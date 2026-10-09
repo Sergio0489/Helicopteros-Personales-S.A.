@@ -774,6 +774,16 @@
 .pending-card-scroll .alert-row>div{min-width:0;overflow-wrap:anywhere}
 @media(min-width:769px) and (max-width:1050px){#resumen-content .pendientes-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:768px){#resumen-content .pendientes-grid{grid-template-columns:1fr!important}}
+
+.schedule-day-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.schedule-day-option{padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--text);cursor:pointer;text-align:center;min-width:0}
+.schedule-day-option span,.schedule-day-option strong,.schedule-day-option small{display:block}
+.schedule-day-option span{text-transform:capitalize;font-size:11px}
+.schedule-day-option strong{font-family:'IBM Plex Mono',monospace;font-size:12px;margin:5px 0}
+.schedule-day-option small{font-size:9px;color:var(--muted)}
+.schedule-day-option[aria-pressed="true"]{border:2px solid var(--accent);background:var(--panel2);color:var(--accent)}
+.schedule-day-option:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:600px){.schedule-day-picker{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
   
   
@@ -833,7 +843,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-17"></script>
+<script src="cloud.js?v=20261009-18"></script>
 </body>
 </html>
 
