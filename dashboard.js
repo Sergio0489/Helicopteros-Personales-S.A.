@@ -62,7 +62,7 @@ previewData.undoFleet ||= {};
 function aircraftKey(reg){return reg.replace(/[^a-zA-Z0-9]/g,'_');}
 function decodeAircraft(value){
   const d=structuredClone(value||{});
-  for(const key of ['mantenimiento','documentos','bitacora_horas','bitacora_pedidos']){
+  for(const key of ['mantenimiento','documentos','bitacora_horas','bitacora_pedidos','bitacora_vencimientos']){
     if(d[key] && !Array.isArray(d[key]))d[key]=Object.keys(d[key]).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(k=>d[key][k]);
   }
   return d;
@@ -77,11 +77,18 @@ async function commitPreview(next){
 async function saveData(reg,data){
   const key=aircraftKey(reg),next=structuredClone(previewData);
   const before=decodeAircraft(previewData.fleet[key]),after=decodeAircraft(data);
+  appendVencimientoRecord(reg,before,after);
   if(JSON.stringify(before)!==JSON.stringify(after)){
     const history=next.undoFleet[key] ||= [];history.push(before);if(history.length>20)history.shift();
     next.fleet[key]=after;
   }
-  return commitPreview(next);
+  const ok=await commitPreview(next);
+  if(ok){
+    data.bitacora_vencimientos=structuredClone(after.bitacora_vencimientos||[]);
+    const idx=fleet.findIndex(ac=>ac.reg===reg);
+    if(idx>=0){state[idx].bitacora_vencimientos=structuredClone(data.bitacora_vencimientos);renderVencimientoLog(idx);}
+  }
+  return ok;
 }
 async function undoAircraft(idx){
   const key=aircraftKey(fleet[idx].reg),next=structuredClone(previewData);
@@ -214,6 +221,7 @@ function updateVencBar(tipo, idx, val, limit) {
   const pct = document.getElementById('pct-' + tipoId + '-' + idx);
   if (pb) { pb.style.width = vencBarPct(val, limit) + '%'; pb.className = 'progress-fill ' + vencBarCls(val, limit); }
   if (pct) pct.textContent = vencBarLabel(val, limit);
+  renderVencimientoLog(idx);
 }
 
 function fillCls(p) {
@@ -557,6 +565,11 @@ function buildPanel(ac, data, idx) {
         </div>
       </div>
 
+      <div class="card" style="grid-column:1 / -1">
+        <div class="card-title">📋 Bitácora de Vencimientos en Horas</div>
+        <p class="venc-log-note">Valores actuales sincronizados con Vencimientos en horas. El historial registra los cambios al guardar; los ajustes negativos descuentan horas.</p>
+        <div id="venc-log-${idx}"></div>
+      </div>
       <div class="card">
         <div class="card-title">📋 Documentos & Certificaciones</div>
         <div id="doc-list-${idx}"></div>
@@ -617,7 +630,7 @@ function arrangeAircraftCards(panel) {
   grid.className = 'aircraft-layout';
   const anchor = panel.querySelector('.divider-label');
   panel.insertBefore(grid, anchor);
-  sections.push(['documents','Documentos & Certificaciones']);
+  sections.push(['hours-history','Bitácora de Vencimientos en Horas'],['documents','Documentos & Certificaciones']);
   sections.forEach(([key, title]) => {
     const card = cards.find(c => c.querySelector('.card-title')?.textContent.includes(title));
     if (!card) return;
@@ -1302,6 +1315,7 @@ async function savePanelInternal(idx){
   if(current)current.value='';
   for(const id of ['horas_diarias-','horas-venc-dia-']){const el=document.getElementById(id+idx);el.value='';el.readOnly=false;delete el.dataset.manualHours;}
   const msg=document.getElementById('tac-msg-'+idx);if(msg)msg.textContent=delta!==null?'TAC registrado. Ingresa la siguiente lectura actual.':'Ingresa ambos TAC para calcular las horas.';
+  renderVencimientoLog(idx);
   renderTACLogs(idx);return true;
 }
 
@@ -1380,6 +1394,8 @@ async function savePanelLegacy(idx) {
       updateVencBar(tipo, idx, d[map.dataField], getLimite(tipo, idx));
       const fEl = document.getElementById('fecha-' + tipo + '-' + idx);
       if (fEl) fEl.textContent = fechaV;
+      const manualEl=document.getElementById(tipo+'-manual-'+idx);
+      if(manualEl)manualEl.value=d[map.dataField];
       const hiddenEl = document.getElementById(map.hiddenId + idx);
       if (hiddenEl) hiddenEl.value = d[map.dataField];
     });
@@ -1541,6 +1557,7 @@ fleet.forEach((ac, idx) => {
   renderBitacoraPedidos(idx);
   renderBitacoraHoras(idx, d.bitacora_horas);
   renderDocList(idx, d.documentos);
+  renderVencimientoLog(idx);
   renderTACLogs(idx);
 });
 
@@ -2878,6 +2895,7 @@ updateClock(); setInterval(updateClock, 1000);
 function refreshPanel(idx) {
   const d = state[idx];
   const prev=document.getElementById('tac-anterior-'+idx);if(prev)prev.value=d.tac_anterior||'';
+  renderVencimientoLog(idx);
   renderTACLogs(idx);
   const g = id => document.getElementById(id + idx);
   const sv = (id, val) => { const el = g(id); if (el) el.value = val || ''; };
@@ -2995,7 +3013,7 @@ if (db) {
       if (firebaseData[key]) {
         const fbData = firebaseData[key];
         // Convert Firebase objects back to arrays
-        ['mantenimiento','documentos','bitacora_horas','bitacora_pedidos'].forEach(arrKey => {
+        ['mantenimiento','documentos','bitacora_horas','bitacora_pedidos','bitacora_vencimientos'].forEach(arrKey => {
           if (fbData[arrKey] && typeof fbData[arrKey] === 'object' && !Array.isArray(fbData[arrKey])) {
             fbData[arrKey] = Object.keys(fbData[arrKey]).sort().map(k => fbData[arrKey][k]);
           }
@@ -3113,4 +3131,41 @@ function eliminarVerificacionPiloto(index, verificationIndex) {
   pilotosData[index].verificaciones.splice(verificationIndex, 1);
   renderPilotos();
   savePilotos();
+}
+
+
+// Component snapshots use the same fields as the first-row expiration card.
+function vencimientoComponents(reg) {
+  return isMultimotor(reg)
+    ? [['motor','Motor izquierdo','Motor'],['helices','Motor derecho','Motor'],['helice1','Hélice izquierda','Hélice'],['helice2','Hélice derecha','Hélice']]
+    : [['motor','Motor','Motor'],['helices','Hélice','Hélice']];
+}
+function vencimientoSnapshot(reg,d) {
+  return vencimientoComponents(reg).map(([key,label,group])=>{
+    const map=VENC_FIELD_MAP[key];
+    const value=d[map.dataField],limit=d[map.limiteField];
+    const total=value!==''&&value!=null&&Number.isFinite(Number(value))?Number(value):null;
+    const limite=Number(limit)>0?Number(limit):null;
+    return {key,label,group,total,limite,remanentes:total!==null&&limite!==null?+(limite-total).toFixed(2):null};
+  });
+}
+function appendVencimientoRecord(reg,before,after) {
+  const old=vencimientoSnapshot(reg,before),current=vencimientoSnapshot(reg,after);
+  if(!current.some((c,i)=>c.total!==old[i].total||c.limite!==old[i].limite))return;
+  const components=current.map((c,i)=>({...c,ingresadas:c.total!==null?+(c.total-(old[i].total||0)).toFixed(2):null,limiteModificado:c.limite!==old[i].limite}));
+  after.bitacora_vencimientos=structuredClone(before.bitacora_vencimientos||[]);
+  after.bitacora_vencimientos.push({fecha:getFechaPanama(),hora:getHoraPanama(),componentes:components});
+}
+function renderVencimientoLog(idx) {
+  const el=document.getElementById('venc-log-'+idx);if(!el)return;
+  const d=state[idx],current=vencimientoSnapshot(fleet[idx].reg,d);
+  const records=Array.isArray(d.bitacora_vencimientos)?d.bitacora_vencimientos:[];
+  const number=v=>v===null||v===undefined?'—':Number(v).toFixed(2);
+  el.innerHTML='<div class="venc-log-groups">'+['Motor','Hélice'].map(group=>
+    '<section class="venc-log-group"><h3>'+group+'</h3>'+current.filter(c=>c.group===group).map(c=>{
+      const entries=[...records].reverse().map(r=>({r,c:(r.componentes||[]).find(x=>x.key===c.key)})).filter(x=>x.c);
+      return '<div class="venc-log-component"><h4>'+c.label+'</h4><div class="venc-log-current"><span>Horas totales <b>'+number(c.total)+'</b></span><span>Horas remanentes <b>'+number(c.remanentes)+'</b></span><span>Límite <b>'+number(c.limite)+'</b></span></div>'+
+        (entries.length?'<table class="venc-log-table"><thead><tr><th>Fecha</th><th>Horas ingresadas</th><th>Horas totales</th><th>Horas remanentes</th></tr></thead><tbody>'+entries.map(({r,c})=>'<tr><td>'+escapeRecord(fechaVista(r.fecha))+'<small>'+escapeRecord(r.hora||'')+'</small>'+(c.limiteModificado?'<small>Límite actualizado</small>':'')+'</td><td>'+number(c.ingresadas)+'</td><td>'+number(c.total)+'</td><td>'+number(c.remanentes)+'</td></tr>').join('')+'</tbody></table>':'<p class="venc-log-note">Sin movimientos registrados. Los nuevos cambios se registrarán al guardar.</p>')+'</div>';
+    }).join('')+'</section>'
+  ).join('')+'</div>';
 }
