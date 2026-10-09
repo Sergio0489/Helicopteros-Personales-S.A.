@@ -666,6 +666,24 @@
 .cloud-menu-options button:hover,.cloud-menu-options button:focus-visible{background:var(--panel2)}
 #cloud-status-detail{flex-basis:100%;font-size:12px;text-align:left;color:var(--danger);padding:6px 0;line-height:1.5}
 @media(max-width:768px){.cloud-menu summary{width:40px;height:40px}.cloud-menu-options button{min-height:44px}}
+
+/* Expiration history: one aircraft-wide card, motor and propeller columns. */
+.venc-log-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.venc-log-group{min-width:0}.venc-log-group h3{font-size:13px;color:var(--accent);margin:8px 0}
+.venc-log-component{border-top:1px solid var(--border);padding:10px 0;min-width:0}
+.venc-log-component h4{font-size:11px;margin-bottom:8px}
+.venc-log-note{font-size:10px;line-height:1.6;color:var(--muted);margin:0 0 10px}
+.venc-log-current{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;background:var(--panel2);padding:9px;border-radius:8px;margin-bottom:10px}
+.venc-log-current span{font-size:9px;overflow-wrap:anywhere;color:var(--muted)}
+.venc-log-current b{display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text);margin-top:4px}
+.venc-log-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px}
+.venc-log-table th,.venc-log-table td{padding:8px 4px;border-bottom:1px solid var(--border);text-align:right;overflow-wrap:anywhere}
+.venc-log-table th{font-size:9px;color:var(--muted)}
+.venc-log-table th:first-child,.venc-log-table td:first-child{text-align:left;width:30%}
+.venc-log-table td{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.venc-log-table small{display:block;font-size:8px;color:var(--muted);margin-top:4px}
+@media(max-width:768px){.venc-log-groups{grid-template-columns:1fr;gap:10px}.venc-log-table td{font-size:9px}}
+
 </style>
   
   
@@ -725,7 +743,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-4"></script>
+<script src="cloud.js?v=20261009-5"></script>
 </body>
 </html>
 
