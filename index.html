@@ -29,10 +29,13 @@
     --border: #a8bccf;
     --accent: #0059b3;
     --accent2: #003d8a;
-    --warn: #a07800;
-    --orange: #c45b00;
-    --danger: #b80f1e;
-    --ok: #006638;
+    --warn: #866300;
+    --signal-yellow:#ffe600;
+    --signal-green:#39ff14;
+    --signal-red:#ff0028;
+    --orange: #dc5b00;
+    --danger: #e60024;
+    --ok: #177000;
     --text: #09142a;
     --muted: #4d6880;
     --dim: #a8bed4;
@@ -206,9 +209,9 @@
 
   .progress-bar { height: 5px; background: var(--dim); border-radius: 99px; overflow: hidden; margin-top: 6px; }
   .progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
-  .fill-ok { background: linear-gradient(90deg, var(--ok), #00c47a); }
-  .fill-warn { background: linear-gradient(90deg, #dbb000, #f6d747); }
-  .fill-danger { background: linear-gradient(90deg, var(--danger), #e01428); }
+  .fill-ok { background: var(--signal-green); }
+  .fill-warn { background: var(--signal-yellow); }
+  .fill-danger { background: var(--signal-red); }
   .fill-empty { background: var(--dim); }
   .pct-line { display: flex; justify-content: space-between; margin-top: 5px; }
   .pct-text { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--muted); }
@@ -733,6 +736,27 @@
 .planner-flight .planner-end{border-bottom:1px solid currentColor;margin-bottom:3px}
 .days-orange{background:rgba(234,110,10,.13);color:var(--orange)}
 .days-warn{background:rgba(234,190,0,.15);color:var(--warn)}
+
+.days-ok{background:var(--signal-green);color:#123b00}
+.days-warn{background:var(--signal-yellow);color:#513e00}
+.days-orange{background:#ff8c19;color:#4c2200}
+.days-danger{background:var(--signal-red);color:#fff}
+.badge-ok,.status-dot{background:var(--signal-green);box-shadow:0 0 6px var(--signal-green)}
+.badge-warn{background:var(--signal-yellow);box-shadow:0 0 6px var(--signal-yellow)}
+.badge-danger{background:var(--signal-red);box-shadow:0 0 6px var(--signal-red)}
+.doc-status-badge-inner{padding:3px 6px;border-radius:5px}
+.doc-status-badge-inner[style*="var(--ok)"]{background:var(--signal-green);color:#123b00!important}
+.doc-status-badge-inner[style*="var(--warn)"]{background:var(--signal-yellow);color:#513e00!important}
+.doc-status-badge-inner[style*="var(--orange)"]{background:#ff8c19;color:#4c2200!important}
+.doc-status-badge-inner[style*="var(--danger)"]{background:var(--signal-red);color:#fff!important}
+.planner-flight .planner-flight-times{display:flex;justify-content:space-between;align-items:center;gap:5px}
+.planner-flight .planner-start,.planner-flight .planner-end{font-size:8px;line-height:16px;border:0;margin:0;flex:none}
+.planner-flight .planner-end{text-align:right}
+.planner-flight-compact .planner-flight-times{flex-direction:column;align-items:stretch;gap:0}
+.planner-flight-compact .planner-start{text-align:left}
+.planner-flight .planner-flight-pilot{margin-top:4px}
+.planner-flight-tiny{padding:1px;text-align:center}
+.planner-flight .planner-tiny-icon{font-size:16px;text-align:center;line-height:36px}
 </style>
   
   
@@ -792,7 +816,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-14"></script>
+<script src="cloud.js?v=20261009-15"></script>
 </body>
 </html>
 
