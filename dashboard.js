@@ -2709,6 +2709,7 @@ function renderDayFlights(dateStr) {
       html += `<div id="planner-flight-${globalIdx}" tabindex="-1" class="flight-card" style="flex-direction:column;align-items:stretch;gap:6px;border-left:3px solid ${color};margin-bottom:6px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
           <div class="flight-time" style="font-size:13px">${timeStr}</div>
+          <button type="button" class="record-btn" onclick="openFlightTimeEditor(${globalIdx})">Editar horas</button>
           <button onclick="deleteFlight(${globalIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px;-webkit-tap-highlight-color:transparent;flex-shrink:0">✕</button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -3309,7 +3310,7 @@ function renderAircraftPlanner() {
   const daily=flightsData.map((f,i)=>({f,i})).filter(({f})=>isoFecha(f.fecha)===date);
   const shown=fleet.map((ac,idx)=>({ac,idx})).filter(({ac})=>!filter||ac.reg===filter);
   const left=body.scrollLeft,top=body.scrollTop;
-  body.innerHTML='<div class="planner-grid"><div class="planner-row planner-hours"><div class="planner-reg">Aeronave</div><div class="planner-track">'+Array.from({length:24},(_,h)=>'<span style="left:'+(h/24*100)+'%">'+fmt12h(plannerTime(h*60))+'</span>').join('')+'</div></div>'+
+  body.innerHTML='<div class="planner-grid"><div class="planner-row planner-hours"><div class="planner-reg">Aeronave</div><div class="planner-track"><div class="planner-normal-band"></div><span class="planner-boundary-label" style="left:27.083333%">6:30 AM</span><span class="planner-boundary-label" style="left:77.083333%">6:30 PM</span>'+Array.from({length:24},(_,h)=>'<span style="left:'+(h/24*100)+'%">'+fmt12h(plannerTime(h*60))+'</span>').join('')+'</div></div>'+
     shown.map(({ac,idx})=>{
       const colors=scheduleAircraftColors(ac.reg);
       const entries=daily.filter(({f})=>f.aeronave===ac.reg&&plannerRange(f));
@@ -3318,9 +3319,9 @@ function renderAircraftPlanner() {
         const r=plannerRange(item.f);let lane=lanes.findIndex(end=>end<=r.start);
         if(lane<0)lane=lanes.length;lanes[lane]=r.end;return {...item,r,lane};
       });
-      return '<div class="planner-row"><div class="planner-reg" style="background:linear-gradient(110deg,'+colors[0]+','+colors[1]+');color:'+colors[2]+'">'+escapeRecord(ac.reg)+'</div><div class="planner-track" style="height:'+Math.max(64,lanes.length*52+10)+'px">'+
-        Array.from({length:48},(_,i)=>'<button type="button" class="planner-slot" style="left:'+(i/48*100)+'%" onclick="plannerChooseSlot('+idx+','+(i*30)+')" aria-label="Programar '+escapeRecord(ac.reg)+' a las '+plannerTime(i*30)+'" title="Programar a las '+plannerTime(i*30)+'"></button>').join('')+
-        placed.map(({f,i,r,lane})=>'<button type="button" class="planner-flight" style="left:'+(r.start/1440*100)+'%;width:'+((r.end-r.start)/1440*100)+'%;top:'+(lane*52+5)+'px;background:'+colors[0]+';color:'+colors[2]+'" onclick="plannerShowFlight('+i+')" title="'+escapeRecord(fmt12h(plannerTime(r.start))+' – '+fmt12h(plannerTime(r.end))+' · '+(f.piloto||'Sin piloto')+(r.estimated?' · Fin estimado':''))+'"><b>'+escapeRecord(fmt12h(plannerTime(r.start)))+'</b><span>'+escapeRecord(f.piloto||'Sin piloto')+'</span></button>').join('')+'</div></div>';
+      return '<div class="planner-row"><div class="planner-reg" style="background:linear-gradient(110deg,'+colors[0]+','+colors[1]+');color:'+colors[2]+'">'+escapeRecord(ac.reg)+'</div><div class="planner-track" style="height:'+Math.max(80,lanes.length*70+10)+'px">'+
+        Array.from({length:48},(_,i)=>'<button type="button" class="planner-slot'+(i>=13&&i<37?' planner-normal-hours':'')+(i===13||i===37?' planner-hours-boundary':'')+'" style="left:'+(i/48*100)+'%" onclick="plannerChooseSlot('+idx+','+(i*30)+')" aria-label="Programar '+escapeRecord(ac.reg)+' a las '+plannerTime(i*30)+'" title="Programar a las '+plannerTime(i*30)+'"></button>').join('')+
+        placed.map(({f,i,r,lane})=>'<button type="button" class="planner-flight" style="left:'+(r.start/1440*100)+'%;width:'+((r.end-r.start)/1440*100)+'%;top:'+(lane*70+5)+'px;background:'+colors[0]+';color:'+colors[2]+'" onclick="plannerShowFlight('+i+')" title="'+escapeRecord(fmt12h(plannerTime(r.start))+' – '+fmt12h(plannerTime(r.end))+' · '+(f.piloto||'Sin piloto')+(r.estimated?' · Fin estimado':''))+'"><b class="planner-start">'+escapeRecord(fmt12h(plannerTime(r.start)))+'</b><b class="planner-end">'+escapeRecord(f.horaFin?fmt12h(f.horaFin):'Fin pendiente')+'</b><span>'+escapeRecord(f.piloto||'Sin piloto')+'</span></button>').join('')+'</div></div>';
     }).join('')+'</div>';
   body.scrollLeft=body.dataset.positioned?left:360;
   body.scrollTop=top;body.dataset.positioned='1';
@@ -3331,10 +3332,48 @@ function installAircraftPlanner() {
   const panel=document.getElementById('panel-itinerarios');
   const layout=panel.querySelector('.section-grid-2');layout.classList.add('planner-lower');
   const board=document.createElement('section');board.className='card planner-board';
-  board.innerHTML='<div class="planner-toolbar"><div><div class="card-title">CALENDARIO POR AERONAVE</div><div id="planner-date-label"></div></div><div class="planner-day-controls"><button type="button" class="record-btn" onclick="plannerChangeDay(-1)" aria-label="Día anterior">‹</button><button type="button" class="record-btn" onclick="plannerSelectDate(panamaISO())">Hoy</button><button type="button" class="record-btn" onclick="plannerChangeDay(1)" aria-label="Día siguiente">›</button></div><label>Aeronave<select id="planner-aircraft-filter" onchange="renderAircraftPlanner()"><option value="">Todas las aeronaves</option>'+fleet.map(ac=>'<option value="'+escapeRecord(ac.reg)+'">'+escapeRecord(ac.reg)+'</option>').join('')+'</select></label></div><p class="planner-help">Toca un espacio sin vuelo programado para preparar una reserva. Toca un vuelo para ver su detalle. Horas de Panamá.</p><div id="planner-summary" class="planner-help"></div><div id="planner-timeline" class="planner-scroll" tabindex="0" role="region" aria-label="Calendario de aeronaves. Desplaza horizontalmente para ver las horas."></div><p class="planner-help">Los espacios vacíos indican disponibilidad de horario; las alertas de la aeronave se revisan al guardar. Los vuelos antiguos sin hora de fin ocupan una hora estimada.</p>';
+  board.innerHTML='<div class="planner-toolbar"><div><div class="card-title">CALENDARIO POR AERONAVE</div><div id="planner-date-label"></div></div><div class="planner-day-controls"><button type="button" class="record-btn" onclick="plannerChangeDay(-1)" aria-label="Día anterior">‹</button><button type="button" class="record-btn" onclick="plannerSelectDate(panamaISO())">Hoy</button><button type="button" class="record-btn" onclick="plannerChangeDay(1)" aria-label="Día siguiente">›</button></div><label>Aeronave<select id="planner-aircraft-filter" onchange="renderAircraftPlanner()"><option value="">Todas las aeronaves</option>'+fleet.map(ac=>'<option value="'+escapeRecord(ac.reg)+'">'+escapeRecord(ac.reg)+'</option>').join('')+'</select></label></div><p class="planner-help">Toca un espacio sin vuelo programado para preparar una reserva. Toca un vuelo para ver su detalle. Horas de Panamá.</p><div id="planner-summary" class="planner-help"></div><div id="planner-timeline" class="planner-scroll" tabindex="0" role="region" aria-label="Calendario de aeronaves. Desplaza horizontalmente para ver las horas."></div><p class="planner-help">Franja sombreada: 6:30 AM a 6:30 PM. Los espacios vacíos indican disponibilidad de horario; las alertas de la aeronave se revisan al guardar. Los vuelos antiguos sin hora de fin ocupan una hora estimada.</p>';
   panel.insertBefore(board,layout);
   const form=panel.querySelector('.add-flight-form');
   form.insertAdjacentHTML('afterbegin','<p id="planner-form-context" class="planner-help">Selecciona una aeronave y un horario en el calendario, o completa los campos.</p>');
   plannerSelectDate(panamaISO());
 }
 installAircraftPlanner();
+
+function validFlightTime(value) {return /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(value);}
+async function saveFlightTimes(index,start,end,expected) {
+  const current=flightsData[index];
+  if(!current||JSON.stringify(current)!==expected)return 'El vuelo cambió. Cierra y vuelve a abrir la edición.';
+  if(!validFlightTime(start)||!validFlightTime(end)||timesToMinutes(end)<=timesToMinutes(start))return 'Ingresa inicio y fin válidos; el fin debe ser posterior dentro del mismo día.';
+  if(hasConflict(current.fecha,start,end,current.aeronave,index))return 'La aeronave ya tiene otro vuelo en ese horario.';
+  const updated=structuredClone(flightsData);
+  updated[index]={...updated[index],horaInicio:start,horaFin:end};
+  if(Object.hasOwn(updated[index],'hora'))updated[index].hora=start;
+  const next=structuredClone(previewData);next.itinerarios=updated;
+  if(!await commitPreview(next))return 'No se pudo guardar. Se conservan las horas anteriores.';
+  flightsData.splice(0,flightsData.length,...updated);
+  renderCalendar();
+  if(calSelectedDate)renderDayFlights(calSelectedDate);
+  return '';
+}
+function openFlightTimeEditor(index) {
+  const flight=flightsData[index];if(!flight)return;
+  const expected=JSON.stringify(flight),dialog=document.createElement('dialog');
+  dialog.className='record-dialog';
+  dialog.innerHTML='<h3>Editar horas del vuelo</h3><p class="planner-help">'+escapeRecord(flight.aeronave||'Sin aeronave')+' · '+escapeRecord(fechaVista(flight.fecha))+' · Hora de Panamá</p><form><div class="record-form"><label>Hora de inicio<input name="start" type="time" required value="'+escapeRecord(flight.horaInicio||flight.hora||'')+'"></label><label>Hora de culminación<input name="end" type="time" required value="'+escapeRecord(flight.horaFin||'')+'"></label></div><p class="record-error" role="alert"></p><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button type="submit" class="record-btn">Guardar horas</button></div></form>';
+  document.body.appendChild(dialog);
+  let saving=false;
+  dialog.querySelector('[data-cancel]').onclick=()=>{if(!saving)dialog.close();};
+  dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
+  dialog.addEventListener('close',()=>dialog.remove());
+  dialog.querySelector('form').onsubmit=async event=>{
+    event.preventDefault();if(saving)return;
+    saving=true;const button=dialog.querySelector('[type="submit"]');button.disabled=true;
+    try{
+      const result=await saveFlightTimes(index,dialog.querySelector('[name="start"]').value,dialog.querySelector('[name="end"]').value,expected);
+      if(result)dialog.querySelector('.record-error').textContent=result;else dialog.close();
+    }catch(error){dialog.querySelector('.record-error').textContent='No se pudo guardar. Intenta nuevamente.';}
+    finally{saving=false;button.disabled=false;}
+  };
+  dialog.showModal();
+}
