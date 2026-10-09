@@ -567,7 +567,7 @@ function buildPanel(ac, data, idx) {
         <div id="venc-log-${idx}"></div>
       </div>
       <div class="card">
-        <div class="card-title">📋 Documentos & Certificaciones</div>
+        <div class="card-title">📋 Documentos y certificaciones</div>
         <div id="doc-list-${idx}"></div>
         <button class="add-row-btn" onclick="addDocRow(${idx})">+ Agregar documento</button>
         <div class="emerg-section">
@@ -627,7 +627,7 @@ function arrangeAircraftCards(panel) {
   grid.className = 'aircraft-layout';
   const anchor = panel.querySelector('.divider-label');
   panel.insertBefore(grid, anchor);
-  sections.push(['hours-history','Bitácora de Vencimientos en Horas'],['documents','Documentos & Certificaciones']);
+  sections.push(['hours-history','Bitácora de Vencimientos en Horas'],['documents','Documentos y certificaciones']);
   sections.forEach(([key, title]) => {
     const card = cards.find(c => c.querySelector('.card-title')?.textContent.includes(title));
     if (!card) return;
@@ -2056,7 +2056,7 @@ function buildResumen() {
         if (!doc.nombre || !doc.vence) return;
         const days = daysUntil(doc.vence);
         if (days !== null && days <= DAYS_WARN) {
-          addAlert('📋 Documentos & Certificaciones', reg, doc.nombre, days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days),days);
+          addAlert('📋 Documentos y certificaciones', reg, doc.nombre, days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days),days);
         }
       });
     }
@@ -3325,7 +3325,7 @@ function renderAircraftPlanner() {
   body.scrollLeft=body.dataset.positioned?left:360;
   body.scrollTop=top;body.dataset.positioned='1';
   const incomplete=daily.filter(({f})=>!fleet.some(ac=>ac.reg===f.aeronave)||!plannerRange(f)).length;
-  document.getElementById('planner-summary').textContent=daily.length+' vuelos programados'+(incomplete?' · '+incomplete+' sin aeronave u horario: consulta el detalle inferior.':'');
+  document.getElementById('planner-summary').textContent=daily.length+' vuelo'+(daily.length===1?' programado':'s programados')+(incomplete?' · '+incomplete+' sin aeronave u horario: consulta el detalle inferior.':'');
 }
 function installAircraftPlanner() {
   const panel=document.getElementById('panel-itinerarios');
