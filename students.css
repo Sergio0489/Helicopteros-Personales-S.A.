@@ -59,3 +59,13 @@
 .school-progress span{box-shadow:var(--green-glow)}
 .school-paid{color:var(--signal-green);text-shadow:0 0 5px rgba(16,185,87,.5)}
 .aircraft-toolbar>.school-aircraft-rate{height:40px;min-width:125px;margin:0!important;padding:8px 16px!important;display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1.3;box-sizing:border-box;white-space:nowrap}
+
+.school-profile-info{align-items:start}
+.school-info-item{min-width:0;line-height:1.7;overflow-wrap:anywhere}
+.school-info-label{color:#082f60;font-weight:700}
+.school-info-value{color:#000;font-weight:400}
+.school-form label,.school-form legend{color:#082f60;font-weight:700}
+.school-form input,.school-form select,.school-form textarea,.school-form option{color:#000;font-weight:400}
+.school-deleted-courses summary{cursor:pointer;color:#082f60;font-size:12px}
+.school-deleted-courses .school-info-item{font-size:10px}
+.school-course [data-action="delete-course"]{color:var(--danger)}
