@@ -3182,7 +3182,7 @@ function dailyScheduleDate(now=new Date()) {
 }
 
 function dailyScheduleGroups(date) {
-  const groups=new Map();
+  const groups=new Map(fleet.map(ac=>[ac.reg,[]]));
   flightsData.filter(f=>isoFecha(f.fecha)===date).slice().sort((a,b)=>
     (a.horaInicio||a.hora||'99:99').localeCompare(b.horaInicio||b.hora||'99:99')
   ).forEach(f=>{
@@ -3190,24 +3190,32 @@ function dailyScheduleGroups(date) {
     if(!groups.has(reg))groups.set(reg,[]);
     groups.get(reg).push(f);
   });
-  const rank=reg=>{const i=fleet.findIndex(ac=>ac.reg===reg);return reg?(i<0?fleet.length:i):Infinity;};
-  return [...groups.entries()].sort(([a],[b])=>rank(a)-rank(b)||a.localeCompare(b));
+  const rank=reg=>{const i=fleet.findIndex(ac=>ac.reg===reg);return i<0?fleet.length:i;};
+  return [...groups.entries()].sort(([a,af],[b,bf])=>{
+    if(!a)return 1;
+    if(!b)return -1;
+    return bf.length-af.length||rank(a)-rank(b)||a.localeCompare(b);
+  });
+}
+function scheduleWeekday(date) {
+  return new Intl.DateTimeFormat('es-PA',{weekday:'long',timeZone:'America/Panama'})
+    .format(new Date(date+'T12:00:00Z'));
 }
 function renderDailySchedule() {
   const panel=document.getElementById('panel-horario-dia');if(!panel)return;
-  const {date,tomorrow}=dailyScheduleDate(),groups=dailyScheduleGroups(date);
+  const {date}=dailyScheduleDate(),groups=dailyScheduleGroups(date);
   panel.dataset.scheduleDate=date;
   const count=groups.reduce((sum,[,flights])=>sum+flights.length,0);
-  panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DE '+(tomorrow?'MAÑANA':'HOY')+'</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(date))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
-    (groups.length?'<div class="daily-schedule-grid">'+groups.map(([reg,flights])=>{
+  panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DEL DÍA ('+escapeRecord(scheduleWeekday(date).toUpperCase())+')</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(date))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
+    '<div class="daily-schedule-grid">'+groups.map(([reg,flights])=>{
       const ac=fleet.find(a=>a.reg===reg);
       return '<section class="card daily-schedule-aircraft"><div class="daily-schedule-heading"><div><h2>'+escapeRecord(reg||'Sin aeronave asignada')+'</h2>'+(ac?'<small>'+escapeRecord(ac.model)+'</small>':'')+'</div><span>'+flights.length+' vuelo'+(flights.length===1?'':'s')+'</span></div>'+
-        flights.map(f=>{
+        (flights.length?flights.map(f=>{
           const start=f.horaInicio||f.hora,end=f.horaFin;
           const time=start?fmt12h(start)+(end?' → '+fmt12h(end):''):'Hora por definir';
           return '<article class="daily-schedule-flight"><div class="flight-time">'+escapeRecord(time)+'</div><div class="daily-schedule-person"><small>Piloto</small><span>'+escapeRecord(f.piloto||'Sin asignar')+'</span></div>'+(f.estudiante?'<div class="daily-schedule-person"><small>Estudiante</small><span>'+escapeRecord(f.estudiante)+'</span></div>':'')+'</article>';
-        }).join('')+'</section>';
-    }).join('')+'</div>':'<div class="card record-empty" style="text-align:center;padding:28px">Sin vuelos programados para '+(tomorrow?'mañana':'hoy')+'.</div>');
+        }).join(''):'<div class="daily-schedule-empty">Sin vuelos programados</div>')+'</section>';
+    }).join('')+'</div>';
 }
 const dailySchedulePanel=document.createElement('div');
 dailySchedulePanel.id='panel-horario-dia';
