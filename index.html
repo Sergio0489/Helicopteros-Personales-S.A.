@@ -506,7 +506,12 @@
     .date-line { display: none; }
     .status-dot { width: 7px !important; height: 7px !important; }
     header { padding: 0 8px; gap: 6px; height: 52px !important; }
-    .header-right { gap: 6px; }
+    .header-right { gap: 6px; flex: 0 0 auto; }
+    header > .hamburger-btn { flex: 0 0 44px; padding: 10px; }
+    header > .logo { flex: 1 1 0; min-width: 0; gap: 0; }
+    header > .logo img { display: block; width: 100%; height: auto !important; max-height: 42px; object-fit: contain; margin-left: 0 !important; }
+    .clock { white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+    .header-right .status-dot { flex-shrink: 0; }
   }
 
   @media (max-width: 480px) {
@@ -720,7 +725,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-3"></script>
+<script src="cloud.js?v=20261009-4"></script>
 </body>
 </html>
 
