@@ -800,6 +800,7 @@
 </style>
   
   
+<link rel="stylesheet" href="students.css?v=20261009-1">
 </head>
 <body>
 <section id="access-screen"><div class="access-card"><h1>Control de Flota</h1><p>Helicópteros Personales S.A.</p><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
@@ -856,7 +857,8 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-20"></script>
+<script src="cloud.js?v=20261009-21"></script>
 </body>
 </html>
+
 
