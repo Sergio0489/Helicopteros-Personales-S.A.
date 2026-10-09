@@ -2569,7 +2569,8 @@ function fmt12h(timeStr) {
   return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
 }
 
-function getAircraftWarnings(reg) {
+function getAircraftWarnings(reg, flightDate=panamaISO()) {
+  const daysUntil=value=>flightDaysUntil(value,flightDate);
   const idx = fleet.findIndex(a => a.reg === reg);
   if (idx === -1) return [];
   const d = state[idx];
@@ -2590,19 +2591,16 @@ function getAircraftWarnings(reg) {
   if (acum100 >= 100) warnings.push({ level: 'danger', msg: `🔧 INSP. 100 HRS VENCIDA (${acum100.toFixed(2)} HV)` });
   else if (acum100 >= 80) warnings.push({ level: 'warn', msg: `⚠️ Insp. 100 hrs próxima (${acum100.toFixed(2)}/100 HV)` });
 
-  // Motor
-  const motor = parseFloat(d.ciclos_totales || 0);
-  const limMotor = parseFloat(d.limite_motor);
-  const pctMotor = motor / limMotor * 100;
-  if (pctMotor >= 100) warnings.push({ level: 'danger', msg: `🔧 MOTOR VENCIDO (${motor.toFixed(0)}/${limMotor} HV)` });
-  else if (pctMotor >= 80) warnings.push({ level: 'warn', msg: `⚠️ Motor próximo (${motor.toFixed(0)}/${limMotor} HV)` });
-
-  // Hélices / Motor 2
-  const helice = parseFloat(d.ciclos_limite || 0);
-  const limHelice = parseFloat(d.limite_helice);
-  const pctHelice = helice / limHelice * 100;
-  if (pctHelice >= 100) warnings.push({ level: 'danger', msg: `🔧 HÉLICES VENCIDAS (${helice.toFixed(0)}/${limHelice} HV)` });
-  else if (pctHelice >= 80) warnings.push({ level: 'warn', msg: `⚠️ Hélices próximas (${helice.toFixed(0)}/${limHelice} HV)` });
+  for(const [key,label] of vencimientoComponents(reg)){
+    const map=VENC_FIELD_MAP[key],hours=Number(d[map.dataField]||0),limit=Number(d[map.limiteField]);
+    if(!(limit>0))continue;
+    if(hours>=limit)warnings.push({level:'danger',msg:label+' VENCIDO ('+hours.toFixed(2)+' / '+limit+' HV)'});
+    else if(hours>=limit*.8)warnings.push({level:'warn',msg:label+' próximo ('+hours.toFixed(2)+' / '+limit+' HV)'});
+  }
+  emergencyAlerts(d).forEach(([label,date])=>{
+    const days=daysUntil(date);
+    if(days!==null&&days<0)warnings.push({level:'danger',msg:label+' VENCIDO'});
+  });
 
   // Documentos vencidos o por vencer
   if (d.documentos) {
@@ -2702,7 +2700,7 @@ function renderDayFlights(dateStr) {
       const pilotOptions = pilotosData.filter(p=>p.nombre).map(p => {
         const status = getPilotoStatus(p);
         const prefix = status === 'vencido' ? '🔴 ' : status === 'proximo' ? '🟡 ' : '';
-        const disabled = status === 'vencido' ? ' disabled' : '';
+        const disabled = ''; // Vencimientos requieren confirmación al guardar.
         return `<option value="${p.nombre}" ${p.nombre===f.piloto?'selected':''}${disabled}>${prefix}${p.nombre}</option>`;
       }).join('');
 
@@ -2749,7 +2747,8 @@ function getPilotoStatus(p) {
   return 'ok';
 }
 
-function getPilotoVencimientos(p) {
+function getPilotoVencimientos(p, flightDate=panamaISO()) {
+  const daysUntil=value=>flightDaysUntil(value,flightDate);
   // Retorna lista de items vencidos o por vencer para mostrar al usuario
   const items = [];
   const check = (label, fecha) => {
@@ -2774,7 +2773,7 @@ function updatePilotDropdown() {
     pilotosData.filter(p => p.nombre).map(p => {
       const status = getPilotoStatus(p);
       const prefix = status === 'vencido' ? '🔴 ' : status === 'proximo' ? '🟡 ' : '';
-      const disabled = status === 'vencido' ? ' disabled' : '';
+      const disabled = ''; // Vencimientos requieren confirmación al guardar.
       return `<option value="${p.nombre}"${disabled}>${prefix}${p.nombre}${status === 'vencido' ? ' (VENCIDO)' : status === 'proximo' ? ' (por vencer)' : ''}</option>`;
     }).join('');
   sel.value = current;
@@ -2799,32 +2798,7 @@ function addFlight() {
     }
   }
 
-  // Validar estado del piloto
-  if (piloto) {
-    const p = pilotosData.find(p => p.nombre === piloto);
-    if (p) {
-      const status = getPilotoStatus(p);
-      if (status === 'vencido') {
-        const items = getPilotoVencimientos(p).filter(i => i.days < 0);
-        alert(`🔴 ${piloto} tiene documentos VENCIDOS:\n\n${items.map(i => `• ${i.label}: ${i.estado}`).join('\n')}\n\nNo se puede agendar este piloto.`);
-        return;
-      }
-      if (status === 'proximo') {
-        const items = getPilotoVencimientos(p);
-        if (!confirm(`🟡 ${piloto} tiene documentos por vencer:\n\n${items.map(i => `• ${i.label}: ${i.estado}`).join('\n')}\n\n¿Deseas agendar de todas formas?`)) return;
-      }
-    }
-  }
-
-  // Avisar si la aeronave tiene problemas (sin bloquear)
-  if (aeronave) {
-    const warns = getAircraftWarnings(aeronave);
-    const dangers = warns.filter(w => w.level === 'danger');
-    if (dangers.length > 0) {
-      const msgs = dangers.map(w => `• ${w.msg}`).join('\n');
-      if (!confirm(`⚠️ ${aeronave} tiene alertas activas:\n\n${msgs}\n\n¿Deseas agendar el vuelo de todas formas?`)) return;
-    }
-  }
+  if(!confirmFlightScheduling({fecha,aeronave,piloto}))return;
 
   const flight = { fecha, horaInicio, horaFin, aeronave, piloto, estudiante, id: Date.now() };
   flightsData.push(flight);
@@ -2842,17 +2816,9 @@ function addFlight() {
 
 function updateFlightPilot(globalIdx, newPilot) {
   if (!flightsData[globalIdx]) return;
-  if (newPilot) {
-    const p = pilotosData.find(p => p.nombre === newPilot);
-    if (p) {
-      const status = getPilotoStatus(p);
-      if (status === 'vencido') {
-        const items = getPilotoVencimientos(p).filter(i => i.days < 0);
-        alert(`🔴 ${newPilot} tiene documentos VENCIDOS:\n\n${items.map(i => `• ${i.label}: ${i.estado}`).join('\n')}\n\nNo se puede asignar este piloto.`);
-        if (calSelectedDate) renderDayFlights(calSelectedDate);
-        return;
-      }
-    }
+  if(!confirmFlightScheduling({...flightsData[globalIdx],piloto:newPilot})){
+    if(calSelectedDate)renderDayFlights(calSelectedDate);
+    return;
   }
   flightsData[globalIdx].piloto = newPilot;
   if (db) db.ref('itinerarios').set(flightsData);
@@ -2873,6 +2839,10 @@ function updateFlightAc(globalIdx, newAc, dateStr) {
     }
   }
 
+  if(!confirmFlightScheduling({...f,aeronave:newAc})){
+    if(calSelectedDate)renderDayFlights(calSelectedDate);
+    return;
+  }
   flightsData[globalIdx].aeronave = newAc;
   if (db) db.ref('itinerarios').set(flightsData);
   renderCalendar();
@@ -3346,6 +3316,7 @@ async function saveFlightTimes(index,start,end,expected) {
   if(!current||JSON.stringify(current)!==expected)return 'El vuelo cambió. Cierra y vuelve a abrir la edición.';
   if(!validFlightTime(start)||!validFlightTime(end)||timesToMinutes(end)<=timesToMinutes(start))return 'Ingresa inicio y fin válidos; el fin debe ser posterior dentro del mismo día.';
   if(hasConflict(current.fecha,start,end,current.aeronave,index))return 'La aeronave ya tiene otro vuelo en ese horario.';
+  if(!confirmFlightScheduling(current))return 'Cambio cancelado: no se confirmó la programación con alertas.';
   const updated=structuredClone(flightsData);
   updated[index]={...updated[index],horaInicio:start,horaFin:end};
   if(Object.hasOwn(updated[index],'hora'))updated[index].hora=start;
@@ -3376,4 +3347,26 @@ function openFlightTimeEditor(index) {
     finally{saving=false;button.disabled=false;}
   };
   dialog.showModal();
+}
+
+function flightDaysUntil(value,flightDate) {
+  const expiry=dayNumber(value),today=dayNumber(panamaISO()),scheduled=dayNumber(flightDate);
+  if(!Number.isFinite(expiry))return null;
+  return expiry-Math.max(today,Number.isFinite(scheduled)?scheduled:today);
+}
+function confirmFlightScheduling(flight) {
+  const warnings=[];
+  const pilot=pilotosData.find(p=>p.nombre===flight.piloto);
+  if(pilot){
+    getPilotoVencimientos(pilot,flight.fecha).forEach(item=>{
+      warnings.push('Piloto '+flight.piloto+': '+item.label+' — '+item.estado);
+    });
+  }
+  if(flight.aeronave){
+    getAircraftWarnings(flight.aeronave,flight.fecha).filter(w=>w.level==='danger').forEach(w=>{
+      warnings.push('Aeronave '+flight.aeronave+': '+w.msg);
+    });
+  }
+  if(!warnings.length)return true;
+  return window.confirm('CONFIRMACIÓN REQUERIDA\nVuelo: '+fechaVista(flight.fecha)+'\n\n'+warnings.map(w=>'• '+w).join('\n')+'\n\n¿Confirmas guardar la programación con estas alertas?\nCancelar impide guardar el cambio.');
 }
