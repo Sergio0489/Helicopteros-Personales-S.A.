@@ -3171,6 +3171,16 @@ function renderVencimientoLog(idx) {
   ).join('')+'</div>';
 }
 
+function dailyScheduleDate(now=new Date()) {
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{
+    timeZone:'America/Panama',year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).formatToParts(now).map(p=>[p.type,p.value]));
+  const tomorrow=Number(parts.hour)*60+Number(parts.minute)>=20*60+30;
+  const date=new Date(Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day)+(tomorrow?1:0))).toISOString().slice(0,10);
+  return {date,tomorrow};
+}
+
 function dailyScheduleGroups(date) {
   const groups=new Map();
   flightsData.filter(f=>isoFecha(f.fecha)===date).slice().sort((a,b)=>
@@ -3185,9 +3195,10 @@ function dailyScheduleGroups(date) {
 }
 function renderDailySchedule() {
   const panel=document.getElementById('panel-horario-dia');if(!panel)return;
-  const today=panamaISO(),groups=dailyScheduleGroups(today);
+  const {date,tomorrow}=dailyScheduleDate(),groups=dailyScheduleGroups(date);
+  panel.dataset.scheduleDate=date;
   const count=groups.reduce((sum,[,flights])=>sum+flights.length,0);
-  panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DEL DÍA</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(today))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
+  panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DE '+(tomorrow?'MAÑANA':'HOY')+'</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(date))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
     (groups.length?'<div class="daily-schedule-grid">'+groups.map(([reg,flights])=>{
       const ac=fleet.find(a=>a.reg===reg);
       return '<section class="card daily-schedule-aircraft"><div class="daily-schedule-heading"><div><h2>'+escapeRecord(reg||'Sin aeronave asignada')+'</h2>'+(ac?'<small>'+escapeRecord(ac.model)+'</small>':'')+'</div><span>'+flights.length+' vuelo'+(flights.length===1?'':'s')+'</span></div>'+
@@ -3196,7 +3207,7 @@ function renderDailySchedule() {
           const time=start?fmt12h(start)+(end?' → '+fmt12h(end):''):'Hora por definir';
           return '<article class="daily-schedule-flight"><div class="flight-time">'+escapeRecord(time)+'</div><div class="daily-schedule-person"><small>Piloto</small><span>'+escapeRecord(f.piloto||'Sin asignar')+'</span></div>'+(f.estudiante?'<div class="daily-schedule-person"><small>Estudiante</small><span>'+escapeRecord(f.estudiante)+'</span></div>':'')+'</article>';
         }).join('')+'</section>';
-    }).join('')+'</div>':'<div class="card record-empty" style="text-align:center;padding:28px">Sin vuelos programados para hoy.</div>');
+    }).join('')+'</div>':'<div class="card record-empty" style="text-align:center;padding:28px">Sin vuelos programados para '+(tomorrow?'mañana':'hoy')+'.</div>');
 }
 const dailySchedulePanel=document.createElement('div');
 dailySchedulePanel.id='panel-horario-dia';
@@ -3215,5 +3226,5 @@ dailyScheduleTab.addEventListener('click',()=>{
 sidebarEl.prepend(dailyScheduleTab);
 renderDailySchedule();
 setInterval(()=>{
-  if(dailySchedulePanel.classList.contains('active'))renderDailySchedule();
-},60000);
+  if(dailySchedulePanel.classList.contains('active')&&dailySchedulePanel.dataset.scheduleDate!==dailyScheduleDate().date)renderDailySchedule();
+},1000);
