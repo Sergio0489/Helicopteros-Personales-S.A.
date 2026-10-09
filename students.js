@@ -5,10 +5,14 @@ const COURSES={
  privado:{name:'Piloto Privado',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','Vuelo solo','Licencia Piloto privado']},
  comercial:{name:'Piloto Comercial',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','XC','Licencia Piloto Comercial']},
  ifr:{name:'IFR',fees:['matricula','teoria','simulador','vuelo'],states:['Por iniciar','Curso Teórico','Simulador','Habilitación IFR']},
- multimotor:{name:'Multi-Motor',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','Habilitación Multi-Motor']},
- rpa:{name:'RPA (Drone)',fees:['teoria','vuelo'],states:['Por iniciar','Curso Teórico','Horas de vuelo','Licencia de RPA']},
+ multimotor:{name:'Multimotor',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','Habilitación Multi-Motor']},
+ rpa:{name:'RPA (dron)',fees:['teoria','vuelo'],states:['Por iniciar','Curso Teórico','Horas de vuelo','Licencia de RPA']},
  instructor:{name:'Instructor de vuelo',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','Horas de vuelo','Licencia de Instructor de vuelo']}
 };
+function schoolDisplayText(value){
+ const labels={'Licencia Piloto privado':'Licencia de piloto privado','Licencia Piloto Comercial':'Licencia de piloto comercial','Habilitación IFR':'Habilitación IFR','Habilitación Multi-Motor':'Habilitación multimotor','Licencia de Instructor de vuelo':'Licencia de instructor de vuelo','Curso Teórico':'Curso teórico'};
+ return labels[value]||value;
+}
 const FEES={matricula:'Matrícula',teoria:'Curso teórico',vuelo:'Horas de vuelo',simulador:'Horas de simulador'};
 const SOURCES=['Propio','IFARHU','Beca'];
 const STAGES=['Interesado','Matriculado','En formación','Carrera culminada','Retirado'];
@@ -59,7 +63,7 @@ async function change(mutator){
   render();decorateRates();
  }finally{busy=false;}
 }
-function options(values,value){return values.map(v=>'<option value="'+esc(v)+'"'+(v===value?' selected':'')+'>'+esc(v)+'</option>').join('');}
+function options(values,value){return values.map(v=>'<option value="'+esc(v)+'"'+(v===value?' selected':'')+'>'+esc(schoolDisplayText(v))+'</option>').join('');}
 function courseOptions(value){return Object.entries(COURSES).map(([key,c])=>'<option value="'+key+'"'+(key===value?' selected':'')+'>'+c.name+'</option>').join('');}
 function dateField(name,label,value='',required=false){return '<label>'+label+'<input name="'+name+'" placeholder="DD/MM/AAAA" value="'+esc(fechaVista(value))+'"'+(required?' required':'')+'></label>';}
 function input(name,label,value='',type='text',extra=''){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+extra+'></label>';}
@@ -89,7 +93,7 @@ function studentPersonalValues(fields){
  result.birthDate=isoFecha(fields.birthDate||'');return result;
 }
 function studentInfoItem(label,value){
- return '<div class="school-info-item"><strong class="school-info-label">'+esc(label)+':</strong> <span class="school-info-value">'+esc(value||'Pendiente')+'</span></div>';
+ return '<div class="school-info-item"><strong class="school-info-label">'+esc(label)+':</strong> <span class="school-info-value">'+esc(value??'')+'</span></div>';
 }
 function studentPersonalHtml(s){
  const values=[['Nombre completo',s.name],['Cédula o pasaporte',s.identity],['Fecha de nacimiento',fechaVista(s.birthDate||'')],['Nacionalidad',s.nationality],['Dirección',s.address],['Celular',s.phone],['Teléfono residencial',s.residentialPhone],['Correo electrónico',s.email],['Contacto de emergencia',s.emergencyName],['Celular de emergencia',s.emergencyPhone],['Nombre del padre',s.fatherName],['Nombre de la madre',s.motherName],['Colegio de procedencia',s.previousSchool],['Quién lo recomienda',s.referredBy],['Ingreso al sistema',fechaVista(s.createdDate||'')],['Fecha de matrícula',fechaVista(s.enrolledDate||'')],['Etapa',s.stage],['Financiamiento',s.funding],['Cursos de interés',list(s.interests).map(k=>COURSES[k]?.name||k).join(', ')],['Culminación de carrera',fechaVista(s.completedDate||'')],['Observaciones',s.notes]];
@@ -203,7 +207,7 @@ function showEmail(sid,intakeId){
 function button(label,action,attrs=''){return '<button type="button" class="record-btn" data-action="'+action+'" '+attrs+'>'+label+'</button>';}
 function courseHtml(student,c){
  const spec=COURSES[c.type],sum=courseSummary(c),sid='data-student="'+esc(student.id)+'" data-course="'+esc(c.id)+'"';
- return '<section class="card school-course"><div class="school-row"><div><h3>'+spec.name+'</h3><span class="school-tag">'+esc(c.status)+'</span></div>'+'<div class="school-actions">'+button('Modificar curso','edit-course',sid)+button('Eliminar','delete-course',sid)+'</div>'+'</div><div class="school-course-dates">Inicio: '+esc(fechaVista(c.startDate)||'Pendiente')+' · Fin: '+esc(fechaVista(c.endDate)||'Pendiente')+(c.licenseDate?'<br>Licencia / habilitación: '+esc(fechaVista(c.licenseDate))+' · '+esc(c.licenseNumber||'Sin número'):'')+'</div>'+
+ return '<section class="card school-course"><div class="school-row"><div><h3>'+spec.name+'</h3><span class="school-tag">'+esc(schoolDisplayText(c.status))+'</span></div>'+'<div class="school-actions">'+button('Modificar curso','edit-course',sid)+button('Eliminar','delete-course',sid)+'</div>'+'</div><div class="school-course-dates">Inicio: '+esc(fechaVista(c.startDate)||'')+' · Fin: '+esc(fechaVista(c.endDate)||'')+(c.licenseDate?'<br>Licencia / habilitación: '+esc(fechaVista(c.licenseDate))+' · '+esc(c.licenseNumber||''):'')+'</div>'+
   spec.fees.map(fee=>{const total=Number(c.budgets?.[fee]||0),paid=paymentTotal(c,fee),pct=total>0?Math.min(100,Math.round(paid/total*100)):0,complete=total>0&&paid>=total;
    return '<div class="school-fee"><div class="school-row"><strong>'+FEES[fee]+'</strong>'+button('+ Abono','payment',sid+' data-fee="'+fee+'"')+'</div><div class="school-fee-figures"><span>Monto: '+money(total)+'</span><span>Abonado: '+money(paid)+'</span><span>'+(!total?'Monto por definir':paid>total?'Crédito: '+money(paid-total):'Pendiente: '+money(total-paid))+'</span></div><div class="school-progress-row"><div class="school-progress" role="progressbar" aria-label="Pagos de '+FEES[fee]+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><span style="width:'+pct+'%"></span></div><b class="school-paid">'+(complete?'✓':pct+'%')+'</b></div></div>';
   }).join('')+'<div class="school-balances"><div><small>Saldo disponible · vuelos</small><b class="'+(sum.flightBalance<0?'school-negative':'')+'">'+money(sum.flightBalance)+'</b><small>'+numeric(hoursTotal(c,'vuelo'))+' h realizadas · cargos '+money(flightTotal(c,'vuelo'))+'</small></div>'+(spec.fees.includes('simulador')?'<div><small>Saldo disponible · simulador</small><b class="'+(sum.simBalance<0?'school-negative':'')+'">'+money(sum.simBalance)+'</b><small>'+numeric(hoursTotal(c,'simulador'))+' h realizadas</small></div>':'')+'</div><div class="school-actions">'+button('+ Horas de vuelo','flight',sid)+(spec.fees.includes('simulador')?button('+ Simulador','simulator',sid):'')+'</div>'+historyHtml(student,c)+'</section>';
@@ -217,7 +221,7 @@ function historyHtml(student,c){
 }
 function deletedCoursesHtml(s){
  if(!list(s.deletedCourses).length)return '';
- return '<details class="card school-deleted-courses"><summary>Cursos eliminados ('+s.deletedCourses.length+')</summary>'+s.deletedCourses.map(c=>'<section class="school-ledger-entry"><h4>'+esc(COURSES[c.type]?.name||c.type)+'</h4><p class="school-muted">Conservado solo como historial; no forma parte de los saldos activos.</p>'+studentInfoItem('Estado al eliminar',c.status)+studentInfoItem('Abonos registrados',money(paymentTotal(c)))+studentInfoItem('Horas registradas',numeric(hoursTotal(c))+' h')+list(c.payments).map(p=>studentInfoItem('Abono '+fechaVista(p.date),FEES[p.fee]+' · '+money(p.cents)+' · '+p.source+(p.voidedAt?' · Anulado':'')+' · '+(p.note||''))).join('')+list(c.flights).map(f=>studentInfoItem('Sesión '+fechaVista(f.date),f.aircraft+' · '+numeric(f.hours100)+' h · '+money(f.costCents)+(f.voidedAt?' · Anulada':''))).join('')+'</section>').join('')+'</details>';
+ return '<details class="card school-deleted-courses"><summary>Cursos eliminados ('+s.deletedCourses.length+')</summary>'+s.deletedCourses.map(c=>'<section class="school-ledger-entry"><h4>'+esc(COURSES[c.type]?.name||c.type)+'</h4><p class="school-muted">Conservado solo como historial; no forma parte de los saldos activos.</p>'+studentInfoItem('Estado al eliminar',schoolDisplayText(c.status))+studentInfoItem('Abonos registrados',money(paymentTotal(c)))+studentInfoItem('Horas registradas',numeric(hoursTotal(c))+' h')+list(c.payments).map(p=>studentInfoItem('Abono '+fechaVista(p.date),FEES[p.fee]+' · '+money(p.cents)+' · '+p.source+(p.voidedAt?' · Anulado':'')+' · '+(p.note||''))).join('')+list(c.flights).map(f=>studentInfoItem('Sesión '+fechaVista(f.date),f.aircraft+' · '+numeric(f.hours100)+' h · '+money(f.costCents)+(f.voidedAt?' · Anulada':''))).join('')+'</section>').join('')+'</details>';
 }
 
 function studentPrintHtml(student){
