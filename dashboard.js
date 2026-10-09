@@ -1183,9 +1183,9 @@ function onStatusChange(idx, val) {
   const label = val==='operativo'?'✅ OPERATIVO':val==='mantenimiento'?'🔧 MANTENIMIENTO':val==='aog'?'🔴 GROUNDED':'SIN REGISTRAR';
   updateEstatusBadge(idx, val, d.estatus_label || label);
   // Update tab badge
-  const tabs = document.querySelectorAll('#sidebar-tabs .aircraft-tab');
-  if (tabs[idx+2]) {
-    const dot = tabs[idx+2].querySelector('.tab-badge');
+  const aircraftTab = document.querySelector('#sidebar-tabs .aircraft-tab[data-idx="'+idx+'"]');
+  if (aircraftTab) {
+    const dot = aircraftTab.querySelector('.tab-badge');
     if (dot) dot.className = 'tab-badge ' + (val==='operativo'?'badge-ok':val==='mantenimiento'?'badge-warn':val==='aog'?'badge-danger':'badge-empty');
   }
 }
@@ -2506,6 +2506,7 @@ function changeMonth(dir) {
 }
 
 function renderCalendar() {
+  renderDailySchedule();
   const label = new Date(calYear, calMonth, 1).toLocaleDateString('es-PA', { month:'long', year:'numeric' }).toUpperCase();
   document.getElementById('cal-month-label').textContent = label;
 
@@ -2995,8 +2996,7 @@ function refreshPanel(idx) {
   renderDocList(idx, d.documentos);
 
   // Update sidebar badge
-  const tabs = document.querySelectorAll('#sidebar-tabs .aircraft-tab');
-  const tab = tabs[idx + 2]; // +2: PENDIENTES and ESTADÍSTICAS tabs come first
+  const tab = document.querySelector('#sidebar-tabs .aircraft-tab[data-idx="'+idx+'"]');
   if (tab) {
     const badge = tab.querySelector('.tab-badge');
     if (badge) badge.className = 'tab-badge ' + (d.status === 'operativo' ? 'badge-ok' : d.status === 'mantenimiento' ? 'badge-warn' : d.status === 'aog' ? 'badge-danger' : 'badge-empty');
@@ -3050,6 +3050,7 @@ if (db) {
     if (saved && Array.isArray(saved)) {
       saved.forEach(f => flightsData.push(f));
     }
+    renderDailySchedule();
     // Re-render calendar if visible
     const panel = document.getElementById('panel-itinerarios');
     if (panel && panel.classList.contains('active')) {
@@ -3169,3 +3170,50 @@ function renderVencimientoLog(idx) {
     }).join('')+'</section>'
   ).join('')+'</div>';
 }
+
+function dailyScheduleGroups(date) {
+  const groups=new Map();
+  flightsData.filter(f=>isoFecha(f.fecha)===date).slice().sort((a,b)=>
+    (a.horaInicio||a.hora||'99:99').localeCompare(b.horaInicio||b.hora||'99:99')
+  ).forEach(f=>{
+    const reg=String(f.aeronave||'').trim();
+    if(!groups.has(reg))groups.set(reg,[]);
+    groups.get(reg).push(f);
+  });
+  const rank=reg=>{const i=fleet.findIndex(ac=>ac.reg===reg);return reg?(i<0?fleet.length:i):Infinity;};
+  return [...groups.entries()].sort(([a],[b])=>rank(a)-rank(b)||a.localeCompare(b));
+}
+function renderDailySchedule() {
+  const panel=document.getElementById('panel-horario-dia');if(!panel)return;
+  const today=panamaISO(),groups=dailyScheduleGroups(today);
+  const count=groups.reduce((sum,[,flights])=>sum+flights.length,0);
+  panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DEL DÍA</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(today))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
+    (groups.length?'<div class="daily-schedule-grid">'+groups.map(([reg,flights])=>{
+      const ac=fleet.find(a=>a.reg===reg);
+      return '<section class="card daily-schedule-aircraft"><div class="daily-schedule-heading"><div><h2>'+escapeRecord(reg||'Sin aeronave asignada')+'</h2>'+(ac?'<small>'+escapeRecord(ac.model)+'</small>':'')+'</div><span>'+flights.length+' vuelo'+(flights.length===1?'':'s')+'</span></div>'+
+        flights.map(f=>{
+          const start=f.horaInicio||f.hora,end=f.horaFin;
+          const time=start?fmt12h(start)+(end?' → '+fmt12h(end):''):'Hora por definir';
+          return '<article class="daily-schedule-flight"><div class="flight-time">'+escapeRecord(time)+'</div><div class="daily-schedule-person"><small>Piloto</small><span>'+escapeRecord(f.piloto||'Sin asignar')+'</span></div>'+(f.estudiante?'<div class="daily-schedule-person"><small>Estudiante</small><span>'+escapeRecord(f.estudiante)+'</span></div>':'')+'</article>';
+        }).join('')+'</section>';
+    }).join('')+'</div>':'<div class="card record-empty" style="text-align:center;padding:28px">Sin vuelos programados para hoy.</div>');
+}
+const dailySchedulePanel=document.createElement('div');
+dailySchedulePanel.id='panel-horario-dia';
+dailySchedulePanel.className='aircraft-panel';
+contentEl.appendChild(dailySchedulePanel);
+const dailyScheduleTab=document.createElement('div');
+dailyScheduleTab.className='aircraft-tab';
+dailyScheduleTab.innerHTML='<div class="tab-reg" style="font-size:10px;color:var(--accent)">🕒 HORARIO DEL DÍA</div>';
+dailyScheduleTab.addEventListener('click',()=>{
+  document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));
+  dailyScheduleTab.classList.add('active');
+  dailySchedulePanel.classList.add('active');
+  renderDailySchedule();
+});
+sidebarEl.prepend(dailyScheduleTab);
+renderDailySchedule();
+setInterval(()=>{
+  if(dailySchedulePanel.classList.contains('active'))renderDailySchedule();
+},60000);
