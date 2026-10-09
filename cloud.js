@@ -3,7 +3,14 @@ const ADMIN_UID='glCsyjLhlyNRmazYA6Y9Gj3u0l13';
 let cloudETag=null,cloudVersion=0,cloudBusy=false,cloudBlocked=false,appLoaded=false,importData=null;
 const el=id=>document.getElementById(id);
 function accessMessage(text){el('access-message').textContent=text;}
-function setCloudStatus(text){el('preview-save').textContent=text;}
+function setCloudStatus(text){
+ const warning=cloudBlocked||/no se pudo|denegado|otro equipo|antes de guardar|error|unavailable/i.test(text);
+ const saving=/guardando/i.test(text);
+ const state=warning?'error':navigator.onLine===false?'offline':saving?'saving':'online';
+ const label=state==='error'?'Revisar conexión':state==='offline'?'Sin conexión':saving?'Guardando…':/guardado/i.test(text)?'Guardado':'Conectado';
+ el('preview-save').textContent=label;el('cloud-connection').dataset.state=state;el('cloud-connection').title=text;
+ el('cloud-status-detail').textContent=warning?text:'';el('cloud-status-detail').hidden=!warning;
+}
 function showCloudError(error){setCloudStatus(error.message||'No se pudo guardar.');}
 window.showCloudError=showCloudError;
 async function cloudRequest(method,body,etag){
@@ -92,3 +99,8 @@ try{
   finally{button.disabled=false;}
  };
 }catch{accessMessage('No se pudo conectar con Firebase. Revisa tu conexión y recarga la página.');}
+
+document.addEventListener('click',event=>{const menu=el('cloud-menu');if(menu&&!menu.contains(event.target))menu.open=false;});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=el('cloud-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
+window.addEventListener('offline',()=>setCloudStatus('Sin conexión a internet.'));
+window.addEventListener('online',()=>{if(!cloudBlocked){el('cloud-connection').dataset.state='online';el('preview-save').textContent='Conexión disponible';el('cloud-connection').title='Conexión a internet disponible';}});
