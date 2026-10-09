@@ -1849,6 +1849,37 @@ function buildEstadisticas() {
     if (window._statsChart) { window._statsChart.destroy(); }
     window._statsChart = new Chart(chartCanvas, {
       type: 'bar',
+      plugins: [{
+        id: 'aircraftRegistrationLabels',
+        afterDatasetsDraw(chart) {
+          const { ctx } = chart;
+          chart.data.datasets.forEach((dataset, datasetIndex) => {
+            if (!chart.isDatasetVisible(datasetIndex)) return;
+            chart.getDatasetMeta(datasetIndex).data.forEach((bar, index) => {
+              if (!(Number(dataset.data[index]) > 0)) return;
+              const { x, y, base, width } = bar.getProps(['x', 'y', 'base', 'width'], false);
+              if (![x, y, base, width].every(Number.isFinite) || width <= 0) return;
+              const label = dataset.label;
+              ctx.save();
+              ctx.font = 'bold ' + Math.min(10, Math.max(7, width - 2)) + 'px "IBM Plex Mono", monospace';
+              const fitsInside = Math.abs(base - y) >= ctx.measureText(label).width + 10;
+              ctx.translate(x, base - 5);
+              ctx.rotate(-Math.PI / 2);
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillStyle = fitsInside ? '#ffffff' : '#09142a';
+              if (!fitsInside) {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(label, 0, 0);
+              }
+              ctx.fillText(label, 0, 0);
+              ctx.restore();
+            });
+          });
+        }
+      }],
       data: {
         labels: months.map(monthLabel),
         datasets: dataByAc.map((ac, i) => ({
@@ -1865,7 +1896,7 @@ function buildEstadisticas() {
           y: { beginAtZero: true, title: { display: true, text: 'Horas (HV)', color: '#09142a' }, ticks: { font: { family: "'IBM Plex Mono', monospace", size: 10 }, color: '#4d6880' }, grid: { color: 'rgba(9,20,42,0.08)' } }
         },
         plugins: {
-          legend: { position: 'bottom', labels: { font: { family: "'Orbitron', sans-serif", size: 10 }, color: '#09142a' } },
+          legend: { display: false },
           tooltip: {
             callbacks: {
               footer: (items) => {
