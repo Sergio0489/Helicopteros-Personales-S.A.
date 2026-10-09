@@ -648,6 +648,19 @@
 @media(max-width:480px){.pending-compact-row{gap:8px;padding:10px 8px}}
 
 [hidden]{display:none!important}#access-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:#edf3f8}.access-card{width:min(100%,420px);background:white;padding:28px;border-radius:14px;border:1px solid #d8e2ed;text-align:center;box-sizing:border-box}.access-card h1{font-size:24px;color:#0059b3}.access-card p{line-height:1.6}.access-card form{display:grid;gap:16px;margin-top:24px}.access-card label{display:grid;gap:6px;text-align:left;font-size:13px}.access-card input{padding:12px;width:100%;box-sizing:border-box;border:1px solid #bccbdc;border-radius:7px;font-size:16px}.access-card button,.cloud-toolbar button{padding:10px 14px;border:1px solid #0059b3;border-radius:7px;background:#0059b3;color:white;cursor:pointer}.access-card button:disabled{opacity:.5}.cloud-toolbar{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;background:#eff6ff;font-size:12px}.cloud-toolbar button{font-size:11px;padding:6px 9px}#cloud-busy{position:fixed;inset:0;background:rgba(255,255,255,.8);z-index:9999;display:grid;place-items:center;color:#0059b3;font-size:18px;font-weight:bold}#access-message{color:#8b3300;font-size:13px}
+
+.compact-cloud-toolbar{justify-content:flex-end;gap:8px;padding:5px 16px;min-height:34px;border-bottom:1px solid var(--border);background:var(--panel)}
+.cloud-connection{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+.connection-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0}
+.cloud-connection[data-state="saving"] .connection-dot{background:var(--warn)}
+.cloud-connection[data-state="error"] .connection-dot,.cloud-connection[data-state="offline"] .connection-dot{background:var(--danger)}
+.cloud-menu{position:relative}.cloud-menu summary{list-style:none;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;font-size:23px;border-radius:6px;color:var(--muted)}
+.cloud-menu summary::-webkit-details-marker{display:none}.cloud-menu summary:hover,.cloud-menu summary:focus-visible{background:var(--panel2);outline:1px solid var(--border)}
+.cloud-menu-options{position:absolute;top:38px;right:0;z-index:1100;min-width:190px;padding:6px;border:1px solid var(--border);border-radius:9px;background:var(--panel);box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.cloud-menu-options button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text);border-radius:5px;padding:11px 12px;font-size:12px}
+.cloud-menu-options button:hover,.cloud-menu-options button:focus-visible{background:var(--panel2)}
+#cloud-status-detail{flex-basis:100%;font-size:12px;text-align:left;color:var(--danger);padding:6px 0;line-height:1.5}
+@media(max-width:768px){.cloud-menu summary{width:40px;height:40px}.cloud-menu-options button{min-height:44px}}
 </style>
   
   
@@ -655,7 +668,7 @@
 <body>
 <section id="access-screen"><div class="access-card"><h1>Control de Flota</h1><p>Helicópteros Personales S.A.</p><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
 <div id="cloud-busy" hidden role="status">Guardando en Firebase…</div>
-<div id="dashboard-app" hidden><div class="cloud-toolbar"><span id="preview-save" role="status">Conectado a Firebase</span><button onclick="exportPreview()">Descargar respaldo</button><button id="cloud-reload">Actualizar datos</button><button id="cloud-logout">Cerrar sesión</button></div>
+<div id="dashboard-app" hidden><div class="cloud-toolbar compact-cloud-toolbar"><div class="cloud-connection" id="cloud-connection" data-state="online"><span class="connection-dot" aria-hidden="true"></span><span id="preview-save" role="status">Conectado</span></div><details class="cloud-menu" id="cloud-menu"><summary aria-label="Opciones de conexión y cuenta" title="Opciones">⋮</summary><div class="cloud-menu-options"><button type="button" onclick="exportPreview();document.getElementById('cloud-menu').open=false">Descargar respaldo</button><button type="button" id="cloud-reload">Actualizar datos</button><button type="button" id="cloud-logout">Cerrar sesión</button></div></details><div id="cloud-status-detail" role="alert" hidden></div></div>
 <header>
   <button class="hamburger-btn" id="hamburgerBtn" aria-label="Abrir menú" onclick="openDrawer()">
     <span></span><span></span><span></span>
@@ -707,7 +720,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-2"></script>
+<script src="cloud.js?v=20261009-3"></script>
 </body>
 </html>
 
