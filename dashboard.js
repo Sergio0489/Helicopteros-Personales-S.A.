@@ -2078,20 +2078,15 @@ function buildResumen() {
       });
     }
 
-    // Inspecciones 50/100 hrs — solo alerta la más alta que aplique
-    const acum50 = parseFloat(d.horas_acum_50 || d.horas_totales || 0);
-    const acum100 = parseFloat(d.horas_acum_100 || d.horas_limite || 0);
-    const pct100 = acum100 / 100 * 100;
-    const pct50 = acum50 / 50 * 100;
-
-    if (pct100 >= 100) {
-      // 100 hrs alert takes priority — don't show 50 hrs
-      const rem = (100 - acum100).toFixed(2);
-      addAlert('✈ Inspecciones', reg, 'Insp. 100 hrs', `Quedan ${rem} HV (${Math.round(100-pct100)}%)`, 'danger');
-    } else if (pct50 >= 100 && Number(d.proxima_inspeccion||50)!==100) {
-      // Only show 50 hrs alert if 100 hrs is not alerting
-      const rem = (50 - acum50).toFixed(2);
-      addAlert('✈ Inspecciones', reg, 'Insp. 50 hrs', `Quedan ${rem} HV (${Math.round(100-pct50)}%)`, 'danger');
+    // Include every applicable inspection warning, including the yellow threshold.
+    for(const limit of [50,100]){
+      if(limit===50&&Number(d.proxima_inspeccion||50)===100)continue;
+      const hours=Number(d['horas_acum_'+limit]||(limit===50?d.horas_totales:d.horas_limite)||0);
+      if(hours>=limit-10){
+        addAlert('✈ Inspecciones',reg,'Insp. '+limit+' hrs',
+          hours>=limit?'Límite alcanzado ('+hours.toFixed(2)+' HV)':'Quedan '+(limit-hours).toFixed(2)+' HV',
+          hours>=limit?'danger':'warn');
+      }
     }
   });
 
@@ -2169,7 +2164,7 @@ function buildResumen() {
     html+=`<div style="margin-bottom:4px"><div class="divider-label" style="margin-bottom:8px">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card" style="padding:0">`;
     items.forEach(item=>{
       const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
-      const bg=item.type==='danger'?'rgba(204,17,34,0.05)':item.type==='orange'?'rgba(234,110,10,0.09)':'rgba(234,190,0,0.12)';
+      const bg=item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'#ffe600';
       const rowLabel=isPilotoGroup
         ? `<div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${escapeRecord(item.reg)}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px">${escapeRecord(item.item)}</div>`
         : `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${escapeRecord(item.cat)}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text);margin-top:2px">${escapeRecord(item.item)}</div>`;
@@ -3292,7 +3287,7 @@ function renderAircraftPlanner() {
       });
       return '<div class="planner-row"><div class="planner-reg" style="background:linear-gradient(110deg,'+colors[0]+','+colors[1]+');color:'+colors[2]+'">'+escapeRecord(ac.reg)+'</div><div class="planner-track" style="height:'+Math.max(80,lanes.length*70+10)+'px">'+
         Array.from({length:48},(_,i)=>'<button type="button" class="planner-slot'+(i>=13&&i<37?' planner-normal-hours':'')+(i===13||i===37?' planner-hours-boundary':'')+'" style="left:'+(i/48*100)+'%" onclick="plannerChooseSlot('+idx+','+(i*30)+')" aria-label="Programar '+escapeRecord(ac.reg)+' a las '+plannerTime(i*30)+'" title="Programar a las '+plannerTime(i*30)+'"></button>').join('')+
-        placed.map(({f,i,r,lane})=>'<button type="button" class="planner-flight" style="left:'+(r.start/1440*100)+'%;width:'+((r.end-r.start)/1440*100)+'%;top:'+(lane*70+5)+'px;background:'+colors[0]+';color:'+colors[2]+'" onclick="plannerShowFlight('+i+')" title="'+escapeRecord(fmt12h(plannerTime(r.start))+' – '+fmt12h(plannerTime(r.end))+' · '+(f.piloto||'Sin piloto')+(r.estimated?' · Fin estimado':''))+'"><b class="planner-start">'+escapeRecord(fmt12h(plannerTime(r.start)))+'</b><b class="planner-end">'+escapeRecord(f.horaFin?fmt12h(f.horaFin):'Fin pendiente')+'</b><span>'+escapeRecord(f.piloto||'Sin piloto')+'</span></button>').join('')+'</div></div>';
+        placed.map(({f,i,r,lane})=>'<button type="button" class="planner-flight '+(r.end-r.start<45?'planner-flight-tiny':r.end-r.start<110?'planner-flight-compact':'planner-flight-wide')+'" style="left:'+(r.start/1440*100)+'%;width:'+((r.end-r.start)/1440*100)+'%;top:'+(lane*70+5)+'px;background:'+colors[0]+';color:'+colors[2]+'" onclick="plannerShowFlight('+i+')" aria-label="'+escapeRecord('Ver vuelo: '+fmt12h(plannerTime(r.start))+' a '+(f.horaFin?fmt12h(f.horaFin):'fin pendiente'))+'" title="'+escapeRecord(fmt12h(plannerTime(r.start))+' – '+(f.horaFin?fmt12h(f.horaFin):'Fin pendiente')+' · '+(f.piloto||'Sin piloto'))+'">'+plannerFlightLabel(f,r)+'</button>').join('')+'</div></div>';
     }).join('')+'</div>';
   body.scrollLeft=body.dataset.positioned?left:360;
   body.scrollTop=top;body.dataset.positioned='1';
@@ -3303,7 +3298,7 @@ function installAircraftPlanner() {
   const panel=document.getElementById('panel-itinerarios');
   const layout=panel.querySelector('.section-grid-2');layout.classList.add('planner-lower');
   const board=document.createElement('section');board.className='card planner-board';
-  board.innerHTML='<div class="planner-toolbar"><div><div class="card-title">CALENDARIO POR AERONAVE</div><div id="planner-date-label"></div></div><div class="planner-day-controls"><button type="button" class="record-btn" onclick="plannerChangeDay(-1)" aria-label="Día anterior">‹</button><button type="button" class="record-btn" onclick="plannerSelectDate(panamaISO())">Hoy</button><button type="button" class="record-btn" onclick="plannerChangeDay(1)" aria-label="Día siguiente">›</button></div><label>Aeronave<select id="planner-aircraft-filter" onchange="renderAircraftPlanner()"><option value="">Todas las aeronaves</option>'+fleet.map(ac=>'<option value="'+escapeRecord(ac.reg)+'">'+escapeRecord(ac.reg)+'</option>').join('')+'</select></label></div><p class="planner-help">Toca un espacio sin vuelo programado para preparar una reserva. Toca un vuelo para ver su detalle. Horas de Panamá.</p><div id="planner-summary" class="planner-help"></div><div id="planner-timeline" class="planner-scroll" tabindex="0" role="region" aria-label="Calendario de aeronaves. Desplaza horizontalmente para ver las horas."></div><p class="planner-help">Franja sombreada: 6:30 AM a 6:30 PM. Los espacios vacíos indican disponibilidad de horario; las alertas de la aeronave se revisan al guardar. Los vuelos antiguos sin hora de fin ocupan una hora estimada.</p>';
+  board.innerHTML='<div class="planner-toolbar"><div><div class="card-title">CALENDARIO POR AERONAVE</div><div id="planner-date-label"></div></div><div class="planner-day-controls"><button type="button" class="record-btn" onclick="plannerChangeDay(-1)" aria-label="Día anterior">‹</button><button type="button" class="record-btn" onclick="plannerSelectDate(panamaISO())">Hoy</button><button type="button" class="record-btn" onclick="plannerChangeDay(1)" aria-label="Día siguiente">›</button></div><label>Aeronave<select id="planner-aircraft-filter" onchange="renderAircraftPlanner()"><option value="">Todas las aeronaves</option>'+fleet.map(ac=>'<option value="'+escapeRecord(ac.reg)+'">'+escapeRecord(ac.reg)+'</option>').join('')+'</select></label></div><p class="planner-help">Toca un espacio sin vuelo programado para preparar una reserva. Toca un vuelo para ver su detalle y horas completas. Las barras muy cortas usan un reloj. Horas de Panamá.</p><div id="planner-summary" class="planner-help"></div><div id="planner-timeline" class="planner-scroll" tabindex="0" role="region" aria-label="Calendario de aeronaves. Desplaza horizontalmente para ver las horas."></div><p class="planner-help">Franja sombreada: 6:30 AM a 6:30 PM. Los espacios vacíos indican disponibilidad de horario; las alertas de la aeronave se revisan al guardar. Los vuelos antiguos sin hora de fin ocupan una hora estimada.</p>';
   panel.insertBefore(board,layout);
   const form=panel.querySelector('.add-flight-form');
   form.insertAdjacentHTML('afterbegin','<p id="planner-form-context" class="planner-help">Selecciona una aeronave y un horario en el calendario, o completa los campos.</p>');
@@ -3375,3 +3370,9 @@ function confirmFlightScheduling(flight) {
 
 function dateAlertLevel(days){return days<0?'danger':days<=5?'orange':days<=30?'warn':'ok';}
 function inspectionFill(hours,limit){const n=Number(hours||0);return n>=limit?'fill-danger':n>=limit-10?'fill-warn':'fill-ok';}
+
+function plannerFlightLabel(f,r){
+  if(r.end-r.start<45)return '<b class="planner-tiny-icon" aria-hidden="true">◷</b>';
+  const start=escapeRecord(fmt12h(plannerTime(r.start))),end=escapeRecord(f.horaFin?fmt12h(f.horaFin):'Fin pendiente');
+  return '<div class="planner-flight-times"><b class="planner-start">'+start+'</b><b class="planner-end">'+end+'</b></div><span class="planner-flight-pilot">'+escapeRecord(f.piloto||'Sin piloto')+'</span>';
+}
