@@ -50,8 +50,9 @@ function validateBackup(data){
 }
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
- const script=document.createElement('script');script.src='dashboard.js';
- await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
+ window.DASHBOARD_READY=false;
+ const script=document.createElement('script');script.src='dashboard.js?v=20261009-2';
+ await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');
 }
