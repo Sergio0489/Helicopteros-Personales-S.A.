@@ -781,7 +781,8 @@
 .schedule-day-option span{text-transform:capitalize;font-size:11px}
 .schedule-day-option strong{font-family:'IBM Plex Mono',monospace;font-size:12px;margin:5px 0}
 .schedule-day-option small{font-size:9px;color:var(--muted)}
-.schedule-day-option[aria-pressed="true"]{border:2px solid var(--accent);background:var(--panel2);color:var(--accent)}
+.schedule-day-option[aria-pressed="true"]{border:2px solid var(--signal-green);background:var(--signal-green);color:#fff}
+.schedule-day-option[aria-pressed="true"] small{color:#e2f4e6}
 .schedule-day-option:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){.schedule-day-picker{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
@@ -843,7 +844,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-18"></script>
+<script src="cloud.js?v=20261009-19"></script>
 </body>
 </html>
 
