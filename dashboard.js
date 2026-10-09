@@ -2017,9 +2017,9 @@ function buildResumen() {
   let sections = {};
 
   // Helper to add alert
-  function addAlert(category, reg, item, detail, type) {
+  function addAlert(category, reg, item, detail, type, dueDays=null) {
     if (!sections[category]) sections[category] = [];
-    sections[category].push({ reg, item, detail, type });
+    sections[category].push({ reg, item, detail, type, dueDays });
   }
 
   // Check each aircraft
@@ -2032,7 +2032,7 @@ function buildResumen() {
         if (!doc.nombre || !doc.vence) return;
         const days = daysUntil(doc.vence);
         if (days !== null && days <= DAYS_WARN) {
-          addAlert('📋 Documentos & Certificaciones', reg, doc.nombre, days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days));
+          addAlert('📋 Documentos & Certificaciones', reg, doc.nombre, days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days),days);
         }
       });
     }
@@ -2042,7 +2042,7 @@ function buildResumen() {
     emergs.forEach(([name,fecha]) => {
       if (!fecha) return;
       const days=daysUntil(fecha);
-      if(days!==null&&days<=DAYS_WARN)addAlert('🚨 Equipos de Emergencia',reg,name,days<0?'VENCIDO':`Vence en ${days} días`,dateAlertLevel(days));
+      if(days!==null&&days<=DAYS_WARN)addAlert('🚨 Equipos de Emergencia',reg,name,days<0?'VENCIDO':`Vence en ${days} días`,dateAlertLevel(days),days);
     });
 
     // Motor (horas) - warn when <= 20% remaining (>= 80% used of 2000)
@@ -2111,19 +2111,19 @@ function buildResumen() {
     if (p.licencia) {
       const days = daysUntil(p.licencia);
       if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Licencia', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days));
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Licencia', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days),days);
       }
     }
     if (p.medico) {
       const days = daysUntil(p.medico);
       if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Cert. Médico', days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days));
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Cert. Médico', days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days),days);
       }
     }
     if (p.escuela && p.escuela !== 'na') {
       const days = daysUntil(p.escuela);
       if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Verif. Escuela', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days));
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Verif. Escuela', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days),days);
       }
     }
     (p.verificaciones || []).forEach(v => {
@@ -2131,7 +2131,7 @@ function buildResumen() {
       const days = daysUntil(v.fecha);
       if (days !== null && days <= DAYS_WARN) {
         const label = v.nombre ? `Verif. ${v.nombre}` : 'Verificación adicional';
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, label, days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days));
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, label, days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days),days);
       }
     });
   });
@@ -2148,10 +2148,12 @@ function buildResumen() {
     (byReg[key]||=[]).push({...item,cat});
   }));
   const regOrder=fleet.map(ac=>ac.reg);
+  Object.values(byReg).forEach(items=>items.sort(comparePendingAlerts));
   const sortedRegs=Object.keys(byReg).sort((a,b)=>{
-    if(a.includes('VIGENCIA'))return 1;if(b.includes('VIGENCIA'))return -1;
+    const priority=comparePendingAlerts(byReg[a][0],byReg[b][0]);
+    if(priority)return priority;
     const ia=regOrder.indexOf(a),ib=regOrder.indexOf(b);
-    if(ia===-1&&ib===-1)return a.localeCompare(b);if(ia===-1)return 1;if(ib===-1)return -1;return ia-ib;
+    return (ia<0?Infinity:ia)-(ib<0?Infinity:ib)||a.localeCompare(b);
   });
   const allItems=Object.values(byReg).flat();
   const urgent=allItems.filter(item=>item.type==='danger').length;
@@ -2161,7 +2163,7 @@ function buildResumen() {
     const regLabel=isPilotoGroup
       ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent2)">${escapeRecord(reg)}</span>`
       : `<span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent)">${escapeRecord(reg)}</span>`;
-    html+=`<div style="margin-bottom:4px"><div class="divider-label" style="margin-bottom:8px">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card" style="padding:0">`;
+    html+=`<div class="pending-uniform-card"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
     items.forEach(item=>{
       const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
       const bg=item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';
@@ -3375,4 +3377,12 @@ function plannerFlightLabel(f,r){
   if(r.end-r.start<45)return '<b class="planner-tiny-icon" aria-hidden="true">◷</b>';
   const start=escapeRecord(fmt12h(plannerTime(r.start))),end=escapeRecord(f.horaFin?fmt12h(f.horaFin):'Fin pendiente');
   return '<div class="planner-flight-times"><b class="planner-start">'+start+'</b><b class="planner-end">'+end+'</b></div><span class="planner-flight-pilot">'+escapeRecord(f.piloto||'Sin piloto')+'</span>';
+}
+
+function comparePendingAlerts(a,b){
+  const dateA=Number.isFinite(a.dueDays)?a.dueDays:Infinity;
+  const dateB=Number.isFinite(b.dueDays)?b.dueDays:Infinity;
+  if(dateA!==dateB)return dateA<dateB?-1:1;
+  const severity={danger:0,orange:1,warn:2};
+  return (severity[a.type]??3)-(severity[b.type]??3);
 }
