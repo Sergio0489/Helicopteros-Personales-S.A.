@@ -588,6 +588,7 @@ function buildPanel(ac, data, idx) {
 
   arrangeAircraftHeader(panel);
   arrangeAircraftCards(panel);
+  window.School?.decorateAircraftPanel(panel,ac.reg);
   return panel;
 }
 
@@ -3434,3 +3435,4 @@ function selectScheduleOffset(offset){
   renderDailySchedule();
   panel.querySelector('[data-day-offset="'+offset+'"]')?.focus({preventScroll:true});
 }
+
