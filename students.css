@@ -92,3 +92,10 @@
 .school-dialog form>.record-actions>[data-close]{background:var(--danger);border:1px solid var(--danger);color:#fff}
 .school-dialog form>.record-actions>[type="submit"]{background:var(--accent);border:1px solid var(--accent);color:#fff}
 .school-dialog form>.record-actions>button:disabled{opacity:.6;cursor:wait}
+
+/* Manual retirement and completion details in the student editor. */
+.school-stage-panel[hidden]{display:none!important}
+.school-stage-panel{padding:12px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc}
+.school-stage-panel>label{display:grid;gap:6px}
+.school-stage-panel textarea{width:100%;min-height:85px;box-sizing:border-box}
+.school-stage-panel fieldset{margin-top:12px}
