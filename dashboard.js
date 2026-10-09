@@ -3402,6 +3402,11 @@ function scheduleOffsetDate(base,offset){
 function selectScheduleOffset(offset){
   if(!Number.isInteger(offset)||offset<0||offset>3)return;
   const panel=document.getElementById('panel-horario-dia');
+  const base=dailyScheduleDate().date;
+  if(panel.dataset.scheduleBase!==base)renderDailySchedule();
+  const target=scheduleOffsetDate(base,offset);
+  if(target===panel.dataset.scheduleDate)return;
+  if(target!==panamaISO()&&!window.confirm('¿Estás seguro de que quieres ver una fecha diferente a la de hoy?\n\nVer: '+scheduleWeekday(target)+' '+fechaVista(target)+'\nHoy: '+fechaVista(panamaISO())))return;
   panel.dataset.dayOffset=String(offset);
   renderDailySchedule();
   panel.querySelector('[data-day-offset="'+offset+'"]')?.focus({preventScroll:true});
