@@ -95,9 +95,10 @@ function studentPersonalValues(fields){
 function studentInfoItem(label,value){
  return '<div class="school-info-item"><strong class="school-info-label">'+esc(label)+':</strong> <span class="school-info-value">'+esc(value??'')+'</span></div>';
 }
-function studentPersonalHtml(s){
+function studentPersonalHtml(s,printing=false){
  const values=[['Nombre completo',s.name],['Cédula o pasaporte',s.identity],['Fecha de nacimiento',fechaVista(s.birthDate||'')],['Nacionalidad',s.nationality],['Dirección',s.address],['Celular',s.phone],['Teléfono residencial',s.residentialPhone],['Correo electrónico',s.email],['Contacto de emergencia',s.emergencyName],['Celular de emergencia',s.emergencyPhone],['Nombre del padre',s.fatherName],['Nombre de la madre',s.motherName],['Colegio de procedencia',s.previousSchool],['Quién lo recomienda',s.referredBy],['Ingreso al sistema',fechaVista(s.createdDate||'')],['Fecha de matrícula',fechaVista(s.enrolledDate||'')],['Etapa',s.stage],['Financiamiento',s.funding],['Cursos de interés',list(s.interests).map(k=>COURSES[k]?.name||k).join(', ')],['Culminación de carrera',fechaVista(s.completedDate||'')],['Observaciones',s.notes]];
- return values.map(([label,value])=>studentInfoItem(label,value)).join('');
+ const ordered=printing?[...values.filter(([label])=>label!=='Nombre completo'&&label!=='Quién lo recomienda'),['Quién lo recomienda',s.referredBy]]:values;
+ return ordered.map(([label,value])=>studentInfoItem(label,value)).join('');
 }
 function editStudent(id){
  const s=id?studentById(data(),id):{name:'',createdDate:today(),stage:'Interesado',funding:'Propio',interests:[],courses:[]};
@@ -225,7 +226,10 @@ function deletedCoursesHtml(s){
 }
 
 function studentPrintHtml(student){
- return '<header class="school-print-heading"><h1>HP Flight School</h1><h2>Información personal del estudiante</h2><p>Emitido: '+esc(fechaVista(today()))+' · Panamá</p></header><div class="school-print-fields">'+studentPersonalHtml(student)+'</div>';
+ const now=new Date();
+ const date=new Intl.DateTimeFormat('es-GB',{timeZone:'America/Panama',day:'2-digit',month:'2-digit',year:'numeric'}).format(now);
+ const time=new Intl.DateTimeFormat('es-PA',{timeZone:'America/Panama',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(now);
+ return '<div class="school-print-heading"><h1>HP Flight School</h1><h2>'+esc(student.name||'')+'</h2><p>Emitido: '+esc(date)+' · '+esc(time)+' · Panamá</p></div><div class="school-print-fields">'+studentPersonalHtml(student,true)+'</div>';
 }
 function printStudent(id){
  const student=studentById(data(),id);
