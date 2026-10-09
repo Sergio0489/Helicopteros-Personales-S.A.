@@ -29,7 +29,8 @@
     --border: #a8bccf;
     --accent: #0059b3;
     --accent2: #003d8a;
-    --warn: #c47000;
+    --warn: #a07800;
+    --orange: #c45b00;
     --danger: #b80f1e;
     --ok: #006638;
     --text: #09142a;
@@ -206,7 +207,7 @@
   .progress-bar { height: 5px; background: var(--dim); border-radius: 99px; overflow: hidden; margin-top: 6px; }
   .progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
   .fill-ok { background: linear-gradient(90deg, var(--ok), #00c47a); }
-  .fill-warn { background: linear-gradient(90deg, var(--warn), #e08800); }
+  .fill-warn { background: linear-gradient(90deg, #dbb000, #f6d747); }
   .fill-danger { background: linear-gradient(90deg, var(--danger), #e01428); }
   .fill-empty { background: var(--dim); }
   .pct-line { display: flex; justify-content: space-between; margin-top: 5px; }
@@ -730,6 +731,8 @@
 .planner-hours .planner-track .planner-boundary-label{top:34px;font-size:9px;background:#f7e6b9;color:#614308;border-radius:3px;padding:1px 3px;z-index:1}
 .planner-flight .planner-start,.planner-flight .planner-end{font-size:8px;line-height:16px}
 .planner-flight .planner-end{border-bottom:1px solid currentColor;margin-bottom:3px}
+.days-orange{background:rgba(234,110,10,.13);color:var(--orange)}
+.days-warn{background:rgba(234,190,0,.15);color:var(--warn)}
 </style>
   
   
@@ -789,7 +792,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-13"></script>
+<script src="cloud.js?v=20261009-14"></script>
 </body>
 </html>
 
