@@ -3193,12 +3193,19 @@ function scheduleAircraftColors(reg) {
 
 function renderDailySchedule() {
   const panel=document.getElementById('panel-horario-dia');if(!panel)return;
-  const {date}=dailyScheduleDate(),groups=dailyScheduleGroups(date);
+  const base=dailyScheduleDate().date;
+  if(panel.dataset.scheduleBase!==base){panel.dataset.scheduleBase=base;panel.dataset.dayOffset='0';}
+  const offset=Number(panel.dataset.dayOffset||0);
+  const date=scheduleOffsetDate(base,offset),groups=dailyScheduleGroups(date);
   panel.dataset.scheduleDate=date;
   const dayLabel=document.getElementById('schedule-tab-day');
   if(dayLabel)dayLabel.textContent='('+scheduleWeekday(date)+')';
   const count=groups.reduce((sum,[,flights])=>sum+flights.length,0);
   panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DEL DÍA ('+escapeRecord(scheduleWeekday(date).toUpperCase())+')</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(date))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
+    '<div class="schedule-day-picker" role="group" aria-label="Seleccionar día del horario">'+[0,1,2,3].map(n=>{
+      const optionDate=scheduleOffsetDate(base,n);
+      return '<button type="button" class="schedule-day-option" data-day-offset="'+n+'" aria-pressed="'+(n===offset)+'" onclick="selectScheduleOffset('+n+')"><span>'+escapeRecord(scheduleWeekday(optionDate))+'</span><strong>'+escapeRecord(fechaVista(optionDate))+'</strong><small>'+(n===0?'Día inicial':'+'+n+' día'+(n===1?'':'s'))+'</small></button>';
+    }).join('')+'</div>'+
     '<div class="daily-schedule-grid">'+groups.map(([reg,flights])=>{
       const ac=fleet.find(a=>a.reg===reg);
       const [first,second,ink]=scheduleAircraftColors(reg);
@@ -3227,7 +3234,7 @@ dailyScheduleTab.addEventListener('click',()=>{
 sidebarEl.prepend(dailyScheduleTab);
 renderDailySchedule();
 setInterval(()=>{
-  if(dailySchedulePanel.dataset.scheduleDate!==dailyScheduleDate().date)renderDailySchedule();
+  if(dailySchedulePanel.dataset.scheduleBase!==dailyScheduleDate().date)renderDailySchedule();
 },1000);
 
 function plannerRange(f) {
@@ -3385,4 +3392,17 @@ function comparePendingAlerts(a,b){
   if(dateA!==dateB)return dateA<dateB?-1:1;
   const severity={danger:0,orange:1,warn:2};
   return (severity[a.type]??3)-(severity[b.type]??3);
+}
+
+function scheduleOffsetDate(base,offset){
+  const date=new Date(base+'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate()+offset);
+  return date.toISOString().slice(0,10);
+}
+function selectScheduleOffset(offset){
+  if(!Number.isInteger(offset)||offset<0||offset>3)return;
+  const panel=document.getElementById('panel-horario-dia');
+  panel.dataset.dayOffset=String(offset);
+  renderDailySchedule();
+  panel.querySelector('[data-day-offset="'+offset+'"]')?.focus({preventScroll:true});
 }
