@@ -785,6 +785,18 @@
 .schedule-day-option[aria-pressed="true"] small{color:#e2f4e6}
 .schedule-day-option:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){.schedule-day-picker{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.aircraft-log-table{width:100%;table-layout:fixed;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:9px}
+.aircraft-log-table th{font-size:8px;color:var(--muted);line-height:1.5}
+.aircraft-log-table th,.aircraft-log-table td{padding:8px 3px;text-align:right;vertical-align:top;border-bottom:1px solid var(--border);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.aircraft-log-table th:first-child,.aircraft-log-table td:first-child{width:32%;text-align:left}
+.aircraft-log-table td:last-child{color:var(--accent)}
+.aircraft-log-table td small{display:block;font-size:8px;line-height:1.5;color:var(--muted);margin-top:3px}
+.log-row-edit{display:block;padding:3px 6px;margin-top:4px;font-size:8px;border:1px solid var(--border);border-radius:5px;color:var(--accent);background:var(--panel2);cursor:pointer}
+.aircraft-log-table .log-audit-row td{text-align:left;color:var(--text)}
+.log-audit-row summary{font-size:9px;cursor:pointer;color:var(--muted)}
+.log-audit-row .record-audit{font-size:9px}
+@media(max-width:600px){.log-row-edit{min-height:32px;min-width:44px}}
 </style>
   
   
@@ -844,7 +856,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-19"></script>
+<script src="cloud.js?v=20261009-20"></script>
 </body>
 </html>
 
