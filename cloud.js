@@ -53,13 +53,22 @@ function validateBackup(data){
  if(data.itinerarios!=null&&!Array.isArray(data.itinerarios))throw Error('La lista de itinerarios no es válida.');
  const allowed=new Set(['HP_1784','HP_1819','HP_1930','HP_1815','HP_1579','HP_1907','HP_880BL','HP_18BLM','HP1186','HP_1805BLM','HP_11BL']);
  for(const [key,value]of Object.entries(data.fleet))if(!allowed.has(key)||!value||typeof value!=='object'||Array.isArray(value))throw Error('El respaldo contiene una aeronave no reconocida: '+key);
- return {fleet:data.fleet,pilotos:data.pilotos||[],itinerarios:data.itinerarios||[],undoFleet:data.undoFleet||{}};
+ const school=data.school||{version:1,students:[],rates:{},intakes:[],brochureUrl:''};
+ if(typeof school!=='object'||Array.isArray(school)||!Array.isArray(school.students)||!Array.isArray(school.intakes)||!school.rates||typeof school.rates!=='object'||Array.isArray(school.rates))throw Error('El registro de estudiantes del respaldo no es válido.');
+ for(const student of school.students){
+  if(!student||typeof student.id!=='string'||typeof student.name!=='string'||!Array.isArray(student.courses))throw Error('El respaldo contiene un expediente de estudiante no válido.');
+  for(const course of student.courses)if(!course||!['privado','comercial','ifr','multimotor','rpa','instructor'].includes(course.type)||!Array.isArray(course.payments)||!Array.isArray(course.flights))throw Error('El respaldo contiene un curso de estudiante no válido.');
+ }
+ return {fleet:data.fleet,pilotos:data.pilotos||[],itinerarios:data.itinerarios||[],undoFleet:data.undoFleet||{},school};
 }
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261009-20';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261009-21';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
+ window.STUDENTS_READY=false;
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261009-1';
+ await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');
 }
@@ -104,3 +113,4 @@ document.addEventListener('click',event=>{const menu=el('cloud-menu');if(menu&&!
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=el('cloud-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
 window.addEventListener('offline',()=>setCloudStatus('Sin conexión a internet.'));
 window.addEventListener('online',()=>{if(!cloudBlocked){el('cloud-connection').dataset.state='online';el('preview-save').textContent='Conexión disponible';el('cloud-connection').title='Conexión a internet disponible';}});
+
