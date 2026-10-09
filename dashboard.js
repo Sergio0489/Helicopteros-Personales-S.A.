@@ -1,3 +1,4 @@
+function isMultimotor(reg){return ['HP-880BL','HP-18BLM','HP-1805BLM','HP1186'].includes(reg);}
 // ===== DRAWER HAMBURGUESA (móvil) =====
 function openDrawer() {
   document.getElementById('sidebar').classList.add('open');
@@ -3061,3 +3062,5 @@ async function savePanel(idx){
 }
 window.hasDraftChanges=()=>aircraftDirty.size>0;
 window.exportCurrentData=()=>exportPreview();
+
+window.DASHBOARD_READY=true;
