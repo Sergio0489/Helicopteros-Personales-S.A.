@@ -53,3 +53,9 @@
 @media(max-width:1250px){.school-course-grid{grid-template-columns:1fr}.school-workspace{grid-template-columns:210px minmax(0,1fr)}}
 @media(max-width:768px){.school-workspace{grid-template-columns:1fr}.school-directory{position:static}#school-student-list{max-height:220px}.school-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.school-rate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.school-form input,.school-form select,.school-form textarea{font-size:16px}.school-course .record-btn{min-height:40px}.school-profile-info{grid-template-columns:1fr}.school-header .aircraft-reg{font-size:18px!important}.school-form{grid-template-columns:1fr}.school-checks{grid-template-columns:1fr}.school-form .school-full{grid-column:auto}}
 @media(max-width:400px){.school-rate-grid{grid-template-columns:1fr}}
+
+.school-form-section{grid-column:1/-1;margin:6px 0 0;padding:8px 0;border-bottom:1px solid var(--border);color:var(--accent);font-size:12px}
+.school-progress{overflow:visible}
+.school-progress span{box-shadow:var(--green-glow)}
+.school-paid{color:var(--signal-green);text-shadow:0 0 5px rgba(16,185,87,.5)}
+.aircraft-toolbar>.school-aircraft-rate{height:40px;min-width:125px;margin:0!important;padding:8px 16px!important;display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1.3;box-sizing:border-box;white-space:nowrap}
