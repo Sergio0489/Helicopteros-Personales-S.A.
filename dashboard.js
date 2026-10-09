@@ -567,7 +567,6 @@ function buildPanel(ac, data, idx) {
 
       <div class="card" style="grid-column:1 / -1">
         <div class="card-title">📋 Bitácora de Vencimientos en Horas</div>
-        <p class="venc-log-note">Valores actuales sincronizados con Vencimientos en horas. El historial registra los cambios al guardar; los ajustes negativos descuentan horas.</p>
         <div id="venc-log-${idx}"></div>
       </div>
       <div class="card">
@@ -3162,10 +3161,11 @@ function renderVencimientoLog(idx) {
   const records=Array.isArray(d.bitacora_vencimientos)?d.bitacora_vencimientos:[];
   const number=v=>v===null||v===undefined?'—':Number(v).toFixed(2);
   el.innerHTML='<div class="venc-log-groups">'+['Motor','Hélice'].map(group=>
-    '<section class="venc-log-group"><h3>'+group+'</h3>'+current.filter(c=>c.group===group).map(c=>{
+    '<section class="venc-log-group">'+current.filter(c=>c.group===group).map(c=>{
       const entries=[...records].reverse().map(r=>({r,c:(r.componentes||[]).find(x=>x.key===c.key)})).filter(x=>x.c);
-      return '<div class="venc-log-component"><h4>'+c.label+'</h4><div class="venc-log-current"><span>Horas totales <b>'+number(c.total)+'</b></span><span>Horas remanentes <b>'+number(c.remanentes)+'</b></span><span>Límite <b>'+number(c.limite)+'</b></span></div>'+
-        (entries.length?'<table class="venc-log-table"><thead><tr><th>Fecha</th><th>Horas ingresadas</th><th>Horas totales</th><th>Horas remanentes</th></tr></thead><tbody>'+entries.map(({r,c})=>'<tr><td>'+escapeRecord(fechaVista(r.fecha))+'<small>'+escapeRecord(r.hora||'')+'</small>'+(c.limiteModificado?'<small>Límite actualizado</small>':'')+'</td><td>'+number(c.ingresadas)+'</td><td>'+number(c.total)+'</td><td>'+number(c.remanentes)+'</td></tr>').join('')+'</tbody></table>':'<p class="venc-log-note">Sin movimientos registrados. Los nuevos cambios se registrarán al guardar.</p>')+'</div>';
+      return '<div class="venc-log-component"><div class="venc-log-label">'+c.label+'</div>'+
+        '<div class="venc-log-row venc-log-head"><span>FECHA</span><span>HORA</span><span>HORAS INGRESADAS</span><span>HORAS TOTALES</span><span>HORAS REMANENTES</span></div>'+
+        (entries.length?entries.map(({r,c},i)=>'<div class="venc-log-row'+(i===0?' venc-log-latest':'')+'"><span>'+escapeRecord(fechaVista(r.fecha))+'</span><span class="venc-log-time">'+escapeRecord(r.hora||'—')+'</span><span class="venc-log-hours">'+number(c.ingresadas)+'</span><span>'+number(c.total)+'</span><span>'+number(c.remanentes)+'</span></div>').join(''):'<div class="venc-log-empty">Sin registros</div>')+'</div>';
     }).join('')+'</section>'
   ).join('')+'</div>';
 }
