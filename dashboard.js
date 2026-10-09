@@ -1219,10 +1219,33 @@ function updateTAC(idx){
 }
 function escapeRecord(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function renderAudit(audit){return (audit||[]).length?`<details><summary>Historial de modificaciones (${audit.length})</summary>${audit.map(a=>`<div class="record-audit"><b>${escapeRecord(a.fecha)} · ${escapeRecord(a.hora)}</b><div>Motivo: ${escapeRecord(a.razon)}</div><div>Antes: ${escapeRecord(JSON.stringify(a.antes))}</div><div>Después: ${escapeRecord(JSON.stringify(a.despues))}</div></div>`).join('')}</details>`:'';}
+function inspectionTACRows(records){
+  const ordered=records.map((r,index)=>({r,index})).sort((a,b)=>{
+    const da=dayNumber(a.r.fecha),db=dayNumber(b.r.fecha);
+    return (Number.isFinite(da)&&Number.isFinite(db)?da-db:0)||a.index-b.index;
+  });
+  return ordered.map((entry,i)=>{
+    const previous=i>0?ordered[i-1].r.tac:null;
+    const prior=previous===null||previous===''?null:tacCents(String(previous));
+    const current=tacCents(String(entry.r.tac??''));
+    return {...entry,previous:prior!==null&&Number.isFinite(prior)?(prior/100).toFixed(2):null,
+      hours:prior!==null&&Number.isFinite(prior)&&Number.isFinite(current)?((current-prior)/100).toFixed(2):null};
+  }).reverse();
+}
 function renderTACLogs(idx){
  const d=state[idx],tac=document.getElementById('tac-log-'+idx),insp=document.getElementById('inspection-log-'+idx);
- if(tac)tac.innerHTML=(d.bitacora_tac||[]).length?d.bitacora_tac.map((r,i)=>`<div class="record-entry"><div class="record-heading"><span>${escapeRecord(r.fecha)} · ${escapeRecord(r.hora)} · Panamá</span><button class="record-btn" onclick="openRecordEditor('tac',${idx},${i})">Modificar</button></div><div class="record-grid"><div><small>TAC anterior</small><b>${escapeRecord(r.anterior)}</b></div><div><small>TAC actual</small><b>${escapeRecord(r.actual)}</b></div><div><small>Horas registradas</small><b>${escapeRecord(r.hv)} HV</b></div></div>${renderAudit(r.modificaciones)}</div>`).reverse().join(''):'<div class="record-empty">Sin tacómetros registrados</div>';
- if(insp)insp.innerHTML=(d.bitacora_inspecciones||[]).length?d.bitacora_inspecciones.map((r,i)=>`<div class="record-entry"><div class="record-heading"><span>${escapeRecord(r.fecha)} · ${escapeRecord(r.hora)} · Panamá</span><button class="record-btn" onclick="openRecordEditor('inspection',${idx},${i})">Modificar</button></div><div class="record-grid"><div><small>Inspección realizada</small><b>${r.tipo} horas</b></div><div><small>Tacómetro</small><b>${escapeRecord(r.tac)}</b></div><div><small>Próxima inspección</small><b>${r.proxima} horas</b></div></div>${renderAudit(r.modificaciones)}</div>`).reverse().join(''):'<div class="record-empty">Sin inspecciones registradas</div>';
+ const number=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?Number(v).toFixed(2):'—';
+ const dateCell=(kind,r,i)=>'<td><span>'+escapeRecord(fechaVista(r.fecha))+'</span><small>'+escapeRecord(r.hora||'')+'</small>'+
+   (kind==='inspection'?'<small>Insp. '+escapeRecord(r.tipo)+' h · Próxima '+escapeRecord(r.proxima)+' h</small>':'')+
+   '<button type="button" class="log-row-edit" onclick="openRecordEditor(\''+kind+'\','+idx+','+i+')" aria-label="Modificar registro del '+escapeRecord(fechaVista(r.fecha))+'">Editar</button></td>';
+ const audit=r=>(r.modificaciones||[]).length?'<tr class="log-audit-row"><td colspan="4">'+renderAudit(r.modificaciones)+'</td></tr>':'';
+ const table=(headers,rows)=>'<table class="aircraft-log-table"><thead><tr>'+headers.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>';
+ if(tac)tac.innerHTML=(d.bitacora_tac||[]).length?table(['Fecha','TAC Anterior','TAC Actual','Horas'],
+   d.bitacora_tac.map((r,i)=>'<tr>'+dateCell('tac',r,i)+'<td>'+escapeRecord(number(r.anterior))+'</td><td>'+escapeRecord(number(r.actual))+'</td><td>'+escapeRecord(number(r.hv))+'</td></tr>'+audit(r)).reverse().join('')
+ ):'<div class="record-empty">Sin tacómetros registrados</div>';
+ if(insp)insp.innerHTML=(d.bitacora_inspecciones||[]).length?table(['Fecha','TAC Insp. Anterior','TAC Actual','Horas'],
+   inspectionTACRows(d.bitacora_inspecciones).map(({r,index,previous,hours})=>'<tr>'+dateCell('inspection',r,index)+'<td title="'+(previous===null?'No hay un TAC de inspección anterior registrado':'TAC de la inspección anterior')+'">'+(previous===null?'Pendiente':escapeRecord(previous))+'</td><td>'+escapeRecord(number(r.tac))+'</td><td title="'+(hours!==null&&Number(hours)<0?'Revisar: el TAC actual es menor al anterior':'Diferencia entre los dos TAC')+'">'+(hours===null?'—':escapeRecord(hours))+'</td></tr>'+audit(r)).join('')
+ ):'<div class="record-empty">Sin inspecciones registradas</div>';
 }
 async function openRecordEditor(kind,idx,ri=-1,tipo=50){
  if(aircraftDirty.has(idx)&&!await savePanel(idx))return;
