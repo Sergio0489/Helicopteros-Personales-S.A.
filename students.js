@@ -6,7 +6,7 @@ const COURSES={
  comercial:{name:'Piloto Comercial',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','XC','Licencia Piloto Comercial']},
  ifr:{name:'IFR',fees:['matricula','teoria','simulador','vuelo'],states:['Por iniciar','Curso Teórico','Simulador','Habilitación IFR']},
  multimotor:{name:'Multimotor',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','Habilitación Multi-Motor']},
- rpa:{name:'RPA (dron)',fees:['teoria','vuelo'],states:['Por iniciar','Curso Teórico','Horas de vuelo','Licencia de RPA']},
+ rpa:{name:'RPA (Drone)',fees:['teoria','vuelo'],states:['Por iniciar','Curso Teórico','Horas de vuelo','Licencia de RPA']},
  instructor:{name:'Instructor de vuelo',fees:['matricula','teoria','vuelo'],states:['Por iniciar','Curso Teórico','Horas de vuelo','Licencia de Instructor de vuelo']}
 };
 function schoolDisplayText(value){
@@ -15,13 +15,36 @@ function schoolDisplayText(value){
 }
 const FEES={matricula:'Matrícula',teoria:'Curso teórico',vuelo:'Horas de vuelo',simulador:'Horas de simulador'};
 const SOURCES=['Propio','IFARHU','Beca'];
-const STAGES=['Interesado','Matriculado','En formación','Carrera culminada','Retirado'];
+const STAGES=['Interesado','Matriculado','En formación','Culminado','Retirado'];
 const FUNDING=['Propio','IFARHU en trámite','IFARHU aprobado','Beca','Mixto'];
 const esc=escapeRecord,uid=()=>crypto.randomUUID(),today=()=>panamaISO();
 const money=c=>new Intl.NumberFormat('es-PA',{style:'currency',currency:'USD'}).format((Number(c)||0)/100);
 const list=x=>Array.isArray(x)?x:[];
 let selected=null,view='students',query='',stageFilter='',busy=false,activeDialog=null;
-function data(){return {version:1,students:[],rates:{},intakes:[],brochureUrl:'',...previewData.school};}
+function manualStage(stage){return ['Culminado','Carrera culminada','Retirado'].includes(stage);}
+function automaticStage(student,stage,enrolledDate){
+ if(manualStage(stage))return stage==='Carrera culminada'?'Culminado':stage;
+ if(list(student.courses).some(c=>paymentTotal(c)>0))return 'En formación';
+ if(enrolledDate&&validDate(enrolledDate))return 'Matriculado';
+ return 'Interesado';
+}
+function data(){const school={version:1,students:[],rates:{},intakes:[],brochureUrl:'',...previewData.school};return {...school,students:list(school.students).map(s=>({...s,stage:automaticStage(s,s.stage,s.enrolledDate)}))};}
+function completionOptions(student){
+ const courses=list(student.courses).map(c=>({courseId:c.id,type:c.type,name:COURSES[c.type]?.name||c.type}));
+ for(const c of list(student.completedCourses))if(!courses.some(x=>x.courseId===c.courseId))courses.push(c);
+ return courses;
+}
+function bindStudentStage(dialog,student){
+ const stage=dialog.querySelector('[name="stage"]'),enrolled=dialog.querySelector('[name="enrolledDate"]');
+ const retirement=dialog.querySelector('[data-retirement]'),completion=dialog.querySelector('[data-completion]');
+ const sync=()=>{
+  stage.value=automaticStage(student,stage.value,enrolled.value);
+  retirement.hidden=stage.value!=='Retirado';completion.hidden=stage.value!=='Culminado';
+  dialog.querySelector('[name="withdrawalReason"]').required=!retirement.hidden;
+  dialog.querySelector('[name="completedDate"]').required=!completion.hidden;
+ };
+ enrolled.addEventListener('input',sync);stage.addEventListener('change',sync);sync();
+}
 function cents(value){
  const s=String(value??'').trim();if(!/^\d{1,9}(?:\.\d{1,2})?$/.test(s))return null;
  const [a,b='']=s.split('.');return Number(a)*100+Number(b.padEnd(2,'0'));
@@ -96,22 +119,31 @@ function studentInfoItem(label,value){
  return '<div class="school-info-item"><strong class="school-info-label">'+esc(label)+':</strong> <span class="school-info-value">'+esc(value??'')+'</span></div>';
 }
 function studentPersonalHtml(s,printing=false){
- const values=[['Nombre completo',s.name],['Cédula o pasaporte',s.identity],['Fecha de nacimiento',fechaVista(s.birthDate||'')],['Nacionalidad',s.nationality],['Dirección',s.address],['Celular',s.phone],['Teléfono residencial',s.residentialPhone],['Correo electrónico',s.email],['Contacto de emergencia',s.emergencyName],['Celular de emergencia',s.emergencyPhone],['Nombre del padre',s.fatherName],['Nombre de la madre',s.motherName],['Colegio de procedencia',s.previousSchool],['Quién lo recomienda',s.referredBy],['Ingreso al sistema',fechaVista(s.createdDate||'')],['Fecha de matrícula',fechaVista(s.enrolledDate||'')],['Etapa',s.stage],['Financiamiento',s.funding],['Cursos de interés',list(s.interests).map(k=>COURSES[k]?.name||k).join(', ')],['Culminación de carrera',fechaVista(s.completedDate||'')],['Observaciones',s.notes]];
+ const values=[['Nombre completo',s.name],['Cédula o pasaporte',s.identity],['Fecha de nacimiento',fechaVista(s.birthDate||'')],['Nacionalidad',s.nationality],['Dirección',s.address],['Celular',s.phone],['Teléfono residencial',s.residentialPhone],['Correo electrónico',s.email],['Contacto de emergencia',s.emergencyName],['Celular de emergencia',s.emergencyPhone],['Nombre del padre',s.fatherName],['Nombre de la madre',s.motherName],['Colegio de procedencia',s.previousSchool],['Quién lo recomienda',s.referredBy],['Ingreso al sistema',fechaVista(s.createdDate||'')],['Fecha de matrícula',fechaVista(s.enrolledDate||'')],['Etapa',s.stage],['Financiamiento',s.funding],['Cursos de interés',list(s.interests).map(k=>COURSES[k]?.name||k).join(', ')],['Culminación',fechaVista(s.completedDate||'')],['Cursos culminados',list(s.completedCourses).map(c=>COURSES[c.type]?.name||c.name).join(', ')],['Motivo del retiro',s.withdrawalReason],['Observaciones',s.notes]];
  const ordered=printing?[...values.filter(([label])=>label!=='Nombre completo'&&label!=='Quién lo recomienda'),['Quién lo recomienda',s.referredBy]]:values;
  return ordered.map(([label,value])=>studentInfoItem(label,value)).join('');
 }
 function editStudent(id){
  const s=id?studentById(data(),id):{name:'',createdDate:today(),stage:'Interesado',funding:'Propio',interests:[],courses:[]};
+ const completedOptions=completionOptions(s);
+ const completionChecks=completedOptions.map(c=>'<label class="school-check"><input type="checkbox" name="completedCourse" value="'+esc(c.courseId)+'"'+(list(s.completedCourses).some(x=>x.courseId===c.courseId)?' checked':'')+'>'+esc(c.name)+'</label>').join('');
  const interests=Object.entries(COURSES).map(([key,c])=>'<label class="school-check"><input type="checkbox" name="interest" value="'+key+'"'+(list(s.interests).includes(key)?' checked':'')+'>'+c.name+'</label>').join('');
- modal(id?'Editar estudiante':'Nuevo estudiante','<h4 class="school-form-section">Datos personales</h4>'+input('name','Nombre completo',s.name,'text','required maxlength="160"')+input('identity','Cédula o pasaporte',s.identity||'','text','maxlength="60"')+input('nationality','Nacionalidad',s.nationality||'','text','maxlength="100"')+dateField('birthDate','Fecha de nacimiento',s.birthDate)+input('address','Dirección',s.address||'','text','maxlength="500"')+input('previousSchool','Colegio de procedencia',s.previousSchool||'','text','maxlength="200"')+'<h4 class="school-form-section">Contacto</h4>'+input('residentialPhone','Teléfono residencial',s.residentialPhone||'','tel','maxlength="40"')+input('phone','Celular',s.phone||'','tel','maxlength="40"')+input('email','Correo electrónico',s.email||'','email','maxlength="180"')+'<h4 class="school-form-section">Familia y contacto de emergencia</h4>'+input('fatherName','Nombre del padre',s.fatherName||'','text','maxlength="160"')+input('motherName','Nombre de la madre',s.motherName||'','text','maxlength="160"')+input('emergencyName','Contacto de emergencia · nombre',s.emergencyName||'','text','maxlength="160"')+input('emergencyPhone','Contacto de emergencia · celular',s.emergencyPhone||'','tel','maxlength="40"')+'<h4 class="school-form-section">Registro académico</h4>'+dateField('createdDate','Ingreso al sistema',s.createdDate,true)+'<label>Etapa<select name="stage">'+options(STAGES,s.stage)+'</select></label><label>Financiamiento<select name="funding">'+options(FUNDING,s.funding)+'</select></label>'+dateField('enrolledDate','Fecha de matrícula',s.enrolledDate)+input('referredBy','Quién lo recomienda',s.referredBy||'','text','maxlength="200"')+dateField('completedDate','Fecha de culminación de carrera',s.completedDate)+'<fieldset class="school-full"><legend>Cursos de interés</legend><div class="school-checks">'+interests+'</div></fieldset><label class="school-full">Observaciones<textarea name="notes" maxlength="4000">'+esc(s.notes||'')+'</textarea></label>',async(f,form)=>{
-  errorDate(f,[['createdDate',true],['birthDate',false],['enrolledDate',['Matriculado','En formación','Carrera culminada'].includes(f.stage)],['completedDate',f.stage==='Carrera culminada']]);
+ modal(id?'Editar estudiante':'Nuevo estudiante','<h4 class="school-form-section">Datos personales</h4>'+input('name','Nombre completo',s.name,'text','required maxlength="160"')+input('identity','Cédula o pasaporte',s.identity||'','text','maxlength="60"')+input('nationality','Nacionalidad',s.nationality||'','text','maxlength="100"')+dateField('birthDate','Fecha de nacimiento',s.birthDate)+input('address','Dirección',s.address||'','text','maxlength="500"')+input('previousSchool','Colegio de procedencia',s.previousSchool||'','text','maxlength="200"')+'<h4 class="school-form-section">Contacto</h4>'+input('residentialPhone','Teléfono residencial',s.residentialPhone||'','tel','maxlength="40"')+input('phone','Celular',s.phone||'','tel','maxlength="40"')+input('email','Correo electrónico',s.email||'','email','maxlength="180"')+'<h4 class="school-form-section">Familia y contacto de emergencia</h4>'+input('fatherName','Nombre del padre',s.fatherName||'','text','maxlength="160"')+input('motherName','Nombre de la madre',s.motherName||'','text','maxlength="160"')+input('emergencyName','Contacto de emergencia · nombre',s.emergencyName||'','text','maxlength="160"')+input('emergencyPhone','Contacto de emergencia · celular',s.emergencyPhone||'','tel','maxlength="40"')+'<h4 class="school-form-section">Registro académico</h4>'+dateField('createdDate','Ingreso al sistema',s.createdDate,true)+'<label>Etapa<select name="stage">'+options(STAGES,s.stage)+'</select></label><label>Financiamiento<select name="funding">'+options(FUNDING,s.funding)+'</select></label>'+dateField('enrolledDate','Fecha de matrícula',s.enrolledDate)+input('referredBy','Quién lo recomienda',s.referredBy||'','text','maxlength="200"')+'<div class="school-full school-stage-panel" data-retirement hidden><label>Observación · motivo del retiro<textarea name="withdrawalReason" maxlength="4000">'+esc(s.withdrawalReason||'')+'</textarea></label></div><div class="school-full school-stage-panel" data-completion hidden>'+dateField('completedDate','Culminación',s.completedDate)+'<fieldset><legend>Cursos culminados</legend><div class="school-checks">'+(completionChecks||'<p>Agrega primero los cursos al expediente para seleccionar cuáles culminó.</p>')+'</div></fieldset></div>'+'<fieldset class="school-full"><legend>Cursos de interés</legend><div class="school-checks">'+interests+'</div></fieldset><label class="school-full">Observaciones<textarea name="notes" maxlength="4000">'+esc(s.notes||'')+'</textarea></label>',async(f,form)=>{
+  if(!STAGES.includes(f.stage))throw Error('Selecciona una etapa válida.');
+  f.stage=automaticStage(s,f.stage,f.enrolledDate);
+  errorDate(f,[['createdDate',true],['birthDate',false],['enrolledDate',false],['completedDate',f.stage==='Culminado']]);
+  const withdrawalReason=String(f.withdrawalReason||'').trim();
+  if(f.stage==='Retirado'&&!withdrawalReason)throw Error('Ingresa la razón del retiro.');
+  const checked=new FormData(form).getAll('completedCourse');
+  const completedCourses=completedOptions.filter(c=>checked.includes(c.courseId));
+  if(f.stage==='Culminado'&&!completedCourses.length)throw Error('Selecciona los cursos que culminó el estudiante.');
   if(!f.name.trim())throw Error('Ingresa el nombre del estudiante.');
   if(f.birthDate&&dayNumber(f.birthDate)>dayNumber(today()))throw Error('La fecha de nacimiento no puede estar en el futuro.');
   const email=f.email.trim();const all=data().students;
   if(email&&all.some(x=>x.id!==id&&String(x.email||'').toLowerCase()===email.toLowerCase()))throw Error('Ya existe un estudiante con ese correo.');
-  const record={...studentPersonalValues(f),name:f.name.trim(),createdDate:isoFecha(f.createdDate),phone:f.phone.trim(),email,stage:f.stage,funding:f.funding,enrolledDate:isoFecha(f.enrolledDate),completedDate:isoFecha(f.completedDate),interests:new FormData(form).getAll('interest'),notes:f.notes.trim()};
-  const newId=id||uid();await change(school=>{if(id){const target=studentById(school,id);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'Expediente actualizado',before:{stage:target.stage,funding:target.funding},after:{stage:record.stage,funding:record.funding}});Object.assign(target,record);}else school.students.push({...record,id:newId,courses:[],history:[{at:new Date().toISOString(),action:'Ingreso al sistema'}]});});selected=newId;render();
- });
+  const record={...studentPersonalValues(f),name:f.name.trim(),createdDate:isoFecha(f.createdDate),phone:f.phone.trim(),email,stage:f.stage,funding:f.funding,withdrawalReason,completedCourses:f.stage==='Culminado'?completedCourses:list(s.completedCourses),enrolledDate:isoFecha(f.enrolledDate),completedDate:isoFecha(f.completedDate),interests:new FormData(form).getAll('interest'),notes:f.notes.trim()};
+  const newId=id||uid();await change(school=>{if(id){const target=studentById(school,id);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'Expediente actualizado',before:{stage:target.stage,funding:target.funding,withdrawalReason:target.withdrawalReason||'',completedCourses:list(target.completedCourses)},after:{stage:record.stage,funding:record.funding,withdrawalReason:record.withdrawalReason,completedCourses:record.completedCourses}});Object.assign(target,record);}else school.students.push({...record,id:newId,courses:[],history:[{at:new Date().toISOString(),action:'Ingreso al sistema'}]});});selected=newId;render();
+ },dialog=>bindStudentStage(dialog,s));
 }
 function addCourse(studentId){
  modal('Agregar curso','<label class="school-full">Curso<select name="type">'+courseOptions('privado')+'</select></label>'+dateField('startDate','Fecha de inicio') ,async f=>{
@@ -154,7 +186,7 @@ function addPayment(sid,cid,fee){
  modal('Registrar abono · '+FEES[fee],dateField('date','Fecha del abono',today(),true)+amountField('amount','Monto del abono (USD)')+'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Recibo / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
   errorDate(f,[['date',true]]);const amount=cents(f.amount);if(!amount)throw Error('El abono debe ser mayor que cero.');
   if(!SOURCES.includes(f.source)||!COURSES[c.type].fees.includes(fee))throw Error('Revisa el origen y concepto.');
-  await change(school=>{const target=studentById(school,sid);courseById(target,cid).payments.push({id:uid(),fee,date:isoFecha(f.date),cents:amount,source:f.source,reference:f.reference.trim(),note:f.note.trim(),createdAt:new Date().toISOString()});if(target.stage==='Interesado'){target.stage='Matriculado';target.enrolledDate=isoFecha(f.date);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'Matrícula por primer abono de curso'});}});
+  await change(school=>{const target=studentById(school,sid);courseById(target,cid).payments.push({id:uid(),fee,date:isoFecha(f.date),cents:amount,source:f.source,reference:f.reference.trim(),note:f.note.trim(),createdAt:new Date().toISOString()});if(!manualStage(target.stage)){const previousStage=target.stage;target.stage='En formación';target.enrolledDate ||= isoFecha(f.date);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'En formación por abono de curso',before:{stage:previousStage},after:{stage:target.stage}});}});
  });
 }
 function logFlight(sid,cid,kind='vuelo'){
@@ -288,5 +320,6 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
