@@ -3201,15 +3201,36 @@ function scheduleWeekday(date) {
   return new Intl.DateTimeFormat('es-PA',{weekday:'long',timeZone:'America/Panama'})
     .format(new Date(date+'T12:00:00Z'));
 }
+function scheduleAircraftColors(reg) {
+  const colors={
+    HP1579:['#b9e4f7','#83c9ec','#163c50'],
+    HP1815:['#f9bf77','#f39836','#4b2705'],
+    HP1784:['#b62532','#8e1622','#ffffff'],
+    HP1819:['#70412c','#4e2d1f','#ffffff'],
+    HP1907:['#292b30','#111216','#ffffff'],
+    HP1930:['#267146','#14532d','#ffffff'],
+    HP880BL:['#164a89','#991f2f','#ffffff'],
+    HP18BLM:['#181a1f','#991f2f','#ffffff'],
+    HP1805BLM:['#164a89','#526174','#ffffff'],
+    HP11BL:['#7c243d','#501328','#ffffff'],
+    HP1186:['#ffffff','#ffffff','#25354a']
+  };
+  const key=String(reg||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return colors[key]||colors[key.replace(/BL$/,'')]||['#e9eff6','#dbe5f0','#25354a'];
+}
+
 function renderDailySchedule() {
   const panel=document.getElementById('panel-horario-dia');if(!panel)return;
   const {date}=dailyScheduleDate(),groups=dailyScheduleGroups(date);
   panel.dataset.scheduleDate=date;
+  const dayLabel=document.getElementById('schedule-tab-day');
+  if(dayLabel)dayLabel.textContent='('+scheduleWeekday(date)+')';
   const count=groups.reduce((sum,[,flights])=>sum+flights.length,0);
   panel.innerHTML='<div class="card daily-schedule-header"><div><div class="card-title">HORARIO DEL DÍA ('+escapeRecord(scheduleWeekday(date).toUpperCase())+')</div><div class="daily-schedule-date">'+escapeRecord(fechaVista(date))+' · Hora de Panamá</div></div><div class="daily-schedule-count">'+count+' vuelo'+(count===1?'':'s')+'<small>Solo lectura · Itinerario</small></div></div>'+
     '<div class="daily-schedule-grid">'+groups.map(([reg,flights])=>{
       const ac=fleet.find(a=>a.reg===reg);
-      return '<section class="card daily-schedule-aircraft"><div class="daily-schedule-heading"><div><h2>'+escapeRecord(reg||'Sin aeronave asignada')+'</h2>'+(ac?'<small>'+escapeRecord(ac.model)+'</small>':'')+'</div><span>'+flights.length+' vuelo'+(flights.length===1?'':'s')+'</span></div>'+
+      const [first,second,ink]=scheduleAircraftColors(reg);
+      return '<section class="card daily-schedule-aircraft"><div class="daily-schedule-heading" style="--aircraft-header-start:'+first+';--aircraft-header-end:'+second+';--aircraft-header-ink:'+ink+'"><div><h2>'+escapeRecord(reg||'Sin aeronave asignada')+'</h2>'+(ac?'<small>'+escapeRecord(ac.model)+'</small>':'')+'</div><span>'+flights.length+' vuelo'+(flights.length===1?'':'s')+'</span></div>'+
         (flights.length?flights.map(f=>{
           const start=f.horaInicio||f.hora,end=f.horaFin;
           const time=start?fmt12h(start)+(end?' → '+fmt12h(end):''):'Hora por definir';
@@ -3223,7 +3244,7 @@ dailySchedulePanel.className='aircraft-panel';
 contentEl.appendChild(dailySchedulePanel);
 const dailyScheduleTab=document.createElement('div');
 dailyScheduleTab.className='aircraft-tab';
-dailyScheduleTab.innerHTML='<div class="tab-reg" style="font-size:10px;color:var(--accent)">🕒 HORARIO DEL DÍA</div>';
+dailyScheduleTab.innerHTML='<div class="tab-reg" style="font-size:10px;color:var(--accent)">🕒 HORARIO DEL DÍA<small id="schedule-tab-day" class="schedule-tab-day"></small></div>';
 dailyScheduleTab.addEventListener('click',()=>{
   document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));
@@ -3234,5 +3255,5 @@ dailyScheduleTab.addEventListener('click',()=>{
 sidebarEl.prepend(dailyScheduleTab);
 renderDailySchedule();
 setInterval(()=>{
-  if(dailySchedulePanel.classList.contains('active')&&dailySchedulePanel.dataset.scheduleDate!==dailyScheduleDate().date)renderDailySchedule();
+  if(dailySchedulePanel.dataset.scheduleDate!==dailyScheduleDate().date)renderDailySchedule();
 },1000);
