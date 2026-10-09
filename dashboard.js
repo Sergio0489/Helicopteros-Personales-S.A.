@@ -168,7 +168,7 @@ function daysUntil(dateStr) { const n=dayNumber(dateStr)-dayNumber(panamaISO());
 function daysBadge(days) {
   if (days === null) return '<span class="days-badge days-empty">—</span>';
   if (days < 0) return `<span class="days-badge days-danger">VENC</span>`;
-  if (days <= 7) return `<span class="days-badge days-danger">${days}d</span>`;
+  if (days <= 5) return `<span class="days-badge days-orange">${days}d</span>`;
   if (days <= 30) return `<span class="days-badge days-warn">${days}d</span>`;
   return `<span class="days-badge days-ok">${days}d</span>`;
 }
@@ -178,15 +178,12 @@ function pct(v, l) {
   return Math.min(100, Math.round(n / lim * 100));
 }
 // Vencimiento bar helpers (shows remaining hours, green < 70% used, red >= 70%)
-function updateHorasWarning(input, limit) {
-  const pct = parseFloat(input.value || 0) / limit * 100;
-  if (pct >= 80) {
-    input.style.background = 'rgba(204,17,34,0.12)';
-    input.style.borderColor = 'var(--danger)';
-  } else {
-    input.style.background = '';
-    input.style.borderColor = '';
-  }
+function updateHorasWarning(input,limit) {
+  if(!input)return;
+  const value=Number(input.value||0);
+  const level=[50,100].includes(limit)?inspectionFill(value,limit):(value>=limit?'fill-danger':'fill-ok');
+  input.style.background=level==='fill-danger'?'rgba(204,17,34,.12)':level==='fill-warn'?'rgba(234,190,0,.15)':'';
+  input.style.borderColor=level==='fill-danger'?'var(--danger)':level==='fill-warn'?'var(--warn)':'';
 }
 
 function setFechaHoy(elemId) {
@@ -417,14 +414,14 @@ function buildPanel(ac, data, idx) {
             <div><input type="number" class="field-input" id="edit-acum50-${idx}" min="0" max="99999.99" step="0.01" aria-label="Horas acumuladas de 50 horas" value="${parseFloat(data.horas_acum_50||0).toFixed(2)}" oninput="editInspectionHours(${idx},this)" style="width:100px"><span class="field-unit"> HV</span><span id="acum50-${idx}" hidden>${parseFloat(data.horas_acum_50||0).toFixed(2)} HV</span></div>
           </div>
           <div class="progress-bar" style="margin-bottom:8px">
-            <div id="pb-50-${idx}" class="progress-fill ${parseFloat(data.horas_acum_50||0)/50*100>=80?'fill-danger':'fill-ok'}" style="width:${Math.min(100,parseFloat(data.horas_acum_50||0)/50*100)}%"></div>
+            <div id="pb-50-${idx}" class="progress-fill ${inspectionFill(data.horas_acum_50, 50)}" style="width:${Math.min(100,parseFloat(data.horas_acum_50||0)/50*100)}%"></div>
           </div>
           <div class="field-row" style="margin-bottom:2px">
             <span class="field-label">Acum. 100 hrs</span>
             <span style="font-family:'Orbitron',sans-serif;font-size:13px;color:var(--text)" id="acum100-${idx}">${parseFloat(data.horas_acum_100||0).toFixed(2)} HV</span>
           </div>
           <div class="progress-bar">
-            <div id="pb-100-${idx}" class="progress-fill ${parseFloat(data.horas_acum_100||0)/100*100>=80?'fill-danger':'fill-ok'}" style="width:${Math.min(100,parseFloat(data.horas_acum_100||0)/100*100)}%"></div>
+            <div id="pb-100-${idx}" class="progress-fill ${inspectionFill(data.horas_acum_100, 100)}" style="width:${Math.min(100,parseFloat(data.horas_acum_100||0)/100*100)}%"></div>
           </div>
         </div>
         <!-- Hidden fields for compatibility -->
@@ -681,7 +678,7 @@ function editInspectionHours(idx,input){
  for(const n of [50,100]){
   const value=d['horas_acum_'+n],label=document.getElementById('acum'+n+'-'+idx),bar=document.getElementById('pb-'+n+'-'+idx);
   if(label)label.textContent=value+' HV';
-  if(bar){bar.style.width=Math.min(100,Number(value)/n*100)+'%';bar.className='progress-fill '+(Number(value)/n>=.8?'fill-danger':'fill-ok');}
+  if(bar){bar.style.width=Math.min(100,Number(value)/n*100)+'%';bar.className='progress-fill '+(inspectionFill(value,n));}
  }
 }
 const EMERGENCY_TYPES=[['salvavidas','🦺 Salvavidas',4],['extintor','🧯 Extintores',1],['flares','🚨 Flares',2],['botiquin','🩹 Botiquín',1]];
@@ -959,6 +956,7 @@ function docStatusBadge(vence) {
   const days = daysUntil(vence);
   if (days === null) return `<span class="doc-status-badge-inner" style="color:var(--muted)">—</span>`;
   if (days < 0) return `<span class="doc-status-badge-inner" style="color:var(--danger)"><span class="dot" style="background:var(--danger)"></span>VENCIDO</span>`;
+  if (days <= 5) return `<span class="doc-status-badge-inner" style="color:var(--orange)"><span class="dot" style="background:var(--orange)"></span>POR VENCER (${days}d)</span>`;
   if (days <= 30) return `<span class="doc-status-badge-inner" style="color:var(--warn)"><span class="dot" style="background:var(--warn)"></span>POR VENCER (${days}d)</span>`;
   return `<span class="doc-status-badge-inner" style="color:var(--ok)"><span class="dot" style="background:var(--ok)"></span>VIGENTE</span>`;
 }
@@ -1095,6 +1093,8 @@ function eliminarHoraBitacora(idx, ri) {
   const pb100 = document.getElementById('pb-100-' + idx);
   if (pb50) pb50.style.width = Math.min(100, parseFloat(d.horas_acum_50)/50*100) + '%';
   if (pb100) pb100.style.width = Math.min(100, parseFloat(d.horas_acum_100)/100*100) + '%';
+  if(pb50)pb50.className='progress-fill '+inspectionFill(d.horas_acum_50,50);
+  if(pb100)pb100.className='progress-fill '+inspectionFill(d.horas_acum_100,100);
   renderBitacoraHoras(idx, d.bitacora_horas);
   savePanel(idx);
 }
@@ -1368,8 +1368,8 @@ async function savePanelLegacy(idx) {
     if (a100) a100.textContent = parseFloat(d.horas_acum_100).toFixed(2) + ' HV';
     const pb50 = document.getElementById('pb-50-' + idx);
     const pb100 = document.getElementById('pb-100-' + idx);
-    if (pb50) { pb50.style.width = Math.min(100, parseFloat(d.horas_acum_50)/50*100) + '%'; pb50.className = 'progress-fill ' + (parseFloat(d.horas_acum_50)/50*100>=80?'fill-danger':'fill-ok'); }
-    if (pb100) { pb100.style.width = Math.min(100, parseFloat(d.horas_acum_100)/100*100) + '%'; pb100.className = 'progress-fill ' + (parseFloat(d.horas_acum_100)/100*100>=80?'fill-danger':'fill-ok'); }
+    if (pb50) { pb50.style.width = Math.min(100, parseFloat(d.horas_acum_50)/50*100) + '%'; pb50.className = 'progress-fill ' + (inspectionFill(d.horas_acum_50, 50)); }
+    if (pb100) { pb100.style.width = Math.min(100, parseFloat(d.horas_acum_100)/100*100) + '%'; pb100.className = 'progress-fill ' + (inspectionFill(d.horas_acum_100, 100)); }
     renderBitacoraHoras(idx, d.bitacora_horas);
   }
   d.horas_totales = d.horas_acum_50 || '';
@@ -2032,7 +2032,7 @@ function buildResumen() {
         if (!doc.nombre || !doc.vence) return;
         const days = daysUntil(doc.vence);
         if (days !== null && days <= DAYS_WARN) {
-          addAlert('📋 Documentos & Certificaciones', reg, doc.nombre, days < 0 ? 'VENCIDO' : `Vence en ${days} días`, days < 0 ? 'danger' : 'warn');
+          addAlert('📋 Documentos & Certificaciones', reg, doc.nombre, days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days));
         }
       });
     }
@@ -2042,7 +2042,7 @@ function buildResumen() {
     emergs.forEach(([name,fecha]) => {
       if (!fecha) return;
       const days=daysUntil(fecha);
-      if(days!==null&&days<=DAYS_WARN)addAlert('🚨 Equipos de Emergencia',reg,name,days<0?'VENCIDO':`Vence en ${days} días`,days<0?'danger':'warn');
+      if(days!==null&&days<=DAYS_WARN)addAlert('🚨 Equipos de Emergencia',reg,name,days<0?'VENCIDO':`Vence en ${days} días`,dateAlertLevel(days));
     });
 
     // Motor (horas) - warn when <= 20% remaining (>= 80% used of 2000)
@@ -2084,11 +2084,11 @@ function buildResumen() {
     const pct100 = acum100 / 100 * 100;
     const pct50 = acum50 / 50 * 100;
 
-    if (pct100 >= 80) {
+    if (pct100 >= 100) {
       // 100 hrs alert takes priority — don't show 50 hrs
       const rem = (100 - acum100).toFixed(2);
       addAlert('✈ Inspecciones', reg, 'Insp. 100 hrs', `Quedan ${rem} HV (${Math.round(100-pct100)}%)`, 'danger');
-    } else if (pct50 >= 80 && Number(d.proxima_inspeccion||50)!==100) {
+    } else if (pct50 >= 100 && Number(d.proxima_inspeccion||50)!==100) {
       // Only show 50 hrs alert if 100 hrs is not alerting
       const rem = (50 - acum50).toFixed(2);
       addAlert('✈ Inspecciones', reg, 'Insp. 50 hrs', `Quedan ${rem} HV (${Math.round(100-pct50)}%)`, 'danger');
@@ -2116,19 +2116,19 @@ function buildResumen() {
     if (p.licencia) {
       const days = daysUntil(p.licencia);
       if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Licencia', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, days < 0 ? 'danger' : 'warn');
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Licencia', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days));
       }
     }
     if (p.medico) {
       const days = daysUntil(p.medico);
       if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Cert. Médico', days < 0 ? 'VENCIDO' : `Vence en ${days} días`, days < 0 ? 'danger' : 'warn');
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Cert. Médico', days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days));
       }
     }
     if (p.escuela && p.escuela !== 'na') {
       const days = daysUntil(p.escuela);
       if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Verif. Escuela', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, days < 0 ? 'danger' : 'warn');
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Verif. Escuela', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days));
       }
     }
     (p.verificaciones || []).forEach(v => {
@@ -2136,7 +2136,7 @@ function buildResumen() {
       const days = daysUntil(v.fecha);
       if (days !== null && days <= DAYS_WARN) {
         const label = v.nombre ? `Verif. ${v.nombre}` : 'Verificación adicional';
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, label, days < 0 ? 'VENCIDA' : `Vence en ${days} días`, days < 0 ? 'danger' : 'warn');
+        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, label, days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days));
       }
     });
   });
@@ -2168,8 +2168,8 @@ function buildResumen() {
       : `<span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent)">${escapeRecord(reg)}</span>`;
     html+=`<div style="margin-bottom:4px"><div class="divider-label" style="margin-bottom:8px">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card" style="padding:0">`;
     items.forEach(item=>{
-      const color=item.type==='danger'?'var(--danger)':'var(--warn)';
-      const bg=item.type==='danger'?'rgba(204,17,34,0.05)':'rgba(204,119,0,0.05)';
+      const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
+      const bg=item.type==='danger'?'rgba(204,17,34,0.05)':item.type==='orange'?'rgba(234,110,10,0.09)':'rgba(234,190,0,0.12)';
       const rowLabel=isPilotoGroup
         ? `<div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${escapeRecord(item.reg)}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px">${escapeRecord(item.item)}</div>`
         : `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${escapeRecord(item.cat)}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text);margin-top:2px">${escapeRecord(item.item)}</div>`;
@@ -2589,7 +2589,7 @@ function getAircraftWarnings(reg, flightDate=panamaISO()) {
   // Inspección 100 hrs
   const acum100 = parseFloat(d.horas_acum_100 || 0);
   if (acum100 >= 100) warnings.push({ level: 'danger', msg: `🔧 INSP. 100 HRS VENCIDA (${acum100.toFixed(2)} HV)` });
-  else if (acum100 >= 80) warnings.push({ level: 'warn', msg: `⚠️ Insp. 100 hrs próxima (${acum100.toFixed(2)}/100 HV)` });
+  else if (acum100 >= 90) warnings.push({ level: 'warn', msg: `⚠️ Insp. 100 hrs próxima (${acum100.toFixed(2)}/100 HV)` });
 
   for(const [key,label] of vencimientoComponents(reg)){
     const map=VENC_FIELD_MAP[key],hours=Number(d[map.dataField]||0),limit=Number(d[map.limiteField]);
@@ -2599,7 +2599,7 @@ function getAircraftWarnings(reg, flightDate=panamaISO()) {
   }
   emergencyAlerts(d).forEach(([label,date])=>{
     const days=daysUntil(date);
-    if(days!==null&&days<0)warnings.push({level:'danger',msg:label+' VENCIDO'});
+    if(days!==null&&days<=30)warnings.push({level:dateAlertLevel(days),msg:label+(days<0?' VENCIDO':' vence en '+days+'d')});
   });
 
   // Documentos vencidos o por vencer
@@ -2608,7 +2608,7 @@ function getAircraftWarnings(reg, flightDate=panamaISO()) {
       if (!doc.nombre || !doc.vence) return;
       const days = daysUntil(doc.vence);
       if (days !== null && days < 0) warnings.push({ level: 'danger', msg: `📄 ${doc.nombre} VENCIDO` });
-      else if (days !== null && days <= 30) warnings.push({ level: 'warn', msg: `📄 ${doc.nombre} vence en ${days}d` });
+      else if (days !== null && days <= 30) warnings.push({ level: dateAlertLevel(days), msg: `📄 ${doc.nombre} vence en ${days}d` });
     });
   }
 
@@ -2691,15 +2691,15 @@ function renderDayFlights(dateStr) {
         <div style="margin-top:4px;display:flex;flex-direction:column;gap:3px">
           ${warnings.map(w => `
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;padding:2px 8px;border-radius:4px;
-              background:${w.level==='danger'?'rgba(184,15,30,0.1)':'rgba(196,112,0,0.1)'};
-              color:${w.level==='danger'?'var(--danger)':'var(--warn)'}">
+              background:${w.level==='danger'?'rgba(184,15,30,0.1)':w.level==='orange'?'rgba(234,110,10,0.1)':'rgba(234,190,0,0.12)'};
+              color:${w.level==='danger'?'var(--danger)':w.level==='orange'?'var(--orange)':'var(--warn)'}">
               ${w.msg}
             </div>`).join('')}
         </div>` : '';
 
       const pilotOptions = pilotosData.filter(p=>p.nombre).map(p => {
         const status = getPilotoStatus(p);
-        const prefix = status === 'vencido' ? '🔴 ' : status === 'proximo' ? '🟡 ' : '';
+        const prefix = status === 'vencido' ? '🔴 ' : status === 'urgente' ? '🟠 ' : status === 'proximo' ? '🟡 ' : '';
         const disabled = ''; // Vencimientos requieren confirmación al guardar.
         return `<option value="${p.nombre}" ${p.nombre===f.piloto?'selected':''}${disabled}>${prefix}${p.nombre}</option>`;
       }).join('');
@@ -2743,6 +2743,7 @@ function getPilotoStatus(p) {
   });
   const valid = checks.filter(d => d !== null);
   if (valid.some(d => d < 0)) return 'vencido';
+  if (valid.some(d => d <= 5)) return 'urgente';
   if (valid.some(d => d <= 30)) return 'proximo';
   return 'ok';
 }
@@ -2772,9 +2773,9 @@ function updatePilotDropdown() {
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     pilotosData.filter(p => p.nombre).map(p => {
       const status = getPilotoStatus(p);
-      const prefix = status === 'vencido' ? '🔴 ' : status === 'proximo' ? '🟡 ' : '';
+      const prefix = status === 'vencido' ? '🔴 ' : status === 'urgente' ? '🟠 ' : status === 'proximo' ? '🟡 ' : '';
       const disabled = ''; // Vencimientos requieren confirmación al guardar.
-      return `<option value="${p.nombre}"${disabled}>${prefix}${p.nombre}${status === 'vencido' ? ' (VENCIDO)' : status === 'proximo' ? ' (por vencer)' : ''}</option>`;
+      return `<option value="${p.nombre}"${disabled}>${prefix}${p.nombre}${status === 'vencido' ? ' (VENCIDO)' : (status === 'proximo'||status === 'urgente') ? ' (por vencer)' : ''}</option>`;
     }).join('');
   sel.value = current;
 }
@@ -2907,8 +2908,8 @@ function refreshPanel(idx) {
   if (a100) a100.textContent = parseFloat(d.horas_acum_100||0).toFixed(2) + ' HV';
   const pb50r = document.getElementById('pb-50-' + idx);
   const pb100r = document.getElementById('pb-100-' + idx);
-  if (pb50r) { pb50r.style.width = Math.min(100,parseFloat(d.horas_acum_50||0)/50*100)+'%'; pb50r.className='progress-fill '+(parseFloat(d.horas_acum_50||0)/50*100>=80?'fill-danger':'fill-ok'); }
-  if (pb100r) { pb100r.style.width = Math.min(100,parseFloat(d.horas_acum_100||0)/100*100)+'%'; pb100r.className='progress-fill '+(parseFloat(d.horas_acum_100||0)/100*100>=80?'fill-danger':'fill-ok'); }
+  if (pb50r) { pb50r.style.width = Math.min(100,parseFloat(d.horas_acum_50||0)/50*100)+'%'; pb50r.className='progress-fill '+(inspectionFill(d.horas_acum_50, 50)); }
+  if (pb100r) { pb100r.style.width = Math.min(100,parseFloat(d.horas_acum_100||0)/100*100)+'%'; pb100r.className='progress-fill '+(inspectionFill(d.horas_acum_100, 100)); }
   const fd = document.getElementById('fecha-diaria-' + idx);
   if (fd && d.fecha_diaria) fd.textContent = d.fecha_diaria;
   renderBitacoraHoras(idx, d.bitacora_horas);
@@ -3370,3 +3371,7 @@ function confirmFlightScheduling(flight) {
   if(!warnings.length)return true;
   return window.confirm('CONFIRMACIÓN REQUERIDA\nVuelo: '+fechaVista(flight.fecha)+'\n\n'+warnings.map(w=>'• '+w).join('\n')+'\n\n¿Confirmas guardar la programación con estas alertas?\nCancelar impide guardar el cambio.');
 }
+
+
+function dateAlertLevel(days){return days<0?'danger':days<=5?'orange':days<=30?'warn':'ok';}
+function inspectionFill(hours,limit){const n=Number(hours||0);return n>=limit?'fill-danger':n>=limit-10?'fill-warn':'fill-ok';}
