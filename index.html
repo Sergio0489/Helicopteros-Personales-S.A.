@@ -680,6 +680,21 @@
 .venc-log-empty{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0}
 @media(max-width:768px){.venc-log-groups{grid-template-columns:1fr;gap:14px}}
 
+
+.daily-schedule-header,.daily-schedule-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.daily-schedule-header{margin-bottom:16px}.daily-schedule-header .card-title{margin-bottom:6px}
+.daily-schedule-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+.daily-schedule-count{font-size:20px;color:var(--accent)}.daily-schedule-count small{display:block;font-size:10px;color:var(--muted);margin-top:4px}
+.daily-schedule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.daily-schedule-aircraft{min-width:0;overflow-wrap:anywhere}
+.daily-schedule-heading{padding-bottom:12px;border-bottom:1px solid var(--border)}
+.daily-schedule-heading h2{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--accent)}
+.daily-schedule-heading small,.daily-schedule-heading>span{font-size:10px;color:var(--muted)}
+.daily-schedule-flight{padding:14px 0;border-bottom:1px solid var(--border)}.daily-schedule-flight:last-child{border-bottom:0;padding-bottom:0}
+.daily-schedule-flight .flight-time{font-size:14px;margin-bottom:10px;white-space:normal}
+.daily-schedule-person{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;margin-top:6px}
+.daily-schedule-person small{font-size:10px;color:var(--muted);min-width:65px}
+@media(max-width:768px){.daily-schedule-grid{grid-template-columns:1fr}}
 </style>
   
   
@@ -739,7 +754,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-6"></script>
+<script src="cloud.js?v=20261009-7"></script>
 </body>
 </html>
 
