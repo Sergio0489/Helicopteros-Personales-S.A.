@@ -99,3 +99,8 @@
 .school-stage-panel>label{display:grid;gap:6px}
 .school-stage-panel textarea{width:100%;min-height:85px;box-sizing:border-box}
 .school-stage-panel fieldset{margin-top:12px}
+
+.school-equipment-list{display:grid;gap:6px;margin-top:10px;width:100%;min-width:0}
+.school-equipment-line{display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-top:1px solid #dce4ed;padding-top:6px;font-size:12px}
+.school-equipment-line span{overflow-wrap:anywhere;min-width:0}
+.school-equipment-line strong{white-space:nowrap;font-size:12px}
