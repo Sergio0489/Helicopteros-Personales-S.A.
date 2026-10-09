@@ -1,0 +1,55 @@
+/* School administration */
+.school-header,.school-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.school-header{margin-bottom:16px}.school-header h2,.school-profile h2{font-size:20px;color:var(--text)}
+.school-muted{font-size:11px;line-height:1.65;color:var(--muted);margin:8px 0;overflow-wrap:anywhere}
+.school-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.school-nav [aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.school-workspace{display:grid;grid-template-columns:230px minmax(0,1fr);gap:16px;align-items:start}
+.school-directory{position:sticky;top:90px;padding:14px;min-width:0}
+.school-directory>label{display:block;font-size:11px;color:var(--muted);margin-bottom:12px}
+.school-directory input,.school-directory select{display:block;width:100%;padding:9px 8px;margin-top:5px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:var(--text);min-width:0}
+#school-student-list{max-height:65vh;overflow:auto}
+.school-student-button{display:block;width:100%;text-align:left;border:1px solid var(--border);border-radius:8px;padding:11px;margin-bottom:8px;background:var(--panel);color:var(--text);cursor:pointer;overflow-wrap:anywhere}
+.school-student-button b{display:block;font-size:12px}.school-student-button span{display:block;margin-top:5px;color:var(--muted);font-size:9px;line-height:1.5}
+.school-student-button[aria-pressed="true"]{border-color:var(--accent);background:var(--panel2);box-shadow:inset 3px 0 var(--accent)}
+.school-profile{min-width:0;display:grid;gap:16px}.school-profile>.card{margin:0}
+.school-profile-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:16px;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+.school-tag{display:inline-block;padding:4px 8px;border:1px solid var(--border);background:var(--panel2);border-radius:20px;color:var(--accent);font-size:10px;margin-top:6px}
+.school-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.school-totals>div{border:1px solid var(--border);background:var(--panel2);border-radius:8px;padding:11px;min-width:0;overflow-wrap:anywhere}
+.school-totals small{display:block;color:var(--muted);font-size:9px;line-height:1.5}
+.school-totals b{display:block;font-family:'IBM Plex Mono',monospace;font-size:16px;margin-top:6px}
+.school-course-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.school-course{min-width:0;padding:15px}.school-course h3{font-size:14px;color:var(--accent)}
+.school-course .record-btn{font-size:9px;padding:6px 8px;min-height:32px}
+.school-course-dates{font-size:10px;color:var(--muted);line-height:1.7;margin:12px 0;overflow-wrap:anywhere}
+.school-fee{padding:12px 0;border-top:1px solid var(--border)}.school-fee strong{font-size:11px}
+.school-fee-figures{display:flex;justify-content:space-between;gap:4px 10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:9px;line-height:1.6;margin:8px 0;color:var(--muted)}
+.school-progress-row{display:flex;align-items:center;gap:8px}
+.school-progress{height:7px;background:var(--border);border-radius:10px;overflow:hidden;flex:1}
+.school-progress span{display:block;height:100%;background:var(--signal-green);border-radius:10px}
+.school-paid{font-size:13px;min-width:36px;text-align:right;color:var(--ok)}
+.school-balances{padding:12px;background:var(--panel2);border-radius:8px;display:grid;gap:12px;margin:10px 0}
+.school-balances small{display:block;color:var(--muted);font-size:9px;line-height:1.6}.school-balances b{display:block;font-family:'IBM Plex Mono',monospace;font-size:18px;margin:5px 0}
+.school-negative{color:var(--danger)}.school-actions{display:flex;gap:8px;flex-wrap:wrap}
+.school-ledger{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;font-size:10px;line-height:1.5}
+.school-ledger summary{cursor:pointer;color:var(--accent);font-size:10px}
+.school-ledger-entry{padding:12px 0;border-bottom:1px solid var(--border);font-size:10px;overflow-wrap:anywhere}
+.school-ledger-entry span{display:block;color:var(--muted);line-height:1.7}.school-ledger-entry p{margin:4px 0;font-size:10px;line-height:1.6}
+.school-void{opacity:.72;background:var(--panel2);padding:10px;border-radius:6px}.school-void>.school-row>b{text-decoration:line-through}
+.school-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.school-dialog{width:min(680px,calc(100% - 24px))}
+.school-form label{display:block;font-size:11px;line-height:1.5;color:var(--muted);min-width:0}
+.school-form input,.school-form select,.school-form textarea,.school-preview-input{display:block;width:100%;padding:10px;margin-top:5px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:var(--text);font-size:14px;min-width:0}
+.school-form textarea{min-height:75px;resize:vertical}.school-full{grid-column:1/-1}.school-form fieldset{padding:12px;border:1px solid var(--border);border-radius:8px}
+.school-form legend{font-size:11px;padding:0 5px}.school-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.school-form .school-check{display:flex;align-items:center;gap:8px}.school-check input{display:inline-block;width:17px;height:17px;margin:0;flex-shrink:0}
+.school-rate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:15px}.school-rate{padding:14px;border:1px solid var(--border);border-radius:9px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.school-rate b{color:var(--accent);font-size:13px}.school-rate span{font-size:10px;color:var(--muted)}.school-rate strong{font-family:'IBM Plex Mono',monospace;font-size:16px}.school-rate .record-btn{margin-top:auto}
+.school-tab-rate{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-top:5px}
+.school-aircraft-rate{font-size:10px}.school-mail{margin-top:16px}.school-mail-status{padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);font-size:11px;color:var(--text);margin:12px 0;line-height:1.6}
+.school-email-preview{display:block;width:100%;min-height:250px;margin:12px 0;padding:12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.7;resize:vertical}
+.school-empty{text-align:center;padding:40px 25px}.school-empty p{font-size:12px;color:var(--muted);line-height:1.7;margin-top:10px}
+@media(max-width:1250px){.school-course-grid{grid-template-columns:1fr}.school-workspace{grid-template-columns:210px minmax(0,1fr)}}
+@media(max-width:768px){.school-workspace{grid-template-columns:1fr}.school-directory{position:static}#school-student-list{max-height:220px}.school-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.school-rate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.school-form input,.school-form select,.school-form textarea{font-size:16px}.school-course .record-btn{min-height:40px}.school-profile-info{grid-template-columns:1fr}.school-header .aircraft-reg{font-size:18px!important}.school-form{grid-template-columns:1fr}.school-checks{grid-template-columns:1fr}.school-form .school-full{grid-column:auto}}
+@media(max-width:400px){.school-rate-grid{grid-template-columns:1fr}}
