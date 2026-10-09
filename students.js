@@ -219,9 +219,23 @@ function deletedCoursesHtml(s){
  if(!list(s.deletedCourses).length)return '';
  return '<details class="card school-deleted-courses"><summary>Cursos eliminados ('+s.deletedCourses.length+')</summary>'+s.deletedCourses.map(c=>'<section class="school-ledger-entry"><h4>'+esc(COURSES[c.type]?.name||c.type)+'</h4><p class="school-muted">Conservado solo como historial; no forma parte de los saldos activos.</p>'+studentInfoItem('Estado al eliminar',c.status)+studentInfoItem('Abonos registrados',money(paymentTotal(c)))+studentInfoItem('Horas registradas',numeric(hoursTotal(c))+' h')+list(c.payments).map(p=>studentInfoItem('Abono '+fechaVista(p.date),FEES[p.fee]+' · '+money(p.cents)+' · '+p.source+(p.voidedAt?' · Anulado':'')+' · '+(p.note||''))).join('')+list(c.flights).map(f=>studentInfoItem('Sesión '+fechaVista(f.date),f.aircraft+' · '+numeric(f.hours100)+' h · '+money(f.costCents)+(f.voidedAt?' · Anulada':''))).join('')+'</section>').join('')+'</details>';
 }
+
+function studentPrintHtml(student){
+ return '<header class="school-print-heading"><h1>HP Flight School</h1><h2>Información personal del estudiante</h2><p>Emitido: '+esc(fechaVista(today()))+' · Panamá</p></header><div class="school-print-fields">'+studentPersonalHtml(student)+'</div>';
+}
+function printStudent(id){
+ const student=studentById(data(),id);
+ document.getElementById('school-print-sheet')?.remove();
+ const sheet=document.createElement('section');sheet.id='school-print-sheet';sheet.innerHTML=studentPrintHtml(student);
+ document.body.appendChild(sheet);document.body.classList.add('school-printing');
+ const cleanup=()=>{document.body.classList.remove('school-printing');sheet.remove();};
+ window.addEventListener('afterprint',cleanup,{once:true});
+ try{window.print();}catch(e){cleanup();throw Error('No se pudo abrir la impresión. Intenta desde el menú de impresión del navegador.');}
+}
+
 function profileHtml(s){
  const courses=list(s.courses),totals=courses.map(courseSummary),sum=key=>totals.reduce((n,t)=>n+t[key],0),licenses=courses.filter(c=>c.licenseDate&&c.status===COURSES[c.type].states.at(-1));
- return '<div class="school-profile"><div class="card"><div class="school-row"><div><h2>'+esc(s.name)+'</h2><span class="school-tag">'+esc(s.stage)+'</span></div>'+button('Editar expediente','edit-student','data-student="'+esc(s.id)+'"')+'</div><div class="school-profile-info">'+studentPersonalHtml(s)+'</div><div class="school-totals"><div><small>Presupuesto de cursos</small><b>'+money(sum('budget'))+'</b></div><div><small>Abonos recibidos</small><b>'+money(sum('paid'))+'</b></div><div><small>Saldo de presupuestos por pagar</small><b>'+money(sum('due'))+'</b></div><div><small>Saldo disponible · simulador</small><b>'+money(sum('simBalance'))+'</b></div><div><small>Saldo disponible · vuelos</small><b>'+money(sum('flightBalance'))+'</b></div><div><small>Horas voladas</small><b>'+numeric(courses.reduce((n,c)=>n+hoursTotal(c,'vuelo'),0))+' h</b></div></div><p class="school-muted">Licencias / habilitaciones obtenidas: '+(licenses.length?licenses.map(c=>esc(COURSES[c.type].name)+' ('+esc(fechaVista(c.licenseDate))+')').join(' · '):'Ninguna registrada')+'</p></div><div class="school-row"><h3>Cursos y pagos</h3>'+button('+ Agregar curso','add-course','data-student="'+esc(s.id)+'"')+'</div><div class="school-course-grid">'+courses.map(c=>courseHtml(s,c)).join('')+'</div>'+deletedCoursesHtml(s)+'</div>';
+ return '<div class="school-profile"><div class="card"><div class="school-row"><div><h2>'+esc(s.name)+'</h2><span class="school-tag">'+esc(s.stage)+'</span></div>'+'<div class="school-actions">'+button('Editar expediente','edit-student','data-student="'+esc(s.id)+'"')+button('Imprimir información personal','print-student','data-student="'+esc(s.id)+'"')+'</div>'+'</div><div class="school-profile-info">'+studentPersonalHtml(s)+'</div><div class="school-totals"><div><small>Presupuesto de cursos</small><b>'+money(sum('budget'))+'</b></div><div><small>Abonos recibidos</small><b>'+money(sum('paid'))+'</b></div><div><small>Saldo de presupuestos por pagar</small><b>'+money(sum('due'))+'</b></div><div><small>Saldo disponible · simulador</small><b>'+money(sum('simBalance'))+'</b></div><div><small>Saldo disponible · vuelos</small><b>'+money(sum('flightBalance'))+'</b></div><div><small>Horas voladas</small><b>'+numeric(courses.reduce((n,c)=>n+hoursTotal(c,'vuelo'),0))+' h</b></div></div><p class="school-muted">Licencias / habilitaciones obtenidas: '+(licenses.length?licenses.map(c=>esc(COURSES[c.type].name)+' ('+esc(fechaVista(c.licenseDate))+')').join(' · '):'Ninguna registrada')+'</p></div><div class="school-row"><h3>Cursos y pagos</h3>'+button('+ Agregar curso','add-course','data-student="'+esc(s.id)+'"')+'</div><div class="school-course-grid">'+courses.map(c=>courseHtml(s,c)).join('')+'</div>'+deletedCoursesHtml(s)+'</div>';
 }
 const panel=document.createElement('div');panel.id='panel-estudiantes';panel.className='aircraft-panel';contentEl.appendChild(panel);
 const tab=document.createElement('div');tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px">🎓 ESTUDIANTES</div>';itinerariosTab.insertAdjacentElement('afterend',tab);
@@ -248,7 +262,7 @@ function renderIntakes(body,school){
 panel.addEventListener('click',event=>{
  const b=event.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,s=b.dataset.student,c=b.dataset.course;
  const handlers={
-  'new-student':()=>editStudent(), 'edit-student':()=>editStudent(s),select:()=>{selected=s;render();},view:()=>{view=b.dataset.view;render();},
+  'new-student':()=>editStudent(), 'edit-student':()=>editStudent(s),'print-student':()=>printStudent(s),select:()=>{selected=s;render();},view:()=>{view=b.dataset.view;render();},
   'add-course':()=>addCourse(s),'edit-course':()=>editCourse(s,c),'delete-course':()=>deleteCourse(s,c),payment:()=>addPayment(s,c,b.dataset.fee),flight:()=>logFlight(s,c),simulator:()=>logFlight(s,c,'simulador'),
   void:()=>voidEntry(s,c,b.dataset.kind,b.dataset.entry),rate:()=>editRate(b.dataset.reg),intake:()=>editIntake(b.dataset.intake),brochure:editBrochure,email:()=>showEmail(s,b.dataset.intake)
  };if(handlers[a])try{Promise.resolve(handlers[a]()).catch(e=>alert(e.message));}catch(e){alert(e.message);}
