@@ -699,6 +699,28 @@
 .daily-schedule-person small{font-size:9px;color:var(--muted);min-width:55px}
 @media(min-width:601px) and (max-width:1000px){.daily-schedule-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.daily-schedule-grid{grid-template-columns:1fr}}
+
+.planner-board{margin-bottom:16px;min-width:0}
+.planner-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.planner-toolbar .card-title{margin-bottom:4px}.planner-toolbar label{font-size:10px;color:var(--muted)}
+.planner-toolbar select{display:block;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);max-width:100%}
+.planner-day-controls{display:flex;gap:6px}#planner-date-label{text-transform:capitalize;font-size:12px}
+.planner-help{font-size:10px;line-height:1.6;color:var(--muted);margin:8px 0}
+.planner-scroll{overflow:auto;max-height:620px;border:1px solid var(--border);border-radius:8px;overscroll-behavior-x:contain}
+.planner-grid{width:1570px}.planner-row{display:flex;border-bottom:1px solid var(--border)}
+.planner-reg{position:sticky;left:0;z-index:3;flex:0 0 130px;display:flex;align-items:center;padding:10px;font-size:11px;background:var(--panel);border-right:1px solid var(--border)}
+.planner-track{width:1440px;flex:none;position:relative;min-height:36px}
+.planner-hours{position:sticky;top:0;z-index:5;background:var(--panel2)}
+.planner-hours .planner-reg{background:var(--panel2)}.planner-hours .planner-track span{position:absolute;font-size:9px;top:10px}
+.planner-slot{position:absolute;top:0;bottom:0;width:2.083333%;background:transparent;border:0;border-right:1px solid var(--border);cursor:pointer}
+.planner-slot:nth-child(even){background:rgba(0,89,179,.025)}.planner-slot:hover,.planner-slot:focus-visible{background:rgba(0,89,179,.15);outline:2px solid var(--accent);outline-offset:-2px}
+.planner-flight{position:absolute;z-index:2;height:44px;border:1px solid rgba(0,0,0,.25);border-radius:5px;text-align:left;padding:4px;overflow:hidden;cursor:pointer;font-size:9px;min-width:4px}
+.planner-flight b,.planner-flight span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#panel-itinerarios .planner-lower{grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr);grid-auto-rows:auto;align-items:start}
+#panel-itinerarios .planner-lower>.card{height:auto}
+#panel-itinerarios .flight-card:focus{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:768px){#panel-itinerarios .planner-lower{grid-template-columns:1fr!important}.planner-reg{flex-basis:100px;font-size:10px}.planner-grid{width:1540px}.planner-scroll{max-height:500px}.planner-toolbar select{font-size:16px}.planner-board{padding:10px}}
+
 </style>
   
   
@@ -758,7 +780,7 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261009-10"></script>
+<script src="cloud.js?v=20261009-11"></script>
 </body>
 </html>
 
