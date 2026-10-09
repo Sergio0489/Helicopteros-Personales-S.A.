@@ -805,6 +805,7 @@ function addPieza(idx, mi) {
 }
 
 function removePieza(idx, mi, pi) {
+  if (!window.confirm("¿Eliminar esta pieza del mantenimiento?")) return;
   state[idx].mantenimiento[mi].piezas.splice(pi, 1);
   renderMaintList(idx, state[idx].mantenimiento);
 }
@@ -856,6 +857,7 @@ function renderBitacoraPedidos(idx) {
 }
 
 function eliminarBitacoraPedido(idx, ri) {
+  if (!window.confirm("¿Eliminar este registro de la bitácora de pedidos?")) return;
   state[idx].bitacora_pedidos.splice(ri, 1);
   renderBitacoraPedidos(idx);
   savePanel(idx);
@@ -934,6 +936,7 @@ function renderBitacora(idx, items) {
 }
 
 function eliminarBitacora(idx, mi) {
+  if (!window.confirm("¿Eliminar este registro de la bitácora de mantenimiento?")) return;
   state[idx].mantenimiento.splice(mi, 1);
   savePanel(idx);
   renderBitacora(idx, state[idx].mantenimiento);
@@ -1062,6 +1065,7 @@ function editarFechaBitacora(idx, ri, isoValue) {
 
 
 function eliminarHoraBitacora(idx, ri) {
+  if (!window.confirm("¿Eliminar este registro de horas de vuelo? Sus horas se descontarán de los acumulados de inspección.")) return;
   const d = state[idx];
   if (!d.bitacora_horas || !d.bitacora_horas[ri]) return;
   const hv = parseFloat(d.bitacora_horas[ri].hv || 0);
@@ -1131,6 +1135,7 @@ function establecerTotalVenc(tipo, idx, val) {
 
 
 function revertirVenc(idx) {
+  if (!window.confirm("¿Revertir el último ingreso de horas? Sus horas se descontarán de los acumulados de vencimiento.")) return;
   const d = state[idx];
   if (!d.ultimo_venc_hv) return;
   const hv = parseFloat(d.ultimo_venc_hv);
@@ -1588,7 +1593,7 @@ function renderPilotos() {
           <div style="display:flex;flex-direction:column;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:4px 6px;min-width:120px">
             <div style="display:flex;align-items:center;gap:4px">
               <input type="text" class="maint-input" placeholder="Aeronave / tipo" value="${v.nombre||''}" onchange="pilotosData[${i}].verificaciones[${vi}].nombre=this.value;savePilotos()" style="font-size:9px;padding:3px 6px">
-              <button onclick="pilotosData[${i}].verificaciones.splice(${vi},1);renderPilotos();savePilotos()" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0">✕</button>
+              <button onclick="eliminarVerificacionPiloto(${i},${vi})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0">✕</button>
             </div>
             ${v.fecha==='na' ?
               `<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);cursor:pointer;text-decoration:underline;text-align:center" onclick="pilotosData[${i}].verificaciones[${vi}].fecha='';renderPilotos();savePilotos()">N/A</span>` :
@@ -1620,7 +1625,7 @@ function renderPilotos() {
       row.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()" style="font-size:13px;font-weight:700;flex:1;margin-right:8px">
-          <button onclick="pilotosData.splice(${i},1);renderPilotos();savePilotos()" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">✕</button>
+          <button onclick="eliminarPiloto(${i})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">✕</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
@@ -1658,7 +1663,7 @@ function renderPilotos() {
           `<div style="display:flex;flex-direction:column;gap:2px"><input type="date" class="maint-input" value="${p.escuela||''}" onchange="pilotosData[${i}].escuela=this.value;renderPilotos();savePilotos()" style="font-size:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);cursor:pointer;text-align:right" onclick="pilotosData[${i}].escuela='na';renderPilotos();savePilotos()">N/A</span></div><span>${daysBadge(daysUntil(p.escuela))}</span>`
         }
         ${verifHtml}
-        <button onclick="pilotosData.splice(${i},1);renderPilotos();savePilotos()" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0">✕</button>
+        <button onclick="eliminarPiloto(${i})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0">✕</button>
       `;
     }
 
@@ -2854,6 +2859,7 @@ function updateFlightAc(globalIdx, newAc, dateStr) {
 }
 
 function deleteFlight(idx) {
+  if (!window.confirm("¿Eliminar este vuelo del itinerario?")) return;
   flightsData.splice(idx, 1);
   if (db) db.ref('itinerarios').set(flightsData);
   renderCalendar();
@@ -3095,3 +3101,16 @@ window.hasDraftChanges=()=>aircraftDirty.size>0;
 window.exportCurrentData=()=>exportPreview();
 
 window.DASHBOARD_READY=true;
+
+function eliminarPiloto(index) {
+  if (!window.confirm('¿Eliminar este piloto y todos sus registros?')) return;
+  pilotosData.splice(index, 1);
+  renderPilotos();
+  savePilotos();
+}
+function eliminarVerificacionPiloto(index, verificationIndex) {
+  if (!window.confirm('¿Eliminar esta verificación del piloto?')) return;
+  pilotosData[index].verificaciones.splice(verificationIndex, 1);
+  renderPilotos();
+  savePilotos();
+}
