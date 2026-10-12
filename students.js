@@ -652,7 +652,13 @@ function renderPayments(){
  field.onfocus=()=>show(true);field.onclick=()=>show(true);
  field.oninput=()=>{paymentSelection='';add.disabled=true;paymentPanel.querySelector('.payment-history').hidden=true;show();};
  field.onkeydown=e=>{if(e.key==='Escape'){close();return;}if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();if(box.hidden)show();position=Math.max(0,Math.min(choices.length-1,position+(e.key==='ArrowDown'?1:-1)));box.querySelectorAll('[role="option"]').forEach((b,i)=>b.setAttribute('aria-selected',String(i===position)));if(choices[position])field.setAttribute('aria-activedescendant','payment-person-'+position);}if(e.key==='Enter'&&!box.hidden){e.preventDefault();if(choices[position]||choices.length===1)choose((choices[position]||choices[0]).id);}};
- combo.onfocusout=e=>{if(!combo.contains(e.relatedTarget))close();};
+ // Safari may blur the input without focusing the option before its click fires.
+ let selectingOption=false;
+ box.onpointerdown=e=>{selectingOption=true;if(e.pointerType==='mouse')e.preventDefault();};
+ box.onmousedown=e=>e.preventDefault();
+ box.onpointerup=()=>{setTimeout(()=>{selectingOption=false;},0);};
+ box.onpointercancel=()=>{selectingOption=false;if(!combo.contains(document.activeElement))close();};
+ combo.onfocusout=e=>{if(!selectingOption&&!combo.contains(e.relatedTarget))close();};
  add.onclick=()=>{if(paymentSelection)openPayment(paymentSelection);};
 
  paymentPanel.querySelectorAll('[data-receipt]').forEach(b=>b.onclick=()=>showReceipt(b.dataset.receipt));
@@ -668,6 +674,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
