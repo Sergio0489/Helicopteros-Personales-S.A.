@@ -215,6 +215,7 @@ function statementData(s){
   for(const p of list(c.payments))rows.push({date:p.date,description:'Abono · '+(FEES[p.fee]||p.fee),course:name,aircraft:'',charge:0,credit:p.voidedAt?0:p.cents,voided:!!p.voidedAt,note:[p.source,p.reference,p.note,p.voidedAt?'Anulado: '+p.voidReason+' · Importe original '+money(p.cents):''].filter(Boolean).join(' · ')});
   for(const f of list(c.flights))rows.push({date:f.date,description:sessionDescription(f,c),course:name,aircraft:f.fee==='simulador'?'Simulador'+(f.equipment?' · '+f.equipment:''):f.aircraft,hours100:f.hours100,rateCents:f.rateCents,charge:f.voidedAt?0:f.costCents,credit:0,voided:!!f.voidedAt,note:[f.instructor,f.note,f.voidedAt?'Anulado: '+f.voidReason+' · Importe original '+money(f.costCents):''].filter(Boolean).join(' · ')});
  }
+ for(const f of list(s.registryFlights))rows.push({date:f.date,description:'Horas de vuelo',course:'Sin curso asignado',aircraft:f.aircraft,hours100:f.hours100,rateCents:0,charge:0,credit:0,note:f.note});
  for(const kind of ['expenses','extraPayments'])for(const e of list(s[kind]))rows.push({date:e.date,description:e.description,course:e.courseName||'',aircraft:e.aircraft||'',charge:kind==='expenses'&&!e.voidedAt?e.cents:0,credit:kind==='extraPayments'&&!e.voidedAt?e.cents:0,voided:!!e.voidedAt,note:[e.source,e.reference,e.note,e.voidedAt?'Anulado: '+e.voidReason+' · Importe original '+money(e.cents):''].filter(Boolean).join(' · ')});
  rows.sort((a,b)=>(isoFecha(a.date)||'').localeCompare(isoFecha(b.date)||''));let balance=0;for(const row of rows){balance+=row.charge-row.credit;row.balance=balance;}
  return {rows,budget,paid,expenses:extra.expenses,contractDue:budget+extra.expenses-paid,servicesBalance:balance,flightBalance,simBalance};
@@ -314,6 +315,7 @@ function logFlight(sid,cid,kind='vuelo'){
  });
 }
 function voidEntry(sid,cid,kind,id){
+ const linked=list(courseById(studentById(data(),sid),cid)[kind]).find(e=>e.id===id);if(linked?.registryId){window.Registro.edit(linked.registryId);return;}
  modal('Anular registro','<p class="school-full school-muted">El original se conserva. La anulación recalcula el saldo y las horas.</p><label class="school-full">Motivo obligatorio<textarea name="reason" required maxlength="2000"></textarea></label>',async f=>{
   if(!f.reason.trim())throw Error('Ingresa el motivo de la anulación.');
   if(!window.confirm('¿Confirmas anular este registro?'))return;
@@ -356,7 +358,7 @@ function courseHtml(student,c){
 function historyHtml(student,c){
  const attrs='data-student="'+esc(student.id)+'" data-course="'+esc(c.id)+'"';
  const payments=list(c.payments).map(p=>({date:p.date,html:'<div class="school-ledger-entry'+(p.voidedAt?' school-void':'')+'"><div class="school-row"><b>'+esc(fechaVista(p.date))+' · Abono '+money(p.cents)+'</b>'+(!p.voidedAt?button('Anular','void',attrs+' data-kind="payments" data-entry="'+esc(p.id)+'"'):'<span>Anulado</span>')+'</div><span>'+FEES[p.fee]+' · '+esc(p.source)+' · '+esc(p.reference||'Sin referencia')+'</span><p>'+esc(p.note||'')+'</p>'+(p.voidedAt?'<p>Motivo de anulación: '+esc(p.voidReason)+'</p>':'')+'</div>'}));
- const flights=list(c.flights).map(f=>({date:f.date,html:'<div class="school-ledger-entry'+(f.voidedAt?' school-void':'')+'"><div class="school-row"><b>'+esc(fechaVista(f.date))+' · '+esc(f.aircraft)+' · '+numeric(f.hours100)+' h</b>'+(!f.voidedAt?button('Anular','void',attrs+' data-kind="flights" data-entry="'+esc(f.id)+'"'):'<span>Anulado</span>')+'</div><span>'+money(f.rateCents)+'/h · Cargo '+money(f.costCents)+' · '+esc(f.equipment||f.instructor||'')+'</span><p>'+esc(f.note||'')+'</p>'+(f.voidedAt?'<p>Motivo de anulación: '+esc(f.voidReason)+'</p>':'')+'</div>'}));
+ const flights=list(c.flights).map(f=>({date:f.date,html:'<div class="school-ledger-entry'+(f.voidedAt?' school-void':'')+'"><div class="school-row"><b>'+esc(fechaVista(f.date))+' · '+esc(f.aircraft)+' · '+numeric(f.hours100)+' h</b>'+(!f.voidedAt?button(f.registryId?'Corregir':'Anular','void',attrs+' data-kind="flights" data-entry="'+esc(f.id)+'"'):'<span>Anulado</span>')+'</div><span>'+money(f.rateCents)+'/h · Cargo '+money(f.costCents)+' · '+esc(f.equipment||f.instructor||'')+'</span><p>'+esc(f.note||'')+'</p>'+(f.voidedAt?'<p>Motivo de anulación: '+esc(f.voidReason)+'</p>':'')+'</div>'}));
  const entries=[...payments,...flights].sort((a,b)=>b.date.localeCompare(a.date));
  return '<details class="school-ledger"><summary>Movimientos y estado de cuenta ('+entries.length+')</summary><p class="school-muted">Saldo de vuelo = abonos de vuelo − cargos por sesiones. El monto del curso es el presupuesto; no se descuenta otra vez del saldo.</p>'+entries.map(e=>e.html).join('')+(entries.length?'':'<p>Sin movimientos.</p>')+'</details>';
 }
@@ -383,7 +385,7 @@ function printStudent(id){
 
 function equipmentHours(student){
  const groups=new Map();
- for(const course of list(student.courses))for(const flight of active(course.flights)){
+ for(const course of [...list(student.courses),{type:'registro',flights:list(student.registryFlights)}])for(const flight of active(course.flights)){
   const category=sessionCategory(flight,course),simulator=category==='simulador';
   const label=simulator?'Simulador'+(flight.equipment?' · '+flight.equipment:''):(flight.aircraft==='RPA'?'RPA (Drone)':flight.aircraft||'Equipo sin registrar');
   const key=category+':'+label;
@@ -396,9 +398,10 @@ function equipmentHoursHtml(student){
  const groups=equipmentHours(student),total=kind=>groups.filter(g=>g.category===kind).reduce((n,g)=>n+g.hours100,0);
  return '<div class="school-equipment-hours"><small>Horas por equipo</small><div class="school-hour-total"><span>Horas de vuelo:</span> <strong>'+numeric(total('vuelo'))+' h</strong></div><div class="school-hour-total"><span>Horas de simulador:</span> <strong>'+numeric(total('simulador'))+' h</strong></div><div class="school-hour-total"><span>Horas de RPA:</span> <strong>'+numeric(total('rpa'))+' h</strong></div>'+(total('unknown')?'<div class="school-hour-total">Horas sin clasificar: '+numeric(total('unknown'))+' h</div>':'')+'<div class="school-equipment-list">'+(groups.length?groups.map(g=>'<div class="school-equipment-line"><span>'+esc(g.label)+'</span><strong>'+numeric(g.hours100)+' h</strong></div>').join(''):'<small>Sin horas registradas</small>')+'</div></div>';
 }
+function registryFlightsHtml(s){return list(s.registryFlights).length?'<section class="card"><h3>Vuelos sin curso asignado</h3>'+s.registryFlights.map(f=>'<div class="school-row school-ledger-entry"><span>'+esc(fechaVista(f.date))+' · '+esc(f.aircraft)+' · '+numeric(f.hours100)+' h</span>'+button('Corregir','registry-edit','data-entry="'+esc(f.registryId)+'"')+'</div>').join('')+'</section>':'';}
 function profileHtml(s){
  const courses=list(s.courses),totals=courses.map(courseSummary),sum=key=>totals.reduce((n,t)=>n+t[key],0),licenses=courses.filter(c=>c.licenseDate&&c.status===COURSES[c.type].states.at(-1));
- return '<div class="school-profile"><div class="card"><div class="school-row"><div><h2>'+esc(s.name)+'</h2><span class="school-tag">'+esc(s.stage)+'</span></div>'+'<div class="school-actions">'+button('Editar expediente','edit-student','data-student="'+esc(s.id)+'"')+button('Imprimir información personal','print-student','data-student="'+esc(s.id)+'"')+button('Eliminar estudiante','delete-student','data-student="'+esc(s.id)+'"')+'</div>'+'</div><div class="school-profile-info">'+studentPersonalHtml(s)+'</div><div class="school-totals"><div><small>Presupuesto de cursos</small><b>'+money(sum('budget'))+'</b></div><button type="button" class="school-account-button" data-action="statement" data-student="'+esc(s.id)+'"><small>Abonos recibidos / estado de cuenta</small><b>'+money(sum('paid')+extraTotals(s).payments)+'</b><span>Ver estado de cuenta →</span></button><div><small>Saldo de presupuestos por pagar</small><b>'+money(sum('due')+extraTotals(s).expenses-extraTotals(s).payments)+'</b></div><div><small>Saldo disponible · simulador</small><b>'+money(sum('simBalance'))+'</b></div><div><small>Saldo disponible · vuelos</small><b>'+money(sum('flightBalance'))+'</b></div>'+equipmentHoursHtml(s)+'</div><p class="school-muted">Licencias / habilitaciones obtenidas: '+(licenses.length?licenses.map(c=>esc(COURSES[c.type].name)+' ('+esc(fechaVista(c.licenseDate))+')').join(' · '):'Ninguna registrada')+'</p></div><div class="school-row"><h3>Cursos y pagos</h3>'+button('+ Agregar curso','add-course','data-student="'+esc(s.id)+'"')+'</div><div class="school-course-grid">'+courses.map(c=>courseHtml(s,c)).join('')+'</div>'+extrasHtml(s)+deletedCoursesHtml(s)+'</div>';
+ return '<div class="school-profile"><div class="card"><div class="school-row"><div><h2>'+esc(s.name)+'</h2><span class="school-tag">'+esc(s.stage)+'</span></div>'+'<div class="school-actions">'+button('Editar expediente','edit-student','data-student="'+esc(s.id)+'"')+button('Imprimir información personal','print-student','data-student="'+esc(s.id)+'"')+button('Eliminar estudiante','delete-student','data-student="'+esc(s.id)+'"')+'</div>'+'</div><div class="school-profile-info">'+studentPersonalHtml(s)+'</div><div class="school-totals"><div><small>Presupuesto de cursos</small><b>'+money(sum('budget'))+'</b></div><button type="button" class="school-account-button" data-action="statement" data-student="'+esc(s.id)+'"><small>Abonos recibidos / estado de cuenta</small><b>'+money(sum('paid')+extraTotals(s).payments)+'</b><span>Ver estado de cuenta →</span></button><div><small>Saldo de presupuestos por pagar</small><b>'+money(sum('due')+extraTotals(s).expenses-extraTotals(s).payments)+'</b></div><div><small>Saldo disponible · simulador</small><b>'+money(sum('simBalance'))+'</b></div><div><small>Saldo disponible · vuelos</small><b>'+money(sum('flightBalance'))+'</b></div>'+equipmentHoursHtml(s)+'</div><p class="school-muted">Licencias / habilitaciones obtenidas: '+(licenses.length?licenses.map(c=>esc(COURSES[c.type].name)+' ('+esc(fechaVista(c.licenseDate))+')').join(' · '):'Ninguna registrada')+'</p></div><div class="school-row"><h3>Cursos y pagos</h3>'+button('+ Agregar curso','add-course','data-student="'+esc(s.id)+'"')+'</div><div class="school-course-grid">'+courses.map(c=>courseHtml(s,c)).join('')+'</div>'+registryFlightsHtml(s)+extrasHtml(s)+deletedCoursesHtml(s)+'</div>';
 }
 const panel=document.createElement('div');panel.id='panel-estudiantes';panel.className='aircraft-panel';contentEl.appendChild(panel);
 const tab=document.createElement('div');tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px">🎓 ESTUDIANTES</div>';itinerariosTab.insertAdjacentElement('afterend',tab);
@@ -426,6 +429,7 @@ function renderIntakes(body,school){
 panel.addEventListener('click',event=>{
  const b=event.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,s=b.dataset.student,c=b.dataset.course;
  const handlers={
+  'registry-edit':()=>window.Registro.edit(b.dataset.entry),
   'add-service':()=>editService(),'edit-service':()=>editService(b.dataset.service),
   'blank-registration':()=>printSchoolHtml(blankRegistrationHtml(),'school-blank-print'),'delete-student':()=>deleteStudent(s),'delete-archived-course':()=>deleteArchivedCourse(s,c),statement:()=>showStatement(s),'course-rate':()=>editCourseRate(b.dataset.type),expense:()=>addExtra(s,'expenses'),'extra-payment':()=>addExtra(s,'extraPayments'),'void-extra':()=>voidExtra(s,b.dataset.kind,b.dataset.entry),
   'new-student':()=>editStudent(), 'edit-student':()=>editStudent(s),'print-student':()=>printStudent(s),select:()=>{selected=s;render();},view:()=>{view=b.dataset.view;render();},
@@ -439,13 +443,14 @@ function decorateAircraftPanel(acPanel,reg){
  const rate=data().rates[reg];button.textContent='Tarifa: '+(rate?money(rate.cents)+'/h':'sin definir');
 }
 function decorateRates(){fleet.forEach((ac,idx)=>{const p=document.getElementById('panel-'+idx);if(p)decorateAircraftPanel(p,ac.reg);const t=document.querySelector('#sidebar-tabs .aircraft-tab[data-idx="'+idx+'"]');if(t){let label=t.querySelector('.school-tab-rate');if(!label){label=document.createElement('div');label.className='school-tab-rate';t.appendChild(label);}const rate=data().rates[ac.reg];label.textContent=rate?money(rate.cents)+'/h':'Tarifa sin definir';}});}
-window.School={decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
+window.School={modal,money,courseName:type=>COURSES[type]?.name||type,refresh:()=>{render();decorateRates();},decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
 const oldDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!oldDraft?.()||window.School.hasDraft();
 window.addEventListener('beforeunload',event=>{if(busy||window.School.hasDraft()){event.preventDefault();event.returnValue='';}});
 render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
