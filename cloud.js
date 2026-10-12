@@ -70,7 +70,7 @@ async function openDashboard(data){
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261012-8';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261012-6';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261012-7';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');
