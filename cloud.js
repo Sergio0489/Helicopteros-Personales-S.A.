@@ -67,10 +67,10 @@ async function openDashboard(data){
  const script=document.createElement('script');script.src='dashboard.js?v=20261012-3';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
- const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261012-6';
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261012-7';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261012-4';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261012-5';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');
@@ -116,6 +116,7 @@ document.addEventListener('click',event=>{const menu=el('cloud-menu');if(menu&&!
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=el('cloud-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
 window.addEventListener('offline',()=>setCloudStatus('Sin conexión a internet.'));
 window.addEventListener('online',()=>{if(!cloudBlocked){el('cloud-connection').dataset.state='online';el('preview-save').textContent='Conexión disponible';el('cloud-connection').title='Conexión a internet disponible';}});
+
 
 
 
