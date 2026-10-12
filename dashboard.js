@@ -3082,8 +3082,51 @@ if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.
 // Service worker desactivado en esta copia de revisión.
 
 const valueDescriptor=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
-function setupDates(){document.querySelectorAll('input[type="date"]').forEach(el=>{let iso=el.value;el.type='text';el.placeholder='DD/MM/AAAA';el.inputMode='numeric';el.dataset.fecha='1';el.setAttribute('aria-label',el.getAttribute('aria-label')||'Fecha DD/MM/AAAA');Object.defineProperty(el,'value',{get(){return isoFecha(valueDescriptor.get.call(this));},set(v){iso=isoFecha(v);valueDescriptor.set.call(this,fechaVista(iso));},configurable:true});el.value=iso;el.addEventListener('change',ev=>{const raw=valueDescriptor.get.call(el);if(raw&&!Number.isFinite(dayNumber(raw))){el.setCustomValidity('Usa una fecha válida DD/MM/AAAA');el.reportValidity();ev.stopImmediatePropagation();return;}el.setCustomValidity('');iso=el.value;el.value=iso;},true);});}
+let datePicker=null,dateInput=null,dateView='';
+function calendarDays(month){const [y,m]=month.split('-').map(Number);return new Date(Date.UTC(y,m,0)).getUTCDate();}
+function shiftCalendarMonth(month,delta){const [y,m]=month.split('-').map(Number);return new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);}
+function closeDatePicker(){dateInput?.setAttribute('aria-expanded','false');datePicker?.remove();datePicker=null;dateInput=null;}
+function positionDatePicker(){
+ if(!datePicker)return;if(!dateInput?.isConnected){closeDatePicker();return;}
+ const rect=dateInput.getBoundingClientRect(),w=datePicker.offsetWidth,h=datePicker.offsetHeight;
+ datePicker.style.left=Math.max(8,Math.min(rect.left,innerWidth-w-8))+'px';
+ datePicker.style.top=Math.max(8,rect.bottom+h+8<innerHeight?rect.bottom+5:rect.top-h-5)+'px';
+}
+function selectDate(value){const input=dateInput;if(!input)return;closeDatePicker();input.value=value;input.setCustomValidity('');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));if(input.isConnected)input.focus({preventScroll:true});}
+function drawDatePicker(){
+ const [year,month]=dateView.split('-').map(Number),selected=isoFecha(valueDescriptor.get.call(dateInput)),today=panamaISO();
+ const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+ const cells=Array((new Date(Date.UTC(year,month-1,1)).getUTCDay()+6)%7).fill('<span></span>');
+ for(let d=1;d<=calendarDays(dateView);d++){const value=dateView+'-'+String(d).padStart(2,'0');cells.push('<button type="button" data-day="'+value+'" aria-label="'+fechaVista(value)+'" aria-pressed="'+(value===selected)+'"'+(value===today?' aria-current="date"':'')+'>'+d+'</button>');}
+ datePicker.innerHTML='<div class="app-calendar-title"><strong>Elegir fecha</strong><button type="button" data-close aria-label="Cerrar calendario">×</button></div><div class="app-calendar-nav"><button type="button" data-prev aria-label="Mes anterior">‹</button><select aria-label="Mes">'+months.map((name,i)=>'<option value="'+(i+1)+'"'+(i+1===month?' selected':'')+'>'+name+'</option>').join('')+'</select><input type="number" aria-label="Año" min="1900" max="9999" value="'+year+'"><button type="button" data-next aria-label="Mes siguiente">›</button></div><div class="app-calendar-grid">'+['L','M','M','J','V','S','D'].map(d=>'<span>'+d+'</span>').join('')+cells.join('')+'</div><div class="app-calendar-footer"><button type="button" data-today>Hoy</button><button type="button" data-clear>Borrar fecha</button></div><small>También puedes escribir DD/MM/AAAA.</small>';
+ const update=()=>{const y=Number(datePicker.querySelector('input').value),m=Number(datePicker.querySelector('select').value);if(Number.isInteger(y)&&y>=1900&&y<=9999){dateView=y+'-'+String(m).padStart(2,'0');drawDatePicker();}};
+ datePicker.querySelector('input').onchange=update;datePicker.querySelector('select').onchange=update;positionDatePicker();
+}
+function openDatePicker(input){
+ if(input.disabled||input.readOnly)return;closeDatePicker();dateInput=input;
+ const raw=valueDescriptor.get.call(input);dateView=(Number.isFinite(dayNumber(raw))?isoFecha(raw):panamaISO()).slice(0,7);
+ datePicker=document.createElement('div');datePicker.className='app-calendar';datePicker.id='app-date-calendar';datePicker.setAttribute('role','dialog');datePicker.setAttribute('aria-label','Elegir fecha');
+ input.setAttribute('aria-expanded','true');input.setAttribute('aria-controls',datePicker.id);(input.closest('dialog')||document.body).appendChild(datePicker);
+ for(const type of ['pointerdown','input','change'])datePicker.addEventListener(type,e=>e.stopPropagation());
+ datePicker.onclick=e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();if(b.dataset.day)return selectDate(b.dataset.day);if(b.hasAttribute('data-today'))return selectDate(panamaISO());if(b.hasAttribute('data-clear'))return selectDate('');if(b.hasAttribute('data-close')){closeDatePicker();input.focus();return;}if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){const next=shiftCalendarMonth(dateView,b.hasAttribute('data-prev')?-1:1);if(/^\d{4}-\d{2}$/.test(next)&&Number(next.slice(0,4))>=1900){dateView=next;drawDatePicker();}}};
+ datePicker.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(e.target.tagName==='BUTTON')e.target.click();else e.target.dispatchEvent(new Event('change'));}});drawDatePicker();
+}
+function prepareDateInput(el){
+ if(el.dataset.dateReady)return;el.dataset.dateReady='1';const native=el.type==='date',old=el.value;
+ el.type='text';el.placeholder='DD/MM/AAAA';el.inputMode='numeric';el.autocomplete='off';el.dataset.fecha='1';el.classList.add('app-date-input');el.setAttribute('aria-haspopup','dialog');el.setAttribute('aria-expanded','false');
+ if(native)Object.defineProperty(el,'value',{get(){return isoFecha(valueDescriptor.get.call(this));},set(v){valueDescriptor.set.call(this,fechaVista(v));},configurable:true});
+ el.value=fechaVista(old||(!el.closest('.school-stage-panel[hidden]')?panamaISO():''));
+ const validate=()=>{const raw=valueDescriptor.get.call(el);el.setCustomValidity(raw&&!Number.isFinite(dayNumber(raw))?'Usa una fecha válida DD/MM/AAAA.':'');};
+ el.addEventListener('input',()=>{const raw=valueDescriptor.get.call(el);if(/^\d{8}$/.test(raw))valueDescriptor.set.call(el,raw.slice(0,2)+'/'+raw.slice(2,4)+'/'+raw.slice(4));validate();});
+ el.addEventListener('change',e=>{validate();if(!el.checkValidity()){el.reportValidity();e.stopImmediatePropagation();return;}el.value=fechaVista(el.value);},true);
+ el.addEventListener('click',()=>openDatePicker(el));el.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();openDatePicker(el);datePicker.querySelector('[aria-pressed="true"]')?.focus();}});
+}
+function setupDates(){document.querySelectorAll('input[type="date"],input[placeholder="DD/MM/AAAA"]').forEach(prepareDateInput);if(dateInput&&!dateInput.isConnected)closeDatePicker();}
 setupDates();new MutationObserver(setupDates).observe(document.body,{childList:true,subtree:true});
+document.addEventListener('pointerdown',e=>{if(datePicker&&e.target!==dateInput&&!datePicker.contains(e.target))closeDatePicker();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&datePicker){e.preventDefault();e.stopImmediatePropagation();const input=dateInput;closeDatePicker();input?.focus();}},true);
+window.addEventListener('resize',positionDatePicker);document.addEventListener('scroll',positionDatePicker,true);
+
 function markAircraftDirty(event){
   const panel=event.target.closest('.aircraft-panel');const match=panel?.id.match(/^panel-(\d+)$/);
   if(match){aircraftDirty.add(Number(match[1]));updateUndoButtons();}
@@ -3435,4 +3478,5 @@ function selectScheduleOffset(offset){
   renderDailySchedule();
   panel.querySelector('[data-day-offset="'+offset+'"]')?.focus({preventScroll:true});
 }
+
 
