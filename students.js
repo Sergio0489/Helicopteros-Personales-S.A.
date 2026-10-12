@@ -511,7 +511,7 @@ function recordReceipt(school,key,f,id,attachment=null){
   if(service.isNew){school.services ||= [];service.serviceId='service-'+line.id;school.services.push({id:service.serviceId,name:service.label,description:'',category:'otro',createdAt:new Date().toISOString()});}
   line.serviceId=service.serviceId;
  }
- const sequence=Math.max(0,...school.paymentReceipts.map(r=>Number(r.sequence)||0))+1;
+ const sequence=Math.max(Number(school.lastReceiptSequence)||0,...school.paymentReceipts.map(r=>Number(r.sequence)||0))+1;school.lastReceiptSequence=sequence;
  const receipt={id,sequence,number:'HP-'+String(sequence).padStart(6,'0'),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:receiver.label,receivedByUid:receiver.uid,method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
  for(const line of lines){
   const payment={id:line.id,receiptId:id,receiptNumber:receipt.number,serviceId:line.serviceId||'',fee:line.fee,service:paymentService(line.fee),date:receipt.date,cents:line.cents,source:receipt.source,method:receipt.method,reference:receipt.reference,note:receipt.note,description:'Abono · '+line.label,createdAt:receipt.createdAt};
@@ -533,6 +533,35 @@ async function paymentPhoto(file){
   if(image.length>500000)throw Error('La foto es demasiado grande; usa una imagen más pequeña.');
   return {name:file.name,data:image};
  }finally{URL.revokeObjectURL(url);}
+}
+function paymentBuckets(school,key){
+ const person=receiptPerson(school,key),p=person.record;
+ return person.kind==='student'?[{owner:p,field:'extraPayments'},...[...list(p.courses),...list(p.deletedCourses)].map(c=>({owner:c,field:'payments'}))]:[{owner:p,field:'payments'}];
+}
+function removePaymentRecord(school,key,receiptId='',movementId=''){
+ const receipts=list(school.paymentReceipts),receipt=receiptId?receipts.find(r=>r.id===receiptId&&r.personKey===key):receipts.find(r=>r.personKey===key&&list(r.lines).some(l=>l.id===movementId));
+ if(receiptId&&!receipt)throw Error('El recibo ya no existe.');
+ const buckets=paymentBuckets(school,key),movement=movementId&&buckets.flatMap(b=>list(b.owner[b.field])).find(p=>p.id===movementId);
+ if(movementId&&!movement)throw Error('El movimiento ya no existe.');
+ school.lastReceiptSequence=Math.max(Number(school.lastReceiptSequence)||0,...receipts.map(r=>Number(r.sequence)||0));
+ const ids=new Set(receiptId?list(receipt.lines).map(l=>l.id):[movementId]);
+ for(const b of buckets)b.owner[b.field]=list(b.owner[b.field]).filter(p=>!ids.has(p.id)&&!(receiptId&&p.receiptId===receiptId));
+ if(receipt){
+  if(receiptId)school.paymentReceipts=receipts.filter(r=>r.id!==receipt.id);
+  else{
+   receipt.lines=list(receipt.lines).filter(l=>l.id!==movementId);
+   receipt.totalCents=receipt.lines.reduce((sum,l)=>sum+l.cents,0);
+   if(!receipt.lines.length)school.paymentReceipts=receipts.filter(r=>r.id!==receipt.id);
+  }
+ }
+}
+function deletePaymentReceipt(key,id){
+ const r=list(data().paymentReceipts).find(r=>r.id===id&&r.personKey===key);if(!r)return;
+ protectedDeletion('¿Eliminar el recibo '+r.number+' de '+r.personName+' por '+money(r.totalCents)+' y todos sus movimientos de pago? Se actualizarán los saldos. Esta acción no se puede deshacer.',school=>removePaymentRecord(school,key,id));
+}
+function deletePaymentMovement(key,id){
+ const p=paymentBuckets(data(),key).flatMap(b=>list(b.owner[b.field])).find(p=>p.id===id);if(!p)return;
+ protectedDeletion('¿Eliminar este movimiento de pago por '+money(p.cents)+'? Se actualizarán los saldos y el total del recibo vinculado; si no quedan movimientos, también se eliminará el recibo. Esta acción no se puede deshacer.',school=>removePaymentRecord(school,key,'',id));
 }
 function receiptStatus(receipt){
  const school=data();let person;try{person=receiptPerson(school,receipt.personKey);}catch{return 'Expediente no disponible';}
@@ -598,11 +627,13 @@ function renderBalanceAlerts(){
 function renderPayments(){
  renderBalanceAlerts();
  const people=paymentPeople(),person=people.find(p=>p.id===paymentSelection),receipts=list(data().paymentReceipts).filter(r=>r.personKey===paymentSelection).slice().reverse();
- paymentPanel.innerHTML='<div class="payment-page-heading">REGISTRO DE PAGO</div><section class="payment-launch"><img class="hp-payment-logo" src="hp-logo.svg?v=1" width="150" height="76" alt="Helicópteros Personales"><label>Estudiante / Cliente<select data-payment-person><option value="">Seleccionar…</option>'+people.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===paymentSelection?' selected':'')+'>'+esc(p.name)+' · '+p.kind+'</option>').join('')+'</select></label><div class="school-actions"><button class="save-btn" data-payment-add '+(!person?'disabled':'')+'>＋ Crear abono</button></div></section><details class="payment-history"><summary>Recibos y movimientos</summary><section class="card"><h3>Recibos de pago</h3>'+receipts.map(r=>'<div class="school-ledger-entry"><strong>'+esc(r.number)+' · '+esc(fechaVista(r.date))+' · '+money(r.totalCents)+'</strong><p>'+esc([r.method,r.reference,receiptStatus(r)].filter(Boolean).join(' · '))+'</p><button class="record-btn" data-receipt="'+esc(r.id)+'">Ver recibo / imprimir dos copias</button></div>').join('')+(!receipts.length?'<p class="school-muted">Sin recibos para esta persona.</p>':'')+'</section><section class="card"><h3>Movimientos de pago</h3>'+paymentMovements(person).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>'<div class="school-ledger-entry'+(p.voidedAt?' school-void':'')+'"><strong>'+esc(fechaVista(p.date))+' · '+money(p.cents)+(p.voidedAt?' · ANULADO':'')+'</strong><p>'+esc([p.description||p.concept,p.method,p.receiptNumber,p.source,p.reference,p.note].filter(Boolean).join(' · '))+'</p></div>').join('')+'</section></details>';
+ paymentPanel.innerHTML='<div class="payment-page-heading">REGISTRO DE PAGO</div><section class="payment-launch"><img class="hp-payment-logo" src="hp-logo.svg?v=1" width="150" height="76" alt="Helicópteros Personales"><label>Estudiante / Cliente<select data-payment-person><option value="">Seleccionar…</option>'+people.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===paymentSelection?' selected':'')+'>'+esc(p.name)+' · '+p.kind+'</option>').join('')+'</select></label><div class="school-actions"><button class="save-btn" data-payment-add '+(!person?'disabled':'')+'>＋ Crear abono</button></div></section><details class="payment-history"><summary>Recibos y movimientos</summary><section class="card"><h3>Recibos de pago</h3>'+receipts.map(r=>'<div class="school-ledger-entry"><strong>'+esc(r.number)+' · '+esc(fechaVista(r.date))+' · '+money(r.totalCents)+'</strong><p>'+esc([r.method,r.reference,receiptStatus(r)].filter(Boolean).join(' · '))+'</p><button class="record-btn" data-receipt="'+esc(r.id)+'">Ver recibo / imprimir dos copias</button><button class="record-btn school-danger" data-delete-receipt="'+esc(r.id)+'">Eliminar recibo</button></div>').join('')+(!receipts.length?'<p class="school-muted">Sin recibos para esta persona.</p>':'')+'</section><section class="card"><h3>Movimientos de pago</h3>'+paymentMovements(person).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>'<div class="school-ledger-entry'+(p.voidedAt?' school-void':'')+'"><strong>'+esc(fechaVista(p.date))+' · '+money(p.cents)+(p.voidedAt?' · ANULADO':'')+'</strong><p>'+esc([p.description||p.concept,p.method,p.receiptNumber,p.source,p.reference,p.note].filter(Boolean).join(' · '))+'</p><button class="record-btn school-danger" data-delete-payment="'+esc(p.id)+'">Eliminar movimiento</button></div>').join('')+'</section></details>';
  paymentPanel.querySelector('[data-payment-person]').onchange=e=>{paymentSelection=e.target.value;renderPayments();};
  paymentPanel.querySelector('[data-payment-add]').onclick=()=>{if(person)openPayment(person.id);};
 
  paymentPanel.querySelectorAll('[data-receipt]').forEach(b=>b.onclick=()=>showReceipt(b.dataset.receipt));
+ paymentPanel.querySelectorAll('[data-delete-receipt]').forEach(b=>b.onclick=()=>deletePaymentReceipt(paymentSelection,b.dataset.deleteReceipt));
+ paymentPanel.querySelectorAll('[data-delete-payment]').forEach(b=>b.onclick=()=>deletePaymentMovement(paymentSelection,b.dataset.deletePayment));
 }
 
 renderPayments();
@@ -613,6 +644,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
