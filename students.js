@@ -198,6 +198,7 @@ function deleteArchivedCourse(sid,cid){const s=studentById(data(),sid),c=list(s.
 function registryChargeTotal(s){return active(s.registryFlights).reduce((n,f)=>n+Number(f.costCents||0),0);}
 function extraTotals(s){return {expenses:active(s.expenses).reduce((n,e)=>n+e.cents,0),payments:active(s.extraPayments).reduce((n,e)=>n+e.cents,0)};}
 function addExtra(sid,kind){
+ if(kind==='extraPayments'){openPayment('student:'+sid,'general');return;}
  const isPayment=kind==='extraPayments',s=studentById(data(),sid),extraServices=rateServices().filter(x=>x.category==='otro');
  modal(isPayment?'Abono a otros gastos':'Registrar otro gasto',dateField('date','Fecha',today(),true)+(!isPayment?'<label>Servicio<select name="extraService"><option value="">Gasto personalizado</option>'+extraServices.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label>':'')+amountField('amount','Monto (USD)')+(isPayment?'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>':input('description','Concepto del gasto','','text','required maxlength="200"')+'<label>Curso relacionado<select name="courseId"><option value="">Gasto general</option>'+list(s.courses).map(c=>'<option value="'+esc(c.id)+'">'+esc(COURSES[c.type].name)+'</option>').join('')+'</select></label><label>Aeronave / equipo<select name="aircraft"><option value="">No aplica</option>'+fleet.map(a=>'<option value="'+esc(a.reg)+'">'+esc(a.reg)+'</option>').join('')+'<option>RPA (Drone)</option><option>Simulador</option></select></label>')+input('reference','Recibo / referencia','','text','maxlength="100"')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
   errorDate(f,[['date',true]]);const amount=cents(f.amount);if(!amount)throw Error('El monto debe ser mayor que cero.');if(!isPayment&&!f.description.trim())throw Error('Describe el gasto.');if(isPayment&&!SOURCES.includes(f.source))throw Error('Revisa el origen del abono.');
@@ -218,11 +219,11 @@ function statementData(s){
  const courses=list(s.courses),extra=extraTotals(s),generalCharges=registryChargeTotal(s),rows=[];let budget=0,paid=extra.payments,flightBalance=0,simBalance=0;
  for(const c of courses){const summary=courseSummary(c),name=COURSES[c.type].name;budget+=summary.budget;paid+=summary.paid;flightBalance+=summary.flightBalance;simBalance+=summary.simBalance;
   for(const fee of COURSES[c.type].fees.filter(f=>!['vuelo','simulador'].includes(f))){const amount=Number(c.budgets?.[fee]||0);if(amount)rows.push({service:'courses',date:c.startDate||'',description:FEES[fee],course:name,aircraft:'',charge:amount,credit:0,note:'Monto acordado del curso'});}
-  for(const p of list(c.payments))rows.push({service:statementFeeService(p.fee,c),date:p.date,description:'Abono · '+(FEES[p.fee]||p.fee),course:name,aircraft:'',charge:0,credit:p.voidedAt?0:p.cents,voided:!!p.voidedAt,note:[p.source,p.reference,p.note,p.voidedAt?'Anulado: '+p.voidReason+' · Importe original '+money(p.cents):''].filter(Boolean).join(' · ')});
+  for(const p of list(c.payments))rows.push({service:statementFeeService(p.fee,c),date:p.date,description:'Abono · '+(FEES[p.fee]||p.fee),course:name,aircraft:'',charge:0,credit:p.voidedAt?0:p.cents,voided:!!p.voidedAt,note:[p.method,p.receiptNumber,p.source,p.reference,p.note,p.voidedAt?'Anulado: '+p.voidReason+' · Importe original '+money(p.cents):''].filter(Boolean).join(' · ')});
   for(const f of list(c.flights))rows.push({...registryMovement(f),service:statementFlightService(f,c),date:f.date,description:sessionDescription(f,c),course:name,aircraft:f.fee==='simulador'?'Simulador'+(f.equipment?' · '+f.equipment:''):f.aircraft,hours100:f.hours100,rateCents:f.rateCents,charge:f.voidedAt?0:f.costCents,credit:0,voided:!!f.voidedAt,note:[f.instructor,f.note,f.voidedAt?'Anulado: '+f.voidReason+' · Importe original '+money(f.costCents):''].filter(Boolean).join(' · ')});
  }
  for(const f of list(s.registryFlights))rows.push({...registryMovement(f),service:statementFlightService(f,{type:'registro'}),date:f.date,description:sessionDescription(f,{type:'registro'}),course:'',aircraft:f.aircraft==='RPA'?'RPA (Drone)':f.aircraft,hours100:f.hours100,rateCents:f.rateCents||0,charge:f.voidedAt?0:Number(f.costCents||0),credit:0,voided:!!f.voidedAt,note:f.note});
- for(const kind of ['expenses','extraPayments'])for(const e of list(s[kind]))rows.push({service:'other',date:e.date,description:e.description,course:e.courseName||'',aircraft:e.aircraft||'',charge:kind==='expenses'&&!e.voidedAt?e.cents:0,credit:kind==='extraPayments'&&!e.voidedAt?e.cents:0,voided:!!e.voidedAt,note:[e.source,e.reference,e.note,e.voidedAt?'Anulado: '+e.voidReason+' · Importe original '+money(e.cents):''].filter(Boolean).join(' · ')});
+ for(const kind of ['expenses','extraPayments'])for(const e of list(s[kind]))rows.push({service:kind==='extraPayments'?(e.service||'other'):'other',date:e.date,description:e.description,course:e.courseName||'',aircraft:e.aircraft||'',charge:kind==='expenses'&&!e.voidedAt?e.cents:0,credit:kind==='extraPayments'&&!e.voidedAt?e.cents:0,voided:!!e.voidedAt,note:[e.method,e.receiptNumber,e.source,e.reference,e.note,e.voidedAt?'Anulado: '+e.voidReason+' · Importe original '+money(e.cents):''].filter(Boolean).join(' · ')});
  rows.sort((a,b)=>STATEMENT_SERVICES.findIndex(x=>x[0]===a.service)-STATEMENT_SERVICES.findIndex(x=>x[0]===b.service)||(isoFecha(a.date)||'').localeCompare(isoFecha(b.date)||''));let balance=0;const balances={};for(const row of rows){balance+=row.charge-row.credit;balances[row.service]=(balances[row.service]||0)+row.charge-row.credit;row.balance=balances[row.service];}const groups=STATEMENT_SERVICES.map(([key,label])=>({key,label,rows:rows.filter(r=>r.service===key),balance:balances[key]||0})).filter(g=>g.key!=='other'||g.rows.length);
  return {rows,groups,budget,paid,generalCharges,expenses:extra.expenses,contractDue:budget+extra.expenses+generalCharges-paid,servicesBalance:balance,flightBalance,simBalance};
 }
@@ -275,14 +276,7 @@ function editCourse(sid,cid){
   };
  });
 }
-function addPayment(sid,cid,fee){
- const c=courseById(studentById(data(),sid),cid);
- modal('Registrar abono · '+FEES[fee],dateField('date','Fecha del abono',today(),true)+amountField('amount','Monto del abono (USD)')+'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Recibo / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
-  errorDate(f,[['date',true]]);const amount=cents(f.amount);if(!amount)throw Error('El abono debe ser mayor que cero.');
-  if(!SOURCES.includes(f.source)||!COURSES[c.type].fees.includes(fee))throw Error('Revisa el origen y concepto.');
-  await change(school=>{const target=studentById(school,sid);courseById(target,cid).payments.push({id:uid(),fee,date:isoFecha(f.date),cents:amount,source:f.source,reference:f.reference.trim(),note:f.note.trim(),createdAt:new Date().toISOString()});if(!manualStage(target.stage)){const previousStage=target.stage;target.stage='En formación';target.enrolledDate ||= isoFecha(f.date);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'En formación por abono de curso',before:{stage:previousStage},after:{stage:target.stage}});}});
- });
-}
+function addPayment(sid,cid,fee){openPayment('student:'+sid,fee,cid);}
 function rateServices(school=data()){
  return [...fleet.map(a=>({id:a.reg,name:a.reg,description:a.model,category:'vuelo'})),{id:'RPA',name:'RPA (Drone)',description:'Entrenamiento de RPA',category:'rpa'},{id:'Simulador',name:'Simulador',description:'Entrenamiento de SIM',category:'simulador'},...list(school.services)];
 }
@@ -415,7 +409,8 @@ function clientById(school,id){const c=list(school.registry?.clients).find(c=>c.
 function clientStatement(c){return {...c,courses:[],registryFlights:list(c.flights),extraPayments:list(c.payments)};}
 function clientPaymentRecord(f,id){errorDate(f,[['date',true]]);const amount=cents(f.amount);if(!amount)throw Error('Ingresa un monto mayor que cero.');if(!SOURCES.includes(f.source))throw Error('Selecciona el origen del pago.');return {id,date:isoFecha(f.date),cents:amount,source:f.source,reference:String(f.reference||'').trim(),note:String(f.note||'').trim(),description:'Abono de cliente',createdAt:new Date().toISOString()};}
 function recordClientPayment(school,cid,payment){const client=clientById(school,cid);client.payments ||= [];if(!client.payments.some(p=>p.id===payment.id))client.payments.push(payment);}
-function addClientPayment(cid){const client=clientById(data(),cid),paymentId=uid();modal('Registrar pago · '+client.name,dateField('date','Fecha',today(),true)+amountField('amount','Monto recibido (USD)')+'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Recibo / referencia','','text','maxlength="100"')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{const payment=clientPaymentRecord(f,paymentId);await change(school=>recordClientPayment(school,cid,payment));});}
+function addClientPayment(cid){openPayment('client:'+cid);}
+
 function paymentPeople(){const school=data();return [...school.students.map(s=>({id:'student:'+s.id,name:s.name,kind:'Estudiante',record:s})),...list(school.registry?.clients).map(c=>({id:'client:'+c.id,name:c.name,kind:'Cliente',record:c}))].sort((a,b)=>a.name.localeCompare(b.name,'es'));}
 function paymentMovements(person){if(!person)return [];const p=person.record;return person.id.startsWith('client:')?list(p.payments).map(e=>({...e,concept:'Cuenta de cliente'})):[...list(p.courses).flatMap(c=>list(c.payments).map(e=>({...e,concept:(COURSES[c.type]?.name||'')+' · '+(FEES[e.fee]||'')}))),...list(p.extraPayments).map(e=>({...e,concept:'Cuenta general'}))];}
 function newClientRecord(school,f,id){
@@ -474,21 +469,105 @@ function decorateAircraftPanel(acPanel,reg){
  const rate=data().rates[reg];button.textContent='Tarifa: '+(rate?money(rate.cents)+'/h':'sin definir');
 }
 function decorateRates(){fleet.forEach((ac,idx)=>{const p=document.getElementById('panel-'+idx);if(p)decorateAircraftPanel(p,ac.reg);const t=document.querySelector('#sidebar-tabs .aircraft-tab[data-idx="'+idx+'"]');if(t){let label=t.querySelector('.school-tab-rate');if(!label){label=document.createElement('div');label.className='school-tab-rate';t.appendChild(label);}const rate=data().rates[ac.reg];label.textContent=rate?money(rate.cents)+'/h':'Tarifa sin definir';}});}
+const PAYMENT_CONCEPTS={matricula:'Matrícula',material:'Material de estudio',teoria:'Curso teórico',vuelo:'Horas de vuelo',simulador:'Horas de SIM',tutoria:'Tutoría',charter:'Chárter',general:'Otros / cuenta general'};
+const PAYMENT_METHODS=['ACH','Yappy','TC','Efectivo'];
+function paymentService(fee){return fee==='charter'?'charter':fee==='vuelo'?'flight':fee==='simulador'?'simulator':fee==='general'?'other':'courses';}
+function receiptPerson(school,key){const i=key.indexOf(':'),kind=key.slice(0,i),id=key.slice(i+1);if(!['student','client'].includes(kind))throw Error('Selecciona estudiante o cliente.');return {kind,record:kind==='student'?studentById(school,id):clientById(school,id)};}
+function recordReceipt(school,key,f,id,attachment=null){
+ school.paymentReceipts ||= [];
+ const previous=school.paymentReceipts.find(r=>r.id===id);if(previous)return previous;
+ errorDate(f,[['date',true]]);
+ if(!PAYMENT_METHODS.includes(f.method))throw Error('Selecciona cómo se realizó el pago.');
+ const reference=String(f.reference||'').trim();
+ if(['ACH','Yappy'].includes(f.method)&&!reference)throw Error('Ingresa el número de transferencia.');
+ if(!String(f.receivedBy||'').trim())throw Error('Indica quién recibió el pago.');
+ const {kind,record}=receiptPerson(school,key),lines=[];
+ for(const [fee,label] of Object.entries(PAYMENT_CONCEPTS)){
+  const raw=String(f['amount_'+fee]||'').trim();if(!raw)continue;const amount=cents(raw);
+  if(amount===null||amount<0)throw Error('Revisa el monto de '+label+'.');if(!amount)continue;
+  const courseId=String(f['target_'+fee]||''),course=courseId&&kind==='student'?courseById(record,courseId):null;
+  if(courseId&&(!course||!COURSES[course.type]?.fees.includes(fee)))throw Error('El curso no corresponde al concepto '+label+'.');
+  lines.push({id:id+'-'+fee,fee,cents:amount,courseId:course?.id||'',courseName:course?COURSES[course.type].name:'',label});
+ }
+ if(!lines.length)throw Error('Ingresa un abono mayor que cero.');
+ if(!SOURCES.includes(f.source))throw Error('Selecciona el origen de fondos.');
+ const total=lines.reduce((n,l)=>n+l.cents,0);if(!Number.isSafeInteger(total))throw Error('El monto es demasiado grande.');
+ const sequence=Math.max(0,...school.paymentReceipts.map(r=>Number(r.sequence)||0))+1;
+ const receipt={id,sequence,number:'HP-'+String(sequence).padStart(6,'0'),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:f.receivedBy.trim(),method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
+ for(const line of lines){
+  const payment={id:line.id,receiptId:id,receiptNumber:receipt.number,fee:line.fee,service:paymentService(line.fee),date:receipt.date,cents:line.cents,source:receipt.source,method:receipt.method,reference:receipt.reference,note:receipt.note,description:'Abono · '+line.label,createdAt:receipt.createdAt};
+  if(line.courseId){const c=courseById(record,line.courseId);c.payments ||= [];c.payments.push(payment);}
+  else{const field=kind==='student'?'extraPayments':'payments';record[field] ||= [];record[field].push(payment);}
+ }
+ if(kind==='student'&&!manualStage(record.stage)){record.stage='En formación';record.enrolledDate ||= receipt.date;}
+ school.paymentReceipts.push(receipt);return receipt;
+}
+async function paymentPhoto(file){
+ if(!file?.size)return null;
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('Adjunta una foto JPG, PNG o WebP.');
+ if(file.size>10*1024*1024)throw Error('La foto debe ser menor de 10 MB.');
+ const url=URL.createObjectURL(file);try{
+  const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('No se pudo leer la foto.'));img.src=url;});
+  const scale=Math.min(1,1400/Math.max(img.width,img.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));
+  const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(img,0,0,canvas.width,canvas.height);
+  let image=canvas.toDataURL('image/jpeg',.8);if(image.length>500000)image=canvas.toDataURL('image/jpeg',.55);
+  if(image.length>500000)throw Error('La foto es demasiado grande; usa una imagen más pequeña.');
+  return {name:file.name,data:image};
+ }finally{URL.revokeObjectURL(url);}
+}
+function receiptStatus(receipt){
+ const school=data();let person;try{person=receiptPerson(school,receipt.personKey);}catch{return 'Expediente no disponible';}
+ const payments=person.kind==='student'?[...list(person.record.extraPayments),...list(person.record.courses).flatMap(c=>list(c.payments)),...list(person.record.deletedCourses).flatMap(c=>list(c.payments))]:list(person.record.payments);
+ const lines=receipt.lines.map(l=>payments.find(p=>p.id===l.id)),voids=lines.filter(p=>p?.voidedAt).length;
+ return voids===lines.length?'ANULADO':voids?'PARCIALMENTE ANULADO':lines.some(p=>!p)?'Revisar movimientos vinculados':'';
+}
+function receiptHtml(r,status=''){
+ const copy=label=>'<article class="payment-receipt"><header><h2>Helicópteros Personales S.A.</h2><h3>Recibo de pago '+esc(r.number)+'</h3><b>'+label+'</b></header>'+(status?'<p class="payment-void">'+esc(status)+'</p>':'')+'<div class="payment-receipt-grid"><span><b>Fecha:</b> '+esc(fechaVista(r.date))+'</span><span><b>Emitido:</b> '+esc(r.issuedAt)+' · Panamá</span><span><b>Estudiante / Cliente:</b> '+esc(r.personName)+'</span><span><b>Identificación:</b> '+esc(r.identity)+'</span><span><b>Pagado por:</b> '+esc(r.payer)+'</span><span><b>Recibido por:</b> '+esc(r.receivedBy)+'</span><span><b>Método:</b> '+esc(r.method)+'</span><span><b>Transferencia / referencia:</b> '+esc(r.reference)+'</span><span><b>Banco:</b> '+esc(r.bank)+'</span><span><b>Fondos:</b> '+esc(r.source)+'</span></div><table><thead><tr><th>Concepto</th><th>Curso / cuenta</th><th>Abono (USD)</th></tr></thead><tbody>'+r.lines.map(l=>'<tr><td>'+esc(l.label)+'</td><td>'+esc(l.courseName||'Cuenta general')+'</td><td>'+money(l.cents)+'</td></tr>').join('')+'</tbody><tfoot><tr><th colspan="2">TOTAL RECIBIDO</th><th>'+money(r.totalCents)+'</th></tr></tfoot></table>'+(r.note?'<p><b>Observaciones:</b> '+esc(r.note)+'</p>':'')+'<p class="payment-signature">Firma de quien recibe: ____________________</p></article>';
+ return copy('COPIA DEL CLIENTE')+copy('COPIA DE ARCHIVO');
+}
+function showReceipt(id){
+ const r=list(data().paymentReceipts).find(x=>x.id===id);if(!r)return;
+ const dialog=document.createElement('dialog');dialog.className='record-dialog school-statement-dialog';
+ dialog.innerHTML='<div class="school-actions"><button type="button" class="record-btn" data-receipt-print>Imprimir ambas copias / PDF</button><button type="button" class="record-btn" data-receipt-close>Cerrar</button></div>'+receiptHtml(r,receiptStatus(r))+(r.attachment?'<details><summary>Comprobante de transferencia</summary><img style="max-width:100%" src="'+esc(r.attachment.data)+'" alt="Comprobante de transferencia"></details>':'');
+ document.body.appendChild(dialog);dialog.querySelector('[data-receipt-close]').onclick=()=>dialog.close();dialog.querySelector('[data-receipt-print]').onclick=()=>printSchoolHtml(receiptHtml(r,receiptStatus(r)),'school-receipt-print');dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+}
+function openPayment(key,defaultFee='',defaultCourse=''){
+ const person=receiptPerson(data(),key),id=uid();
+ const concepts=Object.entries(PAYMENT_CONCEPTS).map(([fee,label])=>'<div class="payment-concept">'+amountField('amount_'+fee,label+' (USD)')+'<label>Aplicar a<select name="target_'+fee+'"><option value="">Cuenta general</option>'+(person.kind==='student'?list(person.record.courses).filter(c=>COURSES[c.type]?.fees.includes(fee)).map(c=>'<option value="'+esc(c.id)+'"'+(c.id===defaultCourse&&fee===defaultFee?' selected':'')+'>'+esc(COURSES[c.type].name)+'</option>').join(''):'')+'</select></label></div>').join('');
+ modal('Registrar pago · '+person.record.name,dateField('date','Fecha del pago',today(),true)+'<div class="school-full payment-concepts">'+concepts+'</div><p class="school-full"><b>Total del abono: <span data-payment-total>$0.00</span></b></p><p class="school-full school-muted">Ingresa importes solo en los conceptos abonados. Selecciona el curso para actualizar su saldo y barra de progreso.</p><label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label>'+'<label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','maxlength="120"')+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+input('receivedBy','Recibido por','','text','required maxlength="160"')+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
+  const attachment=await paymentPhoto(form.querySelector('[name="proof"]').files[0]);
+  await change(school=>recordReceipt(school,key,f,id,attachment));
+  setTimeout(()=>showReceipt(id),0);
+ },dialog=>{
+  dialog.querySelectorAll('[name^="amount_"]').forEach(el=>{el.required=false;el.value='';});
+  const updateTotal=()=>{const total=[...dialog.querySelectorAll('[name^="amount_"]')].reduce((sum,el)=>sum+(cents(el.value)||0),0);dialog.querySelector('[data-payment-total]').textContent=money(total);};dialog.addEventListener('input',updateTotal);updateTotal();
+  if(defaultFee)dialog.querySelector('[name="amount_'+defaultFee+'"]')?.focus();
+  const refresh=()=>{dialog.querySelector('[name="reference"]').required=['ACH','Yappy'].includes(dialog.querySelector('[name="method"]').value);};dialog.querySelector('[name="method"]').onchange=refresh;refresh();
+ });
+}
+
 let paymentSelection='';
 const paymentPanel=document.createElement('div');paymentPanel.className='aircraft-panel';paymentPanel.id='panel-registro-pago';contentEl.appendChild(paymentPanel);
 const paymentTab=document.createElement('div');paymentTab.className='aircraft-tab';paymentTab.id='tab-registro-pago';paymentTab.innerHTML='<div class="tab-reg" style="font-size:10px">💳 REGISTRO DE PAGO</div>';itinerariosTab.insertAdjacentElement('beforebegin',paymentTab);
 paymentTab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab,.aircraft-panel').forEach(e=>e.classList.remove('active'));paymentTab.classList.add('active');paymentPanel.classList.add('active');renderPayments();});
-function renderPayments(){const people=paymentPeople(),person=people.find(p=>p.id===paymentSelection);paymentPanel.innerHTML='<div class="school-header"><div><div class="aircraft-reg">REGISTRO DE PAGO</div><p class="school-muted">Abonos recibidos · Estudiantes y clientes</p></div></div><section class="card"><div class="school-form"><label>Estudiante / Cliente<select data-payment-person><option value="">Seleccionar…</option>'+people.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===paymentSelection?' selected':'')+'>'+esc(p.name)+' · '+p.kind+'</option>').join('')+'</select></label><label>Aplicar pago a<select data-payment-target><option value="general">Cuenta general</option>'+(person?.id.startsWith('student:')?list(person.record.courses).flatMap(c=>COURSES[c.type].fees.map(f=>'<option value="'+esc(c.id+'|'+f)+'">'+esc(COURSES[c.type].name+' · '+FEES[f])+'</option>')).join(''):'')+'</select></label></div><p class="school-muted">Selecciona el concepto y pulsa Registrar pago para ingresar fecha, monto, origen, referencia y observación.</p><div class="school-actions"><button class="record-btn" type="button" data-payment-account '+(!person?'disabled':'')+'>Ver estado de cuenta</button><button class="save-btn" type="button" data-payment-add '+(!person?'disabled':'')+'>Registrar pago</button></div></section><section class="card"><h3>Pagos registrados'+(person?' · '+esc(person.name):'')+'</h3>'+paymentMovements(person).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>'<div class="school-ledger-entry'+(p.voidedAt?' school-void':'')+'"><strong>'+esc(fechaVista(p.date))+' · '+money(p.cents)+(p.voidedAt?' · ANULADO':'')+'</strong><p>'+esc([p.concept,p.source,p.reference,p.note].filter(Boolean).join(' · '))+'</p></div>').join('')+(!paymentMovements(person).length?'<p class="school-muted">Sin pagos registrados.</p>':'')+'</section>';
- paymentPanel.querySelector('[data-payment-person]').onchange=e=>{paymentSelection=e.target.value;renderPayments();};paymentPanel.querySelector('[data-payment-add]').onclick=()=>{if(!person)return;const id=person.record.id,target=paymentPanel.querySelector('[data-payment-target]').value;if(person.id.startsWith('client:'))addClientPayment(id);else if(target==='general')addExtra(id,'extraPayments');else{const [cid,fee]=target.split('|');addPayment(id,cid,fee);}};paymentPanel.querySelector('[data-payment-account]').onclick=()=>{if(!person)return;if(person.id.startsWith('client:'))showStatementRecord(()=>clientStatement(clientById(data(),person.record.id)));else showStatement(person.record.id);};
+function renderPayments(){
+ const people=paymentPeople(),person=people.find(p=>p.id===paymentSelection),receipts=list(data().paymentReceipts).filter(r=>r.personKey===paymentSelection).slice().reverse();
+ paymentPanel.innerHTML='<div class="school-header"><div><div class="aircraft-reg">REGISTRO DE PAGO</div><p class="school-muted">Abonos recibidos · Estudiantes y clientes</p></div></div><section class="card"><label>Estudiante / Cliente<select data-payment-person><option value="">Seleccionar…</option>'+people.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===paymentSelection?' selected':'')+'>'+esc(p.name)+' · '+p.kind+'</option>').join('')+'</select></label><p>Matrícula · Material de estudio · Curso teórico · Horas de vuelo · Horas de SIM · Tutoría · Chárter</p><div class="school-actions"><button class="record-btn" data-payment-account '+(!person?'disabled':'')+'>Ver estado de cuenta</button><button class="save-btn" data-payment-add '+(!person?'disabled':'')+'>Registrar pago</button></div></section><section class="card"><h3>Recibos de pago</h3>'+receipts.map(r=>'<div class="school-ledger-entry"><strong>'+esc(r.number)+' · '+esc(fechaVista(r.date))+' · '+money(r.totalCents)+'</strong><p>'+esc([r.method,r.reference,receiptStatus(r)].filter(Boolean).join(' · '))+'</p><button class="record-btn" data-receipt="'+esc(r.id)+'">Ver recibo / imprimir dos copias</button></div>').join('')+(!receipts.length?'<p class="school-muted">Sin recibos para esta persona.</p>':'')+'</section><section class="card"><h3>Movimientos de pago</h3>'+paymentMovements(person).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>'<div class="school-ledger-entry'+(p.voidedAt?' school-void':'')+'"><strong>'+esc(fechaVista(p.date))+' · '+money(p.cents)+(p.voidedAt?' · ANULADO':'')+'</strong><p>'+esc([p.description||p.concept,p.method,p.receiptNumber,p.source,p.reference,p.note].filter(Boolean).join(' · '))+'</p></div>').join('')+'</section>';
+ paymentPanel.querySelector('[data-payment-person]').onchange=e=>{paymentSelection=e.target.value;renderPayments();};
+ paymentPanel.querySelector('[data-payment-add]').onclick=()=>{if(person)openPayment(person.id);};
+ paymentPanel.querySelector('[data-payment-account]').onclick=()=>{if(!person)return;if(person.id.startsWith('client:'))showStatementRecord(()=>clientStatement(clientById(data(),person.record.id)));else showStatement(person.record.id);};
+ paymentPanel.querySelectorAll('[data-receipt]').forEach(b=>b.onclick=()=>showReceipt(b.dataset.receipt));
 }
+
 renderPayments();
 window.School={modal,money,verifyDeletionKey:correctDeletionKey,courseName:type=>COURSES[type]?.name||type,refresh:()=>{render();decorateRates();renderPayments();},decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
 const oldDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!oldDraft?.()||window.School.hasDraft();
 window.addEventListener('beforeunload',event=>{if(busy||window.School.hasDraft()){event.preventDefault();event.returnValue='';}});
 render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
-window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
+window.School.math={recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
