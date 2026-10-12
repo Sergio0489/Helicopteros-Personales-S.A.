@@ -264,6 +264,7 @@ function aacReport(data=previewData,from=aacFrom,to=aacTo,service=aacService){
  return transportReport(copy).sort((a,b)=>a.date.localeCompare(b.date)||a.service.localeCompare(b.service)).map(g=>({...g,service:g.service.toUpperCase(),flights:g.flights.map(f=>({...f,route:f.route.replaceAll(' → ','-')}))}));
 }
 function renderReport(){
+ renderPersonalReport();
  const target=document.getElementById('registro-transport-report');if(!target)return;
  if(!aacFrom)aacFrom=panamaISO().slice(0,7)+'-01';if(!aacTo)aacTo=panamaISO();
  const groups=aacReport(),count=Math.max(1,...groups.map(g=>g.flights.length)),flights=groups.reduce((n,g)=>n+g.flights.length,0),hours=groups.reduce((n,g)=>n+g.hours100,0);
@@ -279,26 +280,33 @@ function renderReport(){
  };
 }
 // Small, dependency-free OOXML export. Text is always stored as text, never as a formula.
-function aacWorkbook(groups,from,to,service){
+function aacWorkbook(groups,from,to,service,detail=null){
  const xml=s=>String(s??'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
  const col=n=>{let r='';for(n++;n;n=Math.floor((n-1)/26))r=String.fromCharCode(65+(n-1)%26)+r;return r;};
- const count=Math.max(1,...groups.map(g=>g.flights.length)),last=col(3+count),rows=[];
+ const count=detail?3:Math.max(1,...groups.map(g=>g.flights.length)),last=col(3+count),rows=[];
  const text=(r,c,v,style=0)=>'<c r="'+col(c)+r+'" s="'+style+'" t="inlineStr"><is><t xml:space="preserve">'+xml(v)+'</t></is></c>';
  const num=(r,c,v,style=2,formula='')=>'<c r="'+col(c)+r+'" s="'+style+'">'+(formula?'<f>'+formula+'</f>':'')+'<v>'+v+'</v></c>';
- rows.push('<row r="1" ht="25" customHeight="1">'+text(1,0,'Estadísticas para AAC',4)+'</row>');
- rows.push('<row r="2" ht="22" customHeight="1">'+text(2,0,'Todas las aeronaves · '+fechaVista(from)+' a '+fechaVista(to)+' · '+(service==='instruction'?'Adiestramiento':service==='charter'?'Charter':'Todos los servicios'),4)+'</row>');
- rows.push('<row r="3" ht="40" customHeight="1">'+['FECHA','CANTIDAD DE VUELOS','HORAS VOLADAS','TIPO DE SERVICIO DE TRANSPORTE AÉREO EFECTUADO',...Array.from({length:count},(_,i)=>'VUELO '+(i+1))].map((v,c)=>text(3,c,v,1)).join('')+'</row>');
+ rows.push('<row r="1" ht="25" customHeight="1">'+text(1,0,detail?'Estadísticas Helicópteros Personales':'Estadísticas para AAC',4)+'</row>');
+ rows.push('<row r="2" ht="22" customHeight="1">'+text(2,0,(detail&&detail.aircraft!=='all'?equipmentName(detail.aircraft):'Todas las aeronaves')+' · '+fechaVista(from)+' a '+fechaVista(to)+' · '+(service==='instruction'?'Adiestramiento':service==='charter'?'Charter':'Todos los servicios'),4)+'</row>');
+ rows.push('<row r="3" ht="40" customHeight="1">'+(detail?['FECHA','NÚMERO DE BITÁCORA','AERONAVE','INSTRUCTOR','ESTUDIANTE / CLIENTE','TIEMPO DE VUELO','OBSERVACIONES']:['FECHA','CANTIDAD DE VUELOS','HORAS VOLADAS','TIPO DE SERVICIO DE TRANSPORTE AÉREO EFECTUADO',...Array.from({length:count},(_,i)=>'VUELO '+(i+1))]).map((v,c)=>text(3,c,v,1)).join('')+'</row>');
+ if(detail){
+ detail.entries.forEach((e,i)=>{const r=i+4,date=(Date.parse(e.date+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000,lines=String(e.observation||'').split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/44)),0);
+ rows.push('<row r="'+r+'" ht="'+Math.min(409,Math.max(30,lines*15))+'" customHeight="1">'+num(r,0,date,3)+text(r,1,e.book)+text(r,2,equipmentName(e.aircraft))+text(r,3,e.pilot||'')+text(r,4,e.personName||'')+num(r,5,Number(e.hours100||0)/100,5)+text(r,6,e.observation||'')+'</row>');});
+ const r=detail.entries.length+4,total=detail.entries.reduce((n,e)=>n+Number(e.hours100||0),0)/100;
+ rows.push('<row r="'+r+'" ht="24" customHeight="1">'+text(r,0,'TOTAL',1)+num(r,5,total,8,detail.entries.length?'SUM(F4:F'+(r-1)+')':'')+'</row>');
+ }else{
  groups.forEach((g,i)=>{const r=i+4,date=(Date.parse(g.date+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000;rows.push('<row r="'+r+'" ht="24" customHeight="1">'+num(r,0,date,3)+num(r,1,g.flights.length)+num(r,2,g.hours100/100,5)+text(r,3,g.service,6)+Array.from({length:count},(_,c)=>text(r,c+4,g.flights[c]?.route||'')).join('')+'</row>');});
  const r=groups.length+4,totalFlights=groups.reduce((n,g)=>n+g.flights.length,0),totalHours=groups.reduce((n,g)=>n+g.hours100,0)/100;
  rows.push('<row r="'+r+'" ht="24" customHeight="1">'+text(r,0,'TOTALES',1)+num(r,1,totalFlights,7,groups.length?'SUM(B4:B'+(r-1)+')':'')+num(r,2,totalHours,8,groups.length?'SUM(C4:C'+(r-1)+')':'')+'</row>');
+ }
  const prefix='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
  const files={
  '[Content_Types].xml':prefix+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
  '_rels/.rels':prefix+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
- 'xl/workbook.xml':prefix+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Estadísticas para AAC" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>',
+ 'xl/workbook.xml':prefix+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'+(detail?'Helicópteros Personales':'Estadísticas para AAC')+'" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>',
  'xl/_rels/workbook.xml.rels':prefix+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
  'xl/styles.xml':prefix+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="0.0"/></numFmts><fonts count="4"><font><sz val="11"/><name val="Arial"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><i/><sz val="11"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2875A5"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9">'+[[0,0,0,1],[0,1,2,1],[0,0,0,1],[164,0,0,1],[0,2,0,0],[165,0,0,1],[0,3,0,1],[0,2,0,1],[165,2,0,1]].map(([n,f,fill,b])=>'<xf numFmtId="'+n+'" fontId="'+f+'" fillId="'+fill+'" borderId="'+b+'" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>').join('')+'</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>',
- 'xl/worksheets/sheet1.xml':prefix+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="15" customWidth="1"/><col min="2" max="3" width="16" customWidth="1"/><col min="4" max="4" width="43" customWidth="1"/>'+Array.from({length:count},(_,i)=>'<col min="'+(i+5)+'" max="'+(i+5)+'" width="'+Math.max(28,...groups.map(g=>Math.min(80,(g.flights[i]?.route.length||0)+3)))+'" customWidth="1"/>').join('')+'</cols><sheetData>'+rows.join('')+'</sheetData><mergeCells count="2"><mergeCell ref="A1:'+last+'1"/><mergeCell ref="A2:'+last+'2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0" footer="0"/><pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/></worksheet>'
+ 'xl/worksheets/sheet1.xml':prefix+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>'+(detail?[15,20,20,30,32,20,48].map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join(''):'<col min="1" max="1" width="15" customWidth="1"/><col min="2" max="3" width="16" customWidth="1"/><col min="4" max="4" width="43" customWidth="1"/>'+Array.from({length:count},(_,i)=>'<col min="'+(i+5)+'" max="'+(i+5)+'" width="'+Math.max(28,...groups.map(g=>Math.min(80,(g.flights[i]?.route.length||0)+3)))+'" customWidth="1"/>').join(''))+'</cols><sheetData>'+rows.join('')+'</sheetData><mergeCells count="2"><mergeCell ref="A1:'+last+'1"/><mergeCell ref="A2:'+last+'2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0" footer="0"/><pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/></worksheet>'
  };
  return aacZip(files);
 }
@@ -316,10 +324,35 @@ function aacZip(files){
  const result=new Uint8Array(offset+size+22);let pos=0;for(const bytes of [...parts,...central,end.bytes]){result.set(bytes,pos);pos+=bytes.length;}return result;
 }
 
-window.Registro={renderReport,edit,deleteEntry,hasDraft:()=>dirty||pending,refresh:()=>{if(!dirty)render();},math:{aacReport,aacWorkbook,airportCode,transportReport,prepareRegistration,prepareCorrection,number100,resolvePerson,suggestedHours,assignedCourse,nextBook,prepareDeletion,reverseAircraftRecord,deletionNeedsKey}};
+let hpFrom='',hpTo='',hpAircraft='all',hpService='all';
+function personalReport(data=previewData,from=hpFrom,to=hpTo,aircraft=hpAircraft,service=hpService){
+ return arr(registry(data).entries).filter(e=>!e.voidedAt&&!e.deletedAt&&(!from||e.date>=from)&&(!to||e.date<=to)&&(aircraft==='all'||e.aircraft===aircraft)&&(service==='all'||(e.operationType==='charter'?'charter':'instruction')===service)).sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.book).localeCompare(String(b.book),'es',{numeric:true}));
+}
+function renderPersonalReport(){
+ const anchor=document.getElementById('registro-transport-report');if(!anchor)return;
+ let target=document.getElementById('registro-personal-report');
+ if(!target){target=document.createElement('section');target.id='registro-personal-report';target.className='card';target.style.cssText='margin-top:18px;padding:18px';anchor.insertAdjacentElement('afterend',target);}
+ if(!hpFrom)hpFrom=panamaISO().slice(0,7)+'-01';if(!hpTo)hpTo=panamaISO();
+ const aircrafts=[...new Set([...fleet.map(a=>a.reg),'RPA','Simulador',...arr(registry().entries).map(e=>e.aircraft).filter(Boolean)])];
+ const entries=personalReport(),hours=entries.reduce((n,e)=>n+Number(e.hours100||0),0);
+ target.innerHTML='<div class="school-row"><h3>Estadísticas Helicópteros Personales</h3><button type="button" class="save-btn" data-hp-download'+(!entries.length?' disabled':'')+'>Descargar Excel</button></div><form data-hp-filters class="school-row"><label>Desde<input name="from" value="'+esc(fechaVista(hpFrom))+'" placeholder="DD/MM/AAAA" required></label><label>Hasta<input name="to" value="'+esc(fechaVista(hpTo))+'" placeholder="DD/MM/AAAA" required></label><label>Aeronave<select name="aircraft"><option value="all">Todas</option>'+aircrafts.map(a=>'<option value="'+esc(a)+'"'+(hpAircraft===a?' selected':'')+'>'+esc(equipmentName(a))+'</option>').join('')+'</select></label><label>Tipo de servicio<select name="service"><option value="all"'+(hpService==='all'?' selected':'')+'>Todos</option><option value="instruction"'+(hpService==='instruction'?' selected':'')+'>Adiestramiento</option><option value="charter"'+(hpService==='charter'?' selected':'')+'>Charter</option></select></label><button type="submit" class="record-btn">Aplicar filtros</button><p data-hp-error class="record-error" role="alert"></p></form><p class="school-muted">Una fila por bitácora guardada. '+entries.length+' registros · Tiempo total: '+flightHours(hours)+' h.</p><div style="overflow-x:auto"><table class="aac-table"><thead><tr>'+['Fecha','Número de bitácora','Aeronave','Instructor','Estudiante / Cliente','Tiempo de vuelo','Observaciones'].map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+entries.map(e=>'<tr><td>'+esc(fechaVista(e.date))+'</td><td>'+esc(e.book)+'</td><td>'+esc(equipmentName(e.aircraft))+'</td><td>'+esc(e.pilot||'')+'</td><td>'+esc(e.personName||'')+'</td><td>'+flightHours(e.hours100)+'</td><td style="min-width:220px;white-space:pre-wrap;overflow-wrap:anywhere">'+esc(e.observation||'')+'</td></tr>').join('')+'</tbody><tfoot><tr><th colspan="5">TOTAL</th><td>'+flightHours(hours)+'</td><td></td></tr></tfoot></table></div>'+(!entries.length?'<p class="school-muted">Sin registros con los filtros seleccionados.</p>':'');
+ target.querySelector('[data-hp-filters]').onsubmit=e=>{
+  e.preventDefault();const form=e.currentTarget,from=isoFecha(form.elements.from.value),to=isoFecha(form.elements.to.value);
+  if(!Number.isFinite(dayNumber(from))||!Number.isFinite(dayNumber(to))||from>to){target.querySelector('[data-hp-error]').textContent='Revisa las fechas: Desde debe ser anterior o igual a Hasta.';return;}
+  hpFrom=from;hpTo=to;hpAircraft=form.elements.aircraft.value;hpService=form.elements.service.value;renderPersonalReport();
+ };
+ target.querySelector('[data-hp-download]').onclick=()=>{
+  const blob=new Blob([personalWorkbook(personalReport(),hpFrom,hpTo,hpAircraft,hpService)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='Estadisticas_Helicopteros_Personales_'+hpFrom+'_a_'+hpTo+'.xlsx';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+ };
+}
+function personalWorkbook(entries,from,to,aircraft,service){return aacWorkbook([],from,to,service,{entries,aircraft});}
+
+window.Registro={renderReport,edit,deleteEntry,hasDraft:()=>dirty||pending,refresh:()=>{if(!dirty)render();},math:{personalReport,personalWorkbook,aacReport,aacWorkbook,airportCode,transportReport,prepareRegistration,prepareCorrection,number100,resolvePerson,suggestedHours,assignedCourse,nextBook,prepareDeletion,reverseAircraftRecord,deletionNeedsKey}};
 const previousDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!previousDraft?.()||dirty||pending;
 render();renderReport();window.REGISTRO_READY=true;
 })();
+
 
 
 
