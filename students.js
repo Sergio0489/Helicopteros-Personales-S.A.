@@ -487,13 +487,7 @@ function resolvePaymentService(school,value){
 function recordReceipt(school,key,f,id,attachment=null){
  school.paymentReceipts ||= [];
  const previous=school.paymentReceipts.find(r=>r.id===id);if(previous)return previous;
- let selectedService=null;
- if('serviceName' in f){
-  selectedService=resolvePaymentService(school,f.serviceName);
-  if(!selectedService.label)throw Error('Selecciona o escribe el servicio.');
-  const single={...f};for(const fee of Object.keys(PAYMENT_CONCEPTS)){delete single['amount_'+fee];delete single['target_'+fee];}
-  single['amount_'+selectedService.fee]=f.amount;single['target_'+selectedService.fee]=f.targetCourse||'';f=single;
- }
+ const allocations=Array.isArray(f.allocations)?f.allocations:('serviceName' in f?[{serviceName:f.serviceName,amount:f.amount,targetCourse:f.targetCourse}]:Object.entries(PAYMENT_CONCEPTS).filter(([fee])=>String(f['amount_'+fee]||'').trim()&&Number(f['amount_'+fee])!==0).map(([fee,label])=>({serviceName:label,amount:f['amount_'+fee],targetCourse:f['target_'+fee]})));
 
  errorDate(f,[['date',true]]);
  if(!PAYMENT_METHODS.includes(f.method))throw Error('Selecciona cómo se realizó el pago.');
@@ -501,19 +495,21 @@ function recordReceipt(school,key,f,id,attachment=null){
  if(['ACH','Yappy'].includes(f.method)&&!reference)throw Error('Ingresa el número de transferencia.');
  const receiver=paymentReceivers().find(user=>user.uid===f.receivedByUid);if(!receiver)throw Error('Selecciona un usuario autorizado para recibir el abono.');
  const {kind,record}=receiptPerson(school,key),lines=[];
- for(const [fee,label] of Object.entries(PAYMENT_CONCEPTS)){
-  const raw=String(f['amount_'+fee]||'').trim();if(!raw)continue;const amount=cents(raw);
-  if(amount===null||amount<0)throw Error('Revisa el monto de '+label+'.');if(!amount)continue;
-  const courseId=String(f['target_'+fee]||''),course=courseId&&kind==='student'?courseById(record,courseId):null;
+ for(const item of allocations){
+  const selected=resolvePaymentService(school,item.serviceName),fee=selected.fee,label=selected.label;if(!label)throw Error('Selecciona o escribe el servicio.');
+  const amount=cents(String(item.amount||'').trim());if(amount===null||amount<=0)throw Error('El abono de '+label+' debe ser mayor que cero.');
+  const courseId=String(item.targetCourse||''),course=courseId&&kind==='student'?courseById(record,courseId):null;
   if(courseId&&(!course||!COURSES[course.type]?.fees.includes(fee)))throw Error('El curso no corresponde al concepto '+label+'.');
-  lines.push({id:id+'-'+fee,fee,cents:amount,courseId:course?.id||'',courseName:course?COURSES[course.type].name:'',label});
+  lines.push({id:id+'-'+lines.length,fee,cents:amount,courseId:course?.id||'',courseName:course?COURSES[course.type].name:'',label,serviceId:selected.serviceId});
  }
+
  if(!lines.length)throw Error('Ingresa un abono mayor que cero.');
  if(!SOURCES.includes(f.source))throw Error('Selecciona el origen de fondos.');
  const total=lines.reduce((n,l)=>n+l.cents,0);if(!Number.isSafeInteger(total))throw Error('El monto es demasiado grande.');
- if(selectedService){
-  if(selectedService.isNew){school.services ||= [];selectedService.serviceId='service-'+id;school.services.push({id:selectedService.serviceId,name:selectedService.label,description:'',category:'otro',createdAt:new Date().toISOString()});}
-  lines[0].label=selectedService.label;lines[0].serviceId=selectedService.serviceId;
+ for(const line of lines){
+  const service=resolvePaymentService(school,line.label);
+  if(service.isNew){school.services ||= [];service.serviceId='service-'+line.id;school.services.push({id:service.serviceId,name:service.label,description:'',category:'otro',createdAt:new Date().toISOString()});}
+  line.serviceId=service.serviceId;
  }
  const sequence=Math.max(0,...school.paymentReceipts.map(r=>Number(r.sequence)||0))+1;
  const receipt={id,sequence,number:'HP-'+String(sequence).padStart(6,'0'),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:receiver.label,receivedByUid:receiver.uid,method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
@@ -556,17 +552,26 @@ function showReceipt(id){
 }
 function openPayment(key,defaultFee='',defaultCourse=''){
  const person=receiptPerson(data(),key),id=uid(),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
- modal('Crear abono · '+person.record.name,amountField('amount','Monto a abonar (USD)')+input('serviceName','Servicio',PAYMENT_CONCEPTS[defaultFee]||'','text','list="payment-services" required maxlength="160"')+'<datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist><label>Aplicar al curso<select name="targetCourse"><option value="">Cuenta general</option></select></label>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label)+'</option>').join('')+'</select></label>'+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
+ modal('Crear abono · '+person.record.name,'<div class="school-full" data-payment-lines></div><button type="button" class="record-btn" data-add-payment-line>+ Agregar servicio / curso</button><p class="school-full"><b>Total del abono: <span data-payment-total>$0.00</span></b></p><datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label)+'</option>').join('')+'</select></label>'+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
+  f.allocations=[...form.querySelectorAll('[data-payment-line]')].map(row=>({serviceName:row.querySelector('[name="serviceName"]').value,amount:row.querySelector('[name="amount"]').value,targetCourse:row.querySelector('[name="targetCourse"]').value}));
   const attachment=await paymentPhoto(form.querySelector('[name="proof"]').files[0]);
   await change(school=>recordReceipt(school,key,f,id,attachment));
   setTimeout(()=>showReceipt(id),0);
  },dialog=>{
-  dialog.querySelector('[name="amount"]').value='';
-  const service=dialog.querySelector('[name="serviceName"]'),target=dialog.querySelector('[name="targetCourse"]');
-  const refreshCourse=()=>{const current=target.value,fee=resolvePaymentService(data(),service.value).fee,courses=person.kind==='student'?list(person.record.courses).filter(c=>COURSES[c.type]?.fees.includes(fee)):[];
-   target.innerHTML='<option value="">Cuenta general</option>'+courses.map(c=>'<option value="'+esc(c.id)+'">'+esc(COURSES[c.type].name)+'</option>').join('');
-   target.value=courses.some(c=>c.id===current)?current:courses.some(c=>c.id===defaultCourse)&&fee===defaultFee?defaultCourse:'';target.disabled=!courses.length;
-  };service.oninput=refreshCourse;refreshCourse();
+  const container=dialog.querySelector('[data-payment-lines]');
+  const total=()=>{dialog.querySelector('[data-payment-total]').textContent=money([...container.querySelectorAll('[name="amount"]')].reduce((n,input)=>n+(cents(input.value)||0),0));};
+  const addLine=(initial=false)=>{
+   const row=document.createElement('div');row.className='payment-allocation';row.setAttribute('data-payment-line','');
+   row.innerHTML=input('serviceName','Servicio',initial?PAYMENT_CONCEPTS[defaultFee]||'':'','text','list="payment-services" required maxlength="160"')+amountField('amount','Monto (USD)')+'<label>Aplicar al curso<select name="targetCourse"><option value="">Cuenta general</option></select></label><button type="button" class="record-btn" data-remove-line aria-label="Quitar servicio">×</button>';
+   container.appendChild(row);row.querySelector('[name="amount"]').value='';
+   const service=row.querySelector('[name="serviceName"]'),target=row.querySelector('[name="targetCourse"]');
+   const refreshCourse=()=>{const current=target.value,fee=resolvePaymentService(data(),service.value).fee,courses=person.kind==='student'?list(person.record.courses).filter(c=>COURSES[c.type]?.fees.includes(fee)):[];
+    target.innerHTML='<option value="">Cuenta general</option>'+courses.map(c=>'<option value="'+esc(c.id)+'">'+esc(COURSES[c.type].name)+'</option>').join('');
+    target.value=courses.some(c=>c.id===current)?current:initial&&fee===defaultFee&&courses.some(c=>c.id===defaultCourse)?defaultCourse:'';target.disabled=!courses.length;
+   };service.oninput=refreshCourse;refreshCourse();row.querySelector('[name="amount"]').oninput=total;
+   row.querySelector('[data-remove-line]').onclick=()=>{if(container.querySelectorAll('[data-payment-line]').length===1)return;if(window.confirm('¿Quitar este servicio del abono?')){row.remove();total();}};
+  };
+  dialog.querySelector('[data-add-payment-line]').onclick=()=>addLine();addLine(true);
   const refresh=()=>{dialog.querySelector('[name="reference"]').required=['ACH','Yappy'].includes(dialog.querySelector('[name="method"]').value);};dialog.querySelector('[name="method"]').onchange=refresh;refresh();
  });
 }
@@ -575,7 +580,23 @@ let paymentSelection='';
 const paymentPanel=document.createElement('div');paymentPanel.className='aircraft-panel';paymentPanel.id='panel-registro-pago';contentEl.appendChild(paymentPanel);
 const paymentTab=document.createElement('div');paymentTab.className='aircraft-tab';paymentTab.id='tab-registro-pago';paymentTab.innerHTML='<div class="tab-reg" style="font-size:10px">💳 REGISTRO DE PAGO</div>';itinerariosTab.insertAdjacentElement('beforebegin',paymentTab);
 paymentTab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab,.aircraft-panel').forEach(e=>e.classList.remove('active'));paymentTab.classList.add('active');paymentPanel.classList.add('active');renderPayments();});
+function lowBalanceStudents(school=data()){
+ return list(school.students).map(student=>({student,balance:(-statementData(student).servicesBalance || 0)})).filter(row=>row.balance<50000).sort((a,b)=>a.balance-b.balance||a.student.name.localeCompare(b.student.name,'es'));
+}
+function renderBalanceAlerts(){
+ let panel=document.getElementById('panel-alerta-saldos');
+ if(!panel){
+  panel=document.createElement('div');panel.id='panel-alerta-saldos';panel.className='aircraft-panel';contentEl.appendChild(panel);
+  const tab=document.createElement('div');tab.id='tab-alerta-saldos';tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px;color:#d90020">🚨 ALERTA DE SALDOS</div>';
+  if(typeof statsTab!=='undefined')statsTab.insertAdjacentElement('afterend',tab);else paymentTab.insertAdjacentElement('afterend',tab);
+  tab.onclick=()=>{document.querySelectorAll('.aircraft-tab,.aircraft-panel').forEach(e=>e.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');renderBalanceAlerts();};
+ }
+ const rows=lowBalanceStudents();
+ panel.innerHTML='<div class="school-header"><div><div class="aircraft-reg">🚨 ALERTA DE SALDOS</div><p class="school-muted">Saldo disponible menor de $500.00 · '+rows.length+' estudiantes</p></div></div><section class="card"><p class="school-muted">Abonos menos cargos por servicios registrados, según el estado de cuenta. Incluye saldos en cero y deudas.</p><div class="school-statement-table-wrap"><table class="school-statement-table"><thead><tr><th>Estudiante</th><th>Celular</th><th>Saldo disponible</th><th>Estado</th><th></th></tr></thead><tbody>'+rows.map(({student:s,balance})=>'<tr><td>'+esc(s.name)+'</td><td>'+esc(s.phone||'')+'</td><td style="color:'+(balance<0?'#d90020':'#996600')+';font-weight:700">'+money(balance)+'</td><td>'+(balance<0?'Deuda':balance===0?'Sin saldo':'Saldo bajo')+'</td><td><button class="record-btn" data-balance-student="'+esc(s.id)+'">Estado de cuenta</button></td></tr>').join('')+'</tbody></table></div>'+(!rows.length?'<p>Sin estudiantes con saldo menor de $500.00.</p>':'')+'</section>';
+ panel.querySelectorAll('[data-balance-student]').forEach(b=>b.onclick=()=>showStatement(b.dataset.balanceStudent));
+}
 function renderPayments(){
+ renderBalanceAlerts();
  const people=paymentPeople(),person=people.find(p=>p.id===paymentSelection),receipts=list(data().paymentReceipts).filter(r=>r.personKey===paymentSelection).slice().reverse();
  paymentPanel.innerHTML='<div class="payment-page-heading">REGISTRO DE PAGO</div><section class="payment-launch"><img class="hp-payment-logo" src="hp-logo.svg?v=1" width="150" height="76" alt="Helicópteros Personales"><label>Estudiante / Cliente<select data-payment-person><option value="">Seleccionar…</option>'+people.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===paymentSelection?' selected':'')+'>'+esc(p.name)+' · '+p.kind+'</option>').join('')+'</select></label><div class="school-actions"><button class="save-btn" data-payment-add '+(!person?'disabled':'')+'>＋ Crear abono</button></div></section><details class="payment-history"><summary>Recibos y movimientos</summary><section class="card"><h3>Recibos de pago</h3>'+receipts.map(r=>'<div class="school-ledger-entry"><strong>'+esc(r.number)+' · '+esc(fechaVista(r.date))+' · '+money(r.totalCents)+'</strong><p>'+esc([r.method,r.reference,receiptStatus(r)].filter(Boolean).join(' · '))+'</p><button class="record-btn" data-receipt="'+esc(r.id)+'">Ver recibo / imprimir dos copias</button></div>').join('')+(!receipts.length?'<p class="school-muted">Sin recibos para esta persona.</p>':'')+'</section><section class="card"><h3>Movimientos de pago</h3>'+paymentMovements(person).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>'<div class="school-ledger-entry'+(p.voidedAt?' school-void':'')+'"><strong>'+esc(fechaVista(p.date))+' · '+money(p.cents)+(p.voidedAt?' · ANULADO':'')+'</strong><p>'+esc([p.description||p.concept,p.method,p.receiptNumber,p.source,p.reference,p.note].filter(Boolean).join(' · '))+'</p></div>').join('')+'</section></details>';
  paymentPanel.querySelector('[data-payment-person]').onchange=e=>{paymentSelection=e.target.value;renderPayments();};
@@ -590,8 +611,9 @@ const oldDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!oldDraft?.()|
 window.addEventListener('beforeunload',event=>{if(busy||window.School.hasDraft()){event.preventDefault();event.returnValue='';}});
 render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
-window.School.math={resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
+window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
