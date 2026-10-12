@@ -418,7 +418,20 @@ function recordClientPayment(school,cid,payment){const client=clientById(school,
 function addClientPayment(cid){const client=clientById(data(),cid),paymentId=uid();modal('Registrar pago · '+client.name,dateField('date','Fecha',today(),true)+amountField('amount','Monto recibido (USD)')+'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Recibo / referencia','','text','maxlength="100"')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{const payment=clientPaymentRecord(f,paymentId);await change(school=>recordClientPayment(school,cid,payment));});}
 function paymentPeople(){const school=data();return [...school.students.map(s=>({id:'student:'+s.id,name:s.name,kind:'Estudiante',record:s})),...list(school.registry?.clients).map(c=>({id:'client:'+c.id,name:c.name,kind:'Cliente',record:c}))].sort((a,b)=>a.name.localeCompare(b.name,'es'));}
 function paymentMovements(person){if(!person)return [];const p=person.record;return person.id.startsWith('client:')?list(p.payments).map(e=>({...e,concept:'Cuenta de cliente'})):[...list(p.courses).flatMap(c=>list(c.payments).map(e=>({...e,concept:(COURSES[c.type]?.name||'')+' · '+(FEES[e.fee]||'')}))),...list(p.extraPayments).map(e=>({...e,concept:'Cuenta general'}))];}
-function clientsHtml(){const clients=list(data().registry?.clients);return '<div class="school-rate-grid">'+clients.map(c=>{const st=statementData(clientStatement(c));return '<section class="card"><h3>'+esc(c.name)+'</h3><p>Saldo: '+statementBalance(st.servicesBalance)+'</p>'+equipmentHoursHtml(clientStatement(c),1)+'<div class="school-actions">'+button('Estado de cuenta','client-statement','data-client="'+esc(c.id)+'"')+button('Registrar pago','client-payment','data-client="'+esc(c.id)+'"')+'</div></section>';}).join('')+'</div>'+(!clients.length?'<div class="card">Los clientes nuevos se crean al guardar un registro Charter con su nombre.</div>':'');}
+function newClientRecord(school,f,id){
+ const name=String(f.name||'').trim(),email=String(f.email||'').trim(),identity=String(f.identity||'').trim();
+ if(!name)throw Error('Ingresa el nombre del cliente.');
+ const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+ if(list(school.registry?.clients).some(c=>norm(c.name)===norm(name)||(email&&norm(c.email)===norm(email))||(identity&&norm(c.identity)===norm(identity))))throw Error('Ya existe un cliente con ese nombre, correo o identificación. Revisa la lista antes de crear otro.');
+ return {id,name,email,identity,phone:String(f.phone||'').trim(),address:String(f.address||'').trim(),notes:String(f.notes||'').trim(),createdAt:new Date().toISOString(),createdDate:today(),flights:[],payments:[]};
+}
+function addClient(){
+ const id=uid();
+ modal('Agregar cliente',input('name','Nombre completo / empresa','','text','required maxlength="160"')+input('identity','Cédula, pasaporte o RUC','','text','maxlength="60"')+input('phone','Celular','','tel','maxlength="40"')+input('email','Correo electrónico','','email','maxlength="180"')+input('address','Dirección','','text','maxlength="500"')+'<label class="school-full">Observaciones<textarea name="notes" maxlength="4000"></textarea></label>',async f=>{
+  await change(school=>{const record=newClientRecord(school,f,id);school.registry ||= {entries:[],clients:[],destinations:[]};school.registry.clients ||= [];school.registry.clients.push(record);});
+ });
+}
+function clientsHtml(){const clients=list(data().registry?.clients);return '<div class="school-actions">'+button('+ Agregar cliente','new-client')+'</div><div class="school-rate-grid">'+clients.map(c=>{const st=statementData(clientStatement(c));return '<section class="card"><h3>'+esc(c.name)+'</h3><p>Saldo: '+statementBalance(st.servicesBalance)+'</p>'+equipmentHoursHtml(clientStatement(c),1)+'<div class="school-actions">'+button('Estado de cuenta','client-statement','data-client="'+esc(c.id)+'"')+button('Registrar pago','client-payment','data-client="'+esc(c.id)+'"')+'</div></section>';}).join('')+'</div>'+(!clients.length?'<div class="card">Todavía no hay clientes. Usa Agregar cliente o guarda un registro Charter con un nombre nuevo.</div>':'');}
 const panel=document.createElement('div');panel.id='panel-estudiantes';panel.className='aircraft-panel';contentEl.appendChild(panel);
 const tab=document.createElement('div');tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px">🎓 ESTUDIANTES / CLIENTES</div>';itinerariosTab.insertAdjacentElement('afterend',tab);
 tab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');render();});
@@ -447,7 +460,7 @@ panel.addEventListener('click',event=>{
  const b=event.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,s=b.dataset.student,c=b.dataset.course;
  const handlers={
   'registry-edit':()=>window.Registro.edit(b.dataset.entry),
-  'client-statement':()=>showStatementRecord(()=>clientStatement(clientById(data(),b.dataset.client))),'client-payment':()=>addClientPayment(b.dataset.client),
+  'new-client':()=>addClient(),'client-statement':()=>showStatementRecord(()=>clientStatement(clientById(data(),b.dataset.client))),'client-payment':()=>addClientPayment(b.dataset.client),
   'add-service':()=>editService(),'edit-service':()=>editService(b.dataset.service),
   'blank-registration':()=>printSchoolHtml(blankRegistrationHtml(),'school-blank-print'),'delete-student':()=>deleteStudent(s),'delete-archived-course':()=>deleteArchivedCourse(s,c),statement:()=>showStatement(s),'course-rate':()=>editCourseRate(b.dataset.type),expense:()=>addExtra(s,'expenses'),'extra-payment':()=>addExtra(s,'extraPayments'),'void-extra':()=>voidExtra(s,b.dataset.kind,b.dataset.entry),
   'new-student':()=>editStudent(), 'edit-student':()=>editStudent(s),'print-student':()=>printStudent(s),select:()=>{selected=s;render();},view:()=>{view=b.dataset.view;render();},
@@ -476,6 +489,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
