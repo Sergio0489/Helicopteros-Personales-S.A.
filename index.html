@@ -859,6 +859,10 @@
 #panel-registro .registro-route-passengers{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}#panel-registro .registro-route-passengers>fieldset{margin:0}#panel-registro .registro-passengers{align-content:start}#panel-registro .registro-save-actions{justify-content:flex-end;width:100%;margin-top:16px}.registro-confirm{max-width:620px;width:calc(100% - 32px);box-sizing:border-box;max-height:90vh;overflow:auto}.registro-confirm dl{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.registro-confirm dl>div{min-width:0;border-bottom:1px solid var(--border);padding-bottom:9px}.registro-confirm dt{font-size:12px;color:var(--muted)}.registro-confirm dd{margin:5px 0 0;font-size:14px;font-weight:600;overflow-wrap:anywhere}.registro-confirm .registro-confirm-red{color:#d00020;font-weight:800}.registro-confirm .record-actions{justify-content:flex-end}.registro-confirm::backdrop{background:rgba(9,20,42,.55)}
 @media(max-width:600px){#panel-registro .registro-route-passengers{grid-template-columns:1fr}#panel-registro .registro-save-actions button{flex:0 1 auto}.registro-confirm dl{grid-template-columns:1fr}.registro-confirm{max-height:85dvh}}
 </style>
+<style>
+.school-balance-credit{color:var(--signal-green,#087F3E)!important;font-weight:700;text-shadow:0 0 3px rgba(16,185,87,.3)}.school-balance-debt{color:#d00020!important;font-weight:700}.school-balance-neutral{color:var(--text,#09142a)}.school-statement-dialog .school-statement-actions:last-child{justify-content:flex-end;margin-top:24px;padding-top:14px;border-top:1px solid var(--border)}.school-statement-dialog .school-statement-table{min-width:1060px}.school-statement-dialog .school-statement-table-wrap{overflow-x:auto}
+@media print{.school-statement-print .school-statement-table{min-width:0!important;width:100%;font-size:8px;table-layout:auto}.school-statement-print .school-statement-table th,.school-statement-print .school-statement-table td{padding:4px 2px;overflow-wrap:anywhere}.school-statement-print .school-statement-table-wrap{overflow:visible!important}.school-balance-credit,.school-balance-debt{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
 </head>
 <body>
 <section id="access-screen"><div class="access-card"><h1>Control de Flota</h1><p>Helicópteros Personales S.A.</p><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
@@ -915,9 +919,10 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261012-7"></script>
+<script src="cloud.js?v=20261012-8"></script>
 </body>
 </html>
+
 
 
 
