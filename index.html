@@ -851,6 +851,10 @@
 .sidebar-aircraft-items .sidebar-group-title{padding-left:12px}
 
 </style>
+<style>
+#panel-registro>.card{margin:16px 0;padding:20px}#panel-registro .registro-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}#panel-registro [hidden]{display:none!important}#panel-registro label{min-width:0;color:#163a64;font-weight:700;font-size:12px}#panel-registro input,#panel-registro select{width:100%;box-sizing:border-box;min-width:0;color:#151f2b;font-weight:400}#panel-registro .school-full{grid-column:1/-1}#panel-registro fieldset{border:1px solid var(--border);border-radius:8px;padding:14px;min-width:0}#panel-registro legend{color:#163a64;font-weight:700;padding:0 6px}#panel-registro .registro-route{display:flex;gap:10px;align-items:end;margin-bottom:10px}#panel-registro .registro-route label{flex:1}#panel-registro .registro-passengers{display:grid;grid-template-columns:1fr 1fr;gap:16px}#panel-registro .registro-hours{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;background:#edf5fb;border-radius:8px;color:#163a64}#panel-registro .registro-hours strong{font-size:22px}#panel-registro .registro-entry{border-top:1px solid var(--border);padding:16px 0;font-size:12px;overflow-wrap:anywhere}#panel-registro .registro-entry p{margin:7px 0;line-height:1.5}#panel-registro .school-check{display:flex;align-items:center;gap:8px}#panel-registro .school-check input{width:auto}#panel-registro .registro-success{color:var(--signal-green);text-shadow:0 0 5px rgba(16,185,87,.5);font-weight:700}#panel-registro .school-muted{font-size:12px;line-height:1.5}#panel-registro input:read-only{background:#edf1f5}#panel-registro input[type=number]{padding-right:8px;appearance:textfield}#panel-registro input::-webkit-inner-spin-button{appearance:none}#panel-registro .school-actions{flex-wrap:wrap}
+@media(max-width:760px){#panel-registro .registro-form{grid-template-columns:1fr}#panel-registro>.card{padding:14px}#panel-registro .school-row{align-items:flex-start;gap:10px;flex-wrap:wrap}#panel-registro .school-actions button{flex:1}#panel-registro .aircraft-reg{font-size:24px}}
+</style>
 </head>
 <body>
 <section id="access-screen"><div class="access-card"><h1>Control de Flota</h1><p>Helicópteros Personales S.A.</p><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
@@ -907,9 +911,10 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261012-4"></script>
+<script src="cloud.js?v=20261012-5"></script>
 </body>
 </html>
+
 
 
 
