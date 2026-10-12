@@ -1793,8 +1793,8 @@ statsPanel.innerHTML = `
     <div class="card-title" style="margin-bottom:10px">📈 Total de Horas Voladas — Flota Completa</div>
     <div style="height:260px"><canvas id="stats-chart-total"></canvas></div>
   </div>
-  <section class="card" id="registro-transport-report" style="margin-bottom:18px;padding:18px"></section>
   <div id="estadisticas-content"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);padding:20px 0">Cargando...</div></div>
+  <section class="card" id="registro-transport-report" style="margin-bottom:18px;padding:18px"></section>
 `;
 contentEl.insertBefore(statsPanel, resumenPanel.nextSibling);
 
