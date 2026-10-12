@@ -210,7 +210,7 @@ function voidExtra(sid,kind,id){
 }
 function extrasHtml(s){const attrs='data-student="'+esc(s.id)+'"',totals=extraTotals(s);return '<section class="card"><div class="school-row"><h3>Otros gastos</h3><div class="school-actions">'+button('+ Gasto','expense',attrs)+button('+ Abono a otros gastos','extra-payment',attrs)+'</div></div><p class="school-muted">Gastos: '+money(totals.expenses)+' · Abonos: '+money(totals.payments)+' · Saldo pendiente: '+money(totals.expenses-totals.payments)+'</p>'+['expenses','extraPayments'].flatMap(kind=>list(s[kind]).map(e=>'<div class="school-ledger-entry'+(e.voidedAt?' school-void':'')+'"><div class="school-row"><b>'+esc(fechaVista(e.date))+' · '+esc(e.description)+' · '+money(e.cents)+'</b>'+(!e.voidedAt?button('Anular','void-extra',attrs+' data-kind="'+kind+'" data-entry="'+esc(e.id)+'"'):'<span>Anulado</span>')+'</div><p>'+esc([e.courseName,e.aircraft,e.source,e.reference,e.note].filter(Boolean).join(' · '))+'</p>'+(e.voidedAt?'<p>Motivo: '+esc(e.voidReason)+'</p>':'')+'</div>')).join('')+'</section>';}
 function statementBalance(value,available=false){const n=Number(value)||0,credit=available?n>0:n<0,debt=available?n<0:n>0;return '<span class="'+(credit?'school-balance-credit':debt?'school-balance-debt':'school-balance-neutral')+'">'+money(n)+'</span>';}
-function registryMovement(f){const entry=list(previewData.school?.registry?.entries).find(e=>e.id===f.registryId);return {operationType:entry?.operationType||f.operationType||'instruction',book:entry?.book||f.book||'',pilot:entry?.pilot||f.pilot||f.instructor||'',destinations:list(entry?.destinations||f.destinations).join(' → ')};}
+function registryMovement(f){const entry=list(previewData.school?.registry?.entries).find(e=>e.id===f.registryId);return {operationType:entry?.operationType||f.operationType||'instruction',book:entry?.book||f.book||'',pilot:entry?.pilot||f.pilot||f.instructor||'',destinations:[entry?.origin||f.origin,...list(entry?.destinations||f.destinations)].filter(Boolean).join(' → ')};}
 const STATEMENT_SERVICES=[['courses','Cursos'],['flight','Horas de vuelo'],['simulator','Horas de simulador'],['rpa','Horas RPA (Drone)'],['charter','Charter'],['other','Otros gastos y abonos']];
 function statementFlightService(f,c){if(registryMovement(f).operationType==='charter')return 'charter';const kind=sessionCategory(f,c);return kind==='rpa'?'rpa':kind==='simulador'?'simulator':'flight';}
 function statementFeeService(fee,c){return fee==='simulador'?'simulator':fee==='vuelo'?(c.type==='rpa'?'rpa':'flight'):'courses';}
@@ -476,6 +476,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
