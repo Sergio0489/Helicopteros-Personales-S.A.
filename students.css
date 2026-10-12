@@ -154,3 +154,7 @@
  .school-statement-print .school-statement-closing{font-size:10pt;break-inside:avoid}
  .school-statement-print .school-equipment-hours{break-inside:avoid;font-size:9pt}.school-statement-print .school-equipment-line{font-size:8pt}.school-statement-print .school-equipment-line strong{font-size:8pt}
 }
+
+
+.school-hour-total{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;margin-top:8px;font-size:12px;line-height:1.5}.school-hour-total strong{font-size:13px;white-space:nowrap}
+@media print{.school-hour-total,.school-hour-total strong{font-size:9pt}}
