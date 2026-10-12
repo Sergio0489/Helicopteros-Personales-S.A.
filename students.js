@@ -41,7 +41,7 @@ function bindStudentStage(dialog,student){
   stage.value=automaticStage(student,stage.value,enrolled.value);
   retirement.hidden=stage.value!=='Retirado';completion.hidden=stage.value!=='Culminado';
   dialog.querySelector('[name="withdrawalReason"]').required=!retirement.hidden;
-  dialog.querySelector('[name="completedDate"]').required=!completion.hidden;
+  const completedDate=dialog.querySelector('[name="completedDate"]');completedDate.required=!completion.hidden;completedDate.disabled=completion.hidden;if(!completion.hidden&&!completedDate.value)completedDate.value=fechaVista(today());
  };
  enrolled.addEventListener('input',sync);stage.addEventListener('change',sync);sync();
 }
@@ -88,6 +88,28 @@ async function change(mutator){
 }
 function options(values,value){return values.map(v=>'<option value="'+esc(v)+'"'+(v===value?' selected':'')+'>'+esc(schoolDisplayText(v))+'</option>').join('');}
 function courseOptions(value){return Object.entries(COURSES).map(([key,c])=>'<option value="'+key+'"'+(key===value?' selected':'')+'>'+c.name+'</option>').join('');}
+const COUNTRY_CODES='AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ');
+const countryNames=new Intl.DisplayNames(['es'],{type:'region'});
+const COUNTRIES=COUNTRY_CODES.map(code=>({code,name:countryNames.of(code)})).sort((a,b)=>a.code==='PA'?-1:b.code==='PA'?1:a.name.localeCompare(b.name,'es',{sensitivity:'base'}));
+function countrySearch(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es').trim();}
+function matchingCountries(value){return COUNTRIES.filter(c=>countrySearch(c.name).includes(countrySearch(value)));}
+function nationalityField(value){return '<label class="school-country-field">Nacionalidad<div class="school-country-control"><input name="nationality" value="'+esc(value||'')+'" maxlength="100" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="school-country-options" autocomplete="off" placeholder="Escribe o selecciona un país"><button type="button" class="school-country-toggle" aria-label="Mostrar todos los países">▾</button></div><div id="school-country-options" class="school-country-options" role="listbox" aria-label="Países" hidden></div></label>';}
+function bindNationality(dialog){
+ const input=dialog.querySelector('[name="nationality"]'),box=dialog.querySelector('#school-country-options'),toggle=dialog.querySelector('.school-country-toggle');let choices=[],active=-1;
+ const close=()=>{box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
+ const show=(all=false)=>{choices=all?COUNTRIES:matchingCountries(input.value);active=-1;input.removeAttribute('aria-activedescendant');box.innerHTML=choices.length?choices.map((c,i)=>'<div id="country-option-'+i+'" role="option" aria-selected="false" data-country-index="'+i+'">'+esc(c.name)+'</div>').join(''):'<div>No se encontraron países.</div>';box.hidden=false;input.setAttribute('aria-expanded','true');};
+ const choose=i=>{if(!choices[i])return;input.value=choices[i].name;input.dispatchEvent(new Event('input',{bubbles:true}));close();input.dispatchEvent(new Event('change',{bubbles:true}));input.focus();};
+ input.addEventListener('input',()=>show());input.addEventListener('click',()=>show(true));toggle.onpointerdown=e=>e.preventDefault();toggle.onclick=e=>{e.preventDefault();if(box.hidden){input.focus();show(true);}else close();};
+ box.addEventListener('pointerdown',e=>e.preventDefault());box.addEventListener('click',e=>{const option=e.target.closest('[data-country-index]');if(option){e.preventDefault();choose(Number(option.dataset.countryIndex));}});
+ input.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!box.hidden){e.preventDefault();e.stopPropagation();close();return;}
+  if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();if(box.hidden)show(true);if(!choices.length)return;active=Math.max(0,Math.min(choices.length-1,active+(e.key==='ArrowDown'?1:-1)));box.querySelectorAll('[role="option"]').forEach((el,i)=>el.setAttribute('aria-selected',String(i===active)));const option=box.querySelector('#country-option-'+active);input.setAttribute('aria-activedescendant',option.id);option.scrollIntoView({block:'nearest'});}
+  if(e.key==='Enter'&&!box.hidden){e.preventDefault();if(active>=0)choose(active);else if(choices.length===1)choose(0);}
+  if(e.key==='Tab')close();
+ });
+ input.addEventListener('blur',()=>{const matches=matchingCountries(input.value);if(matches.length===1&&countrySearch(matches[0].name)===countrySearch(input.value))input.value=matches[0].name;close();});
+}
+
 function dateField(name,label,value='',required=false){return '<label>'+label+'<input name="'+name+'" placeholder="DD/MM/AAAA" value="'+esc(fechaVista(value))+'"'+(required?' required':'')+'></label>';}
 function input(name,label,value='',type='text',extra=''){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+extra+'></label>';}
 function amountField(name,label,value=0){return input(name,label,numeric(value),'number','min="0" max="999999999.99" step="0.01" required');}
@@ -108,7 +130,7 @@ function modal(title,body,onSave,afterOpen){
   catch(e){dialog.querySelector('.record-error').textContent=e.message||'No se pudo completar la operación.';}
   finally{saving=false;if(dialog.isConnected)dialog.querySelector('[type="submit"]').disabled=false;}
  };
- dialog.showModal();if(afterOpen)afterOpen(dialog);
+ dialog.showModal();setupDates();if(afterOpen)afterOpen(dialog);
 }
 function studentPersonalValues(fields){
  const result={};
@@ -128,7 +150,7 @@ function editStudent(id){
  const completedOptions=completionOptions(s);
  const completionChecks=completedOptions.map(c=>'<label class="school-check"><input type="checkbox" name="completedCourse" value="'+esc(c.courseId)+'"'+(list(s.completedCourses).some(x=>x.courseId===c.courseId)?' checked':'')+'>'+esc(c.name)+'</label>').join('');
  const interests=Object.entries(COURSES).map(([key,c])=>'<label class="school-check"><input type="checkbox" name="interest" value="'+key+'"'+(list(s.interests).includes(key)?' checked':'')+'>'+c.name+'</label>').join('');
- modal(id?'Editar estudiante':'Nuevo estudiante','<h4 class="school-form-section">Datos personales</h4>'+input('name','Nombre completo',s.name,'text','required maxlength="160"')+input('identity','Cédula o pasaporte',s.identity||'','text','maxlength="60"')+input('nationality','Nacionalidad',s.nationality||'','text','maxlength="100"')+dateField('birthDate','Fecha de nacimiento',s.birthDate)+input('address','Dirección',s.address||'','text','maxlength="500"')+input('previousSchool','Colegio de procedencia',s.previousSchool||'','text','maxlength="200"')+'<h4 class="school-form-section">Contacto</h4>'+input('residentialPhone','Teléfono residencial',s.residentialPhone||'','tel','maxlength="40"')+input('phone','Celular',s.phone||'','tel','maxlength="40"')+input('email','Correo electrónico',s.email||'','email','maxlength="180"')+'<h4 class="school-form-section">Familia y contacto de emergencia</h4>'+input('fatherName','Nombre del padre',s.fatherName||'','text','maxlength="160"')+input('motherName','Nombre de la madre',s.motherName||'','text','maxlength="160"')+input('emergencyName','Contacto de emergencia · nombre',s.emergencyName||'','text','maxlength="160"')+input('emergencyPhone','Contacto de emergencia · celular',s.emergencyPhone||'','tel','maxlength="40"')+'<h4 class="school-form-section">Registro académico</h4>'+dateField('createdDate','Ingreso al sistema',s.createdDate,true)+'<label>Etapa<select name="stage">'+options(STAGES,s.stage)+'</select></label><label>Financiamiento<select name="funding">'+options(FUNDING,s.funding)+'</select></label>'+dateField('enrolledDate','Fecha de matrícula',s.enrolledDate)+'<div class="school-full school-stage-panel" data-retirement hidden><label>Observación · motivo del retiro<textarea name="withdrawalReason" maxlength="4000">'+esc(s.withdrawalReason||'')+'</textarea></label></div><div class="school-full school-stage-panel" data-completion hidden>'+dateField('completedDate','Culminación',s.completedDate)+'<fieldset><legend>Cursos culminados</legend><div class="school-checks">'+(completionChecks||'<p>Agrega primero los cursos al expediente para seleccionar cuáles culminó.</p>')+'</div></fieldset></div>'+'<fieldset class="school-full"><legend>Cursos de interés</legend><div class="school-checks">'+interests+'</div></fieldset><label class="school-full">Observaciones<textarea name="notes" maxlength="4000">'+esc(s.notes||'')+'</textarea></label>'+input('referredBy','Quién lo recomienda',s.referredBy||'','text','maxlength="200"'),async(f,form)=>{
+ modal(id?'Editar estudiante':'Nuevo estudiante','<h4 class="school-form-section">Datos personales</h4>'+input('name','Nombre completo',s.name,'text','required maxlength="160"')+input('identity','Cédula o pasaporte',s.identity||'','text','maxlength="60"')+nationalityField(s.nationality)+dateField('birthDate','Fecha de nacimiento',s.birthDate)+input('address','Dirección',s.address||'','text','maxlength="500"')+input('previousSchool','Colegio de procedencia',s.previousSchool||'','text','maxlength="200"')+'<h4 class="school-form-section">Contacto</h4>'+input('residentialPhone','Teléfono residencial',s.residentialPhone||'','tel','maxlength="40"')+input('phone','Celular',s.phone||'','tel','maxlength="40"')+input('email','Correo electrónico',s.email||'','email','maxlength="180"')+'<h4 class="school-form-section">Familia y contacto de emergencia</h4>'+input('fatherName','Nombre del padre',s.fatherName||'','text','maxlength="160"')+input('motherName','Nombre de la madre',s.motherName||'','text','maxlength="160"')+input('emergencyName','Contacto de emergencia · nombre',s.emergencyName||'','text','maxlength="160"')+input('emergencyPhone','Contacto de emergencia · celular',s.emergencyPhone||'','tel','maxlength="40"')+'<h4 class="school-form-section">Registro académico</h4>'+dateField('createdDate','Ingreso al sistema',s.createdDate,true)+'<label>Etapa<select name="stage">'+options(STAGES,s.stage)+'</select></label><label>Financiamiento<select name="funding">'+options(FUNDING,s.funding)+'</select></label>'+dateField('enrolledDate','Fecha de matrícula',s.enrolledDate)+'<div class="school-full school-stage-panel" data-retirement hidden><label>Observación · motivo del retiro<textarea name="withdrawalReason" maxlength="4000">'+esc(s.withdrawalReason||'')+'</textarea></label></div><div class="school-full school-stage-panel" data-completion hidden>'+dateField('completedDate','Culminación',s.completedDate)+'<fieldset><legend>Cursos culminados</legend><div class="school-checks">'+(completionChecks||'<p>Agrega primero los cursos al expediente para seleccionar cuáles culminó.</p>')+'</div></fieldset></div>'+'<fieldset class="school-full"><legend>Cursos de interés</legend><div class="school-checks">'+interests+'</div></fieldset><label class="school-full">Observaciones<textarea name="notes" maxlength="4000">'+esc(s.notes||'')+'</textarea></label>'+input('referredBy','Quién lo recomienda',s.referredBy||'','text','maxlength="200"'),async(f,form)=>{
   if(!STAGES.includes(f.stage))throw Error('Selecciona una etapa válida.');
   f.stage=automaticStage(s,f.stage,f.enrolledDate);
   errorDate(f,[['createdDate',true],['birthDate',false],['enrolledDate',false],['completedDate',f.stage==='Culminado']]);
@@ -141,9 +163,9 @@ function editStudent(id){
   if(f.birthDate&&dayNumber(f.birthDate)>dayNumber(today()))throw Error('La fecha de nacimiento no puede estar en el futuro.');
   const email=f.email.trim();const all=data().students;
   if(email&&all.some(x=>x.id!==id&&String(x.email||'').toLowerCase()===email.toLowerCase()))throw Error('Ya existe un estudiante con ese correo.');
-  const record={...studentPersonalValues(f),name:f.name.trim(),createdDate:isoFecha(f.createdDate),phone:f.phone.trim(),email,stage:f.stage,funding:f.funding,withdrawalReason,completedCourses:f.stage==='Culminado'?completedCourses:list(s.completedCourses),enrolledDate:isoFecha(f.enrolledDate),completedDate:isoFecha(f.completedDate),interests:new FormData(form).getAll('interest'),notes:f.notes.trim()};
+  const record={...studentPersonalValues(f),name:f.name.trim(),createdDate:isoFecha(f.createdDate),phone:f.phone.trim(),email,stage:f.stage,funding:f.funding,withdrawalReason,completedCourses:f.stage==='Culminado'?completedCourses:list(s.completedCourses),enrolledDate:isoFecha(f.enrolledDate),completedDate:f.stage==='Culminado'?isoFecha(f.completedDate):s.completedDate||'',interests:new FormData(form).getAll('interest'),notes:f.notes.trim()};
   const newId=id||uid();await change(school=>{if(id){const target=studentById(school,id);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'Expediente actualizado',before:{stage:target.stage,funding:target.funding,withdrawalReason:target.withdrawalReason||'',completedCourses:list(target.completedCourses)},after:{stage:record.stage,funding:record.funding,withdrawalReason:record.withdrawalReason,completedCourses:record.completedCourses}});Object.assign(target,record);}else school.students.push({...record,id:newId,courses:[],history:[{at:new Date().toISOString(),action:'Ingreso al sistema'}]});});selected=newId;render();
- },dialog=>bindStudentStage(dialog,s));
+ },dialog=>{bindStudentStage(dialog,s);bindNationality(dialog);});
 }
 function addCourse(studentId){
  modal('Agregar curso','<label class="school-full">Curso<select name="type">'+courseOptions('privado')+'</select></label>'+dateField('startDate','Fecha de inicio') ,async f=>{
@@ -335,6 +357,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
