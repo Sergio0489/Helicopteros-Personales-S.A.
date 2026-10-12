@@ -28,7 +28,7 @@ function automaticStage(student,stage,enrolledDate){
  if(enrolledDate&&validDate(enrolledDate))return 'Matriculado';
  return 'Interesado';
 }
-function data(){const school={version:1,students:[],rates:{},intakes:[],brochureUrl:'',...previewData.school};return {...school,students:list(school.students).map(s=>({...s,stage:automaticStage(s,s.stage,s.enrolledDate)}))};}
+function data(){const school={version:1,students:[],rates:{},intakes:[],brochureUrl:'',...previewData.school};return {...school,rates:{Simulador:{cents:9000},...school.rates},students:list(school.students).map(s=>({...s,stage:automaticStage(s,s.stage,s.enrolledDate)}))};}
 function completionOptions(student){
  const courses=list(student.courses).map(c=>({courseId:c.id,type:c.type,name:COURSES[c.type]?.name||c.type}));
  for(const c of list(student.completedCourses))if(!courses.some(x=>x.courseId===c.courseId))courses.push(c);
@@ -284,7 +284,7 @@ function addPayment(sid,cid,fee){
  });
 }
 function rateServices(school=data()){
- return [...fleet.map(a=>({id:a.reg,name:a.reg,description:a.model,category:'vuelo'})),{id:'RPA',name:'RPA (Drone)',description:'Entrenamiento de RPA',category:'rpa'},...list(school.services)];
+ return [...fleet.map(a=>({id:a.reg,name:a.reg,description:a.model,category:'vuelo'})),{id:'RPA',name:'RPA (Drone)',description:'Entrenamiento de RPA',category:'rpa'},{id:'Simulador',name:'Simulador',description:'Entrenamiento de SIM',category:'simulador'},...list(school.services)];
 }
 function serviceLabel(category){return {vuelo:'Horas de vuelo',rpa:'Horas de RPA',simulador:'Horas de simulador',otro:'Servicio adicional'}[category]||'Servicio';}
 function editService(id){
@@ -307,9 +307,9 @@ function sessionDescription(f,c){if(registryMovement(f).operationType==='charter
 
 function logFlight(sid,cid,kind='vuelo'){
  const school=data(),student=studentById(school,sid),course=courseById(student,cid),sim=kind==='simulador',services=rateServices(school).filter(x=>sim?x.category==='simulador':['vuelo','rpa'].includes(x.category));
- const selectedService=!sim&&course.type==='rpa'?'RPA':'';
+ const selectedService=sim?'Simulador':course.type==='rpa'?'RPA':'';
  const selector='<label>'+ (sim?'Servicio de simulador':'Aeronave / servicio')+'<select name="serviceId"'+(!sim?' required':'')+'><option value="">'+(sim?'Ingresar equipo y tarifa manualmente':'Seleccionar…')+'</option>'+services.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===selectedService?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>';
- modal(sim?'Registrar horas de simulador':course.type==='rpa'?'Registrar horas de RPA':'Registrar horas de vuelo / RPA',dateField('date','Fecha de la sesión',today(),true)+selector+(sim?input('equipment','Simulador / equipo','','text','required maxlength="160"'):'')+input('hours','Horas realizadas','','number','min="0.01" max="99999.99" step="0.01" required')+amountField('rate','Tarifa por hora (USD)',school.rates[selectedService]?.cents)+'<p class="school-full school-muted" id="school-flight-estimate"></p>'+input('instructor','Instructor / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
+ modal(sim?'Registrar horas de simulador':course.type==='rpa'?'Registrar horas de RPA':'Registrar horas de vuelo / RPA',dateField('date','Fecha de la sesión',today(),true)+selector+(sim?input('equipment','Simulador / equipo','Simulador','text','required maxlength="160"'):'')+input('hours','Horas realizadas','','number','min="0.01" max="99999.99" step="0.01" required')+amountField('rate','Tarifa por hora (USD)',school.rates[selectedService]?.cents)+'<p class="school-full school-muted" id="school-flight-estimate"></p>'+input('instructor','Instructor / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
   errorDate(f,[['date',true]]);const hours100=cents(f.hours),rate=cents(f.rate),service=services.find(x=>x.id===f.serviceId);
   if(!hours100||rate===null)throw Error('Revisa las horas y la tarifa.');if(!sim&&!service)throw Error('Selecciona una aeronave o servicio.');if(sim&&!f.equipment.trim())throw Error('Ingresa el simulador o equipo.');if(rate===0&&!f.note.trim())throw Error('Explica en la observación por qué la sesión no tiene cargo.');
   const costCents=Math.round(hours100*rate/100);if(!Number.isSafeInteger(costCents))throw Error('El importe excede el rango permitido.');const latest=courseById(studentById(data(),sid),cid),balance=paymentTotal(latest,kind)-flightTotal(latest,kind);
@@ -476,6 +476,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
