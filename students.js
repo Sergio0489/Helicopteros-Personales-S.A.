@@ -197,11 +197,11 @@ function deleteStudent(sid){const s=studentById(data(),sid);protectedDeletion('�
 function deleteArchivedCourse(sid,cid){const s=studentById(data(),sid),c=list(s.deletedCourses).find(c=>c.id===cid);if(!c)return;protectedDeletion('¿Eliminar definitivamente el curso archivado '+(COURSES[c.type]?.name||c.type)+' de '+s.name+', incluidos sus pagos y horas? Esta acción no se puede deshacer.',school=>{const target=studentById(school,sid);target.deletedCourses=list(target.deletedCourses).filter(c=>c.id!==cid);});}
 function extraTotals(s){return {expenses:active(s.expenses).reduce((n,e)=>n+e.cents,0),payments:active(s.extraPayments).reduce((n,e)=>n+e.cents,0)};}
 function addExtra(sid,kind){
- const isPayment=kind==='extraPayments',s=studentById(data(),sid);
- modal(isPayment?'Abono a otros gastos':'Registrar otro gasto',dateField('date','Fecha',today(),true)+amountField('amount','Monto (USD)')+(isPayment?'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>':input('description','Concepto del gasto','','text','required maxlength="200"')+'<label>Curso relacionado<select name="courseId"><option value="">Gasto general</option>'+list(s.courses).map(c=>'<option value="'+esc(c.id)+'">'+esc(COURSES[c.type].name)+'</option>').join('')+'</select></label><label>Aeronave / equipo<select name="aircraft"><option value="">No aplica</option>'+fleet.map(a=>'<option value="'+esc(a.reg)+'">'+esc(a.reg)+'</option>').join('')+'<option>RPA (Drone)</option><option>Simulador</option></select></label>')+input('reference','Recibo / referencia','','text','maxlength="100"')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
+ const isPayment=kind==='extraPayments',s=studentById(data(),sid),extraServices=rateServices().filter(x=>x.category==='otro');
+ modal(isPayment?'Abono a otros gastos':'Registrar otro gasto',dateField('date','Fecha',today(),true)+(!isPayment?'<label>Servicio<select name="extraService"><option value="">Gasto personalizado</option>'+extraServices.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label>':'')+amountField('amount','Monto (USD)')+(isPayment?'<label>Origen<select name="source">'+options(SOURCES,'Propio')+'</select></label>':input('description','Concepto del gasto','','text','required maxlength="200"')+'<label>Curso relacionado<select name="courseId"><option value="">Gasto general</option>'+list(s.courses).map(c=>'<option value="'+esc(c.id)+'">'+esc(COURSES[c.type].name)+'</option>').join('')+'</select></label><label>Aeronave / equipo<select name="aircraft"><option value="">No aplica</option>'+fleet.map(a=>'<option value="'+esc(a.reg)+'">'+esc(a.reg)+'</option>').join('')+'<option>RPA (Drone)</option><option>Simulador</option></select></label>')+input('reference','Recibo / referencia','','text','maxlength="100"')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
   errorDate(f,[['date',true]]);const amount=cents(f.amount);if(!amount)throw Error('El monto debe ser mayor que cero.');if(!isPayment&&!f.description.trim())throw Error('Describe el gasto.');if(isPayment&&!SOURCES.includes(f.source))throw Error('Revisa el origen del abono.');
-  await change(school=>{const target=studentById(school,sid),course=!isPayment&&f.courseId?courseById(target,f.courseId):null;target[kind] ||= [];target[kind].push({id:uid(),date:isoFecha(f.date),cents:amount,description:isPayment?'Abono a otros gastos':f.description.trim(),source:isPayment?f.source:'',aircraft:f.aircraft||'',courseId:course?.id||'',courseName:course?COURSES[course.type].name:'',reference:f.reference.trim(),note:f.note.trim(),createdAt:new Date().toISOString()});if(isPayment&&!manualStage(target.stage)){target.stage='En formación';target.enrolledDate ||= isoFecha(f.date);}});
- });
+  await change(school=>{const target=studentById(school,sid),course=!isPayment&&f.courseId?courseById(target,f.courseId):null;target[kind] ||= [];target[kind].push({id:uid(),date:isoFecha(f.date),cents:amount,description:isPayment?'Abono a otros gastos':f.description.trim(),serviceId:!isPayment?f.extraService||'':'',source:isPayment?f.source:'',aircraft:f.aircraft||'',courseId:course?.id||'',courseName:course?COURSES[course.type].name:'',reference:f.reference.trim(),note:f.note.trim(),createdAt:new Date().toISOString()});if(isPayment&&!manualStage(target.stage)){target.stage='En formación';target.enrolledDate ||= isoFecha(f.date);}});
+ },dialog=>{if(!isPayment)dialog.querySelector('[name="extraService"]').onchange=e=>{const service=extraServices.find(x=>x.id===e.target.value);if(service){dialog.querySelector('[name="description"]').value=service.name;dialog.querySelector('[name="amount"]').value=numeric(data().rates[service.id]?.cents);}};});
 }
 function voidExtra(sid,kind,id){
  if(!['expenses','extraPayments'].includes(kind)||!window.confirm('¿Anular este movimiento? Se conservará con el motivo de anulación.'))return;
@@ -213,7 +213,7 @@ function statementData(s){
  for(const c of courses){const summary=courseSummary(c),name=COURSES[c.type].name;budget+=summary.budget;paid+=summary.paid;flightBalance+=summary.flightBalance;simBalance+=summary.simBalance;
   for(const fee of COURSES[c.type].fees.filter(f=>!['vuelo','simulador'].includes(f))){const amount=Number(c.budgets?.[fee]||0);if(amount)rows.push({date:c.startDate||'',description:FEES[fee],course:name,aircraft:'',charge:amount,credit:0,note:'Monto acordado del curso'});}
   for(const p of list(c.payments))rows.push({date:p.date,description:'Abono · '+(FEES[p.fee]||p.fee),course:name,aircraft:'',charge:0,credit:p.voidedAt?0:p.cents,voided:!!p.voidedAt,note:[p.source,p.reference,p.note,p.voidedAt?'Anulado: '+p.voidReason+' · Importe original '+money(p.cents):''].filter(Boolean).join(' · ')});
-  for(const f of list(c.flights))rows.push({date:f.date,description:f.fee==='simulador'?'Sesión de simulador':'Sesión de vuelo',course:name,aircraft:f.fee==='simulador'?'Simulador'+(f.equipment?' · '+f.equipment:''):f.aircraft,hours100:f.hours100,rateCents:f.rateCents,charge:f.voidedAt?0:f.costCents,credit:0,voided:!!f.voidedAt,note:[f.instructor,f.note,f.voidedAt?'Anulado: '+f.voidReason+' · Importe original '+money(f.costCents):''].filter(Boolean).join(' · ')});
+  for(const f of list(c.flights))rows.push({date:f.date,description:sessionDescription(f,c),course:name,aircraft:f.fee==='simulador'?'Simulador'+(f.equipment?' · '+f.equipment:''):f.aircraft,hours100:f.hours100,rateCents:f.rateCents,charge:f.voidedAt?0:f.costCents,credit:0,voided:!!f.voidedAt,note:[f.instructor,f.note,f.voidedAt?'Anulado: '+f.voidReason+' · Importe original '+money(f.costCents):''].filter(Boolean).join(' · ')});
  }
  for(const kind of ['expenses','extraPayments'])for(const e of list(s[kind]))rows.push({date:e.date,description:e.description,course:e.courseName||'',aircraft:e.aircraft||'',charge:kind==='expenses'&&!e.voidedAt?e.cents:0,credit:kind==='extraPayments'&&!e.voidedAt?e.cents:0,voided:!!e.voidedAt,note:[e.source,e.reference,e.note,e.voidedAt?'Anulado: '+e.voidReason+' · Importe original '+money(e.cents):''].filter(Boolean).join(' · ')});
  rows.sort((a,b)=>(isoFecha(a.date)||'').localeCompare(isoFecha(b.date)||''));let balance=0;for(const row of rows){balance+=row.charge-row.credit;row.balance=balance;}
@@ -275,20 +275,42 @@ function addPayment(sid,cid,fee){
   await change(school=>{const target=studentById(school,sid);courseById(target,cid).payments.push({id:uid(),fee,date:isoFecha(f.date),cents:amount,source:f.source,reference:f.reference.trim(),note:f.note.trim(),createdAt:new Date().toISOString()});if(!manualStage(target.stage)){const previousStage=target.stage;target.stage='En formación';target.enrolledDate ||= isoFecha(f.date);target.history ||= [];target.history.push({at:new Date().toISOString(),action:'En formación por abono de curso',before:{stage:previousStage},after:{stage:target.stage}});}});
  });
 }
+function rateServices(school=data()){
+ return [...fleet.map(a=>({id:a.reg,name:a.reg,description:a.model,category:'vuelo'})),{id:'RPA',name:'RPA (Drone)',description:'Entrenamiento de RPA',category:'rpa'},...list(school.services)];
+}
+function serviceLabel(category){return {vuelo:'Horas de vuelo',rpa:'Horas de RPA',simulador:'Horas de simulador',otro:'Servicio adicional'}[category]||'Servicio';}
+function editService(id){
+ const s=id?list(data().services).find(x=>x.id===id):{name:'',description:'',category:'otro'};if(!s)return;
+ modal(id?'Modificar servicio':'Agregar servicio',input('name','Nombre del servicio',s.name,'text','required maxlength="120"')+input('description','Descripción',s.description||'','text','maxlength="250"')+'<label>Tipo de servicio<select name="category">'+['vuelo','rpa','simulador','otro'].map(k=>'<option value="'+k+'"'+(k===s.category?' selected':'')+'>'+serviceLabel(k)+(k==='otro'?' · precio por servicio':' · precio por hora')+'</option>').join('')+'</select></label>'+amountField('rate','Tarifa (USD)',data().rates[id]?.cents)+'<p class="school-full school-muted">Los servicios por hora estarán disponibles al registrar sesiones. Los servicios adicionales estarán disponibles en Otros gastos. Los registros anteriores conservan el equipo, el tipo y la tarifa cobrados.</p>',async f=>{
+  const name=f.name.trim(),rate=cents(f.rate);if(!name||rate===null||!['vuelo','rpa','simulador','otro'].includes(f.category))throw Error('Revisa el nombre, el tipo y la tarifa.');
+  if(rateServices().some(x=>x.id!==id&&(countrySearch(x.name)===countrySearch(name)||countrySearch(x.id)===countrySearch(name))))throw Error('Ya existe una aeronave o servicio con ese nombre.');
+  const key=id||'service-'+uid();await change(school=>{school.services ||= [];const record={id:key,name,description:f.description.trim(),category:f.category};if(id){const target=school.services.find(x=>x.id===id);if(!target)throw Error('No se encontró el servicio.');Object.assign(target,record);}else school.services.push(record);const old=school.rates[key];school.rates[key]={cents:rate,updatedAt:new Date().toISOString(),history:[...list(old?.history),...(old?[{cents:old.cents,updatedAt:old.updatedAt}]:[])]};});
+ });
+}
+function ratesHtml(school){return '<div class="card"><div class="school-row"><h3>Tarifas de aeronaves y servicios</h3>'+button('+ Agregar servicio','add-service')+'</div><p class="school-muted">Tarifas editables en USD. Los registros anteriores conservan el precio cobrado.</p><div class="school-rate-grid">'+rateServices(school).map(a=>'<div class="school-rate"><b>'+esc(a.name)+'</b><span>'+esc(a.description||'')+'</span><span>'+serviceLabel(a.category)+'</span><strong>'+(school.rates[a.id]?money(school.rates[a.id].cents)+(a.category==='otro'?'/servicio':'/h'):'Sin tarifa')+'</strong>'+button('Editar tarifa','rate','data-reg="'+esc(a.id)+'"')+(a.id.startsWith('service-')?button('Modificar servicio','edit-service','data-service="'+esc(a.id)+'"'):'')+'</div>').join('')+'</div></div>';}
+function sessionCategory(flight,course){
+ if(flight.equipmentKind)return flight.equipmentKind;
+ if(flight.fee==='simulador'||flight.aircraft==='Simulador')return 'simulador';
+ if(['RPA','RPA (Drone)'].includes(flight.aircraft))return 'rpa';
+ if(flight.aircraft==='Otra / RPA')return course.type==='rpa'?'rpa':'unknown';
+ return 'vuelo';
+}
+function sessionDescription(f,c){const kind=sessionCategory(f,c);return kind==='rpa'?'Sesión de RPA':kind==='simulador'?'Sesión de simulador':kind==='unknown'?'Sesión · equipo sin clasificar':'Sesión de vuelo';}
+
 function logFlight(sid,cid,kind='vuelo'){
- const school=data(),student=studentById(school,sid),course=courseById(student,cid),sim=kind==='simulador';
- const aircraft='<label>Aeronave<select name="aircraft" required><option value="">Seleccionar…</option>'+fleet.map(a=>'<option value="'+esc(a.reg)+'">'+esc(a.reg)+' — '+esc(a.model)+'</option>').join('')+'<option value="RPA">RPA (Drone)</option></select></label>';
- modal(sim?'Registrar horas de simulador':'Registrar horas de vuelo',dateField('date','Fecha de la sesión',today(),true)+(sim?input('equipment','Simulador / equipo','','text','required'):aircraft)+input('hours','Horas realizadas','', 'number','min="0.01" max="99999.99" step="0.01" required')+amountField('rate','Tarifa por hora (USD)')+'<p class="school-full school-muted" id="school-flight-estimate">Selecciona aeronave e ingresa las horas para calcular el cargo.</p>'+input('instructor','Instructor / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
-  errorDate(f,[['date',true]]);const hours100=cents(f.hours),rate=cents(f.rate);if(!hours100||rate===null)throw Error('Revisa las horas y la tarifa.');
-  if(!sim&&!f.aircraft)throw Error('Selecciona una aeronave.');if(rate===0&&!f.note.trim())throw Error('Explica en la observación por qué la sesión no tiene cargo.');
-  const costCents=Math.round(hours100*rate/100);if(!Number.isSafeInteger(costCents))throw Error('El importe excede el rango permitido.');
-  const latest=courseById(studentById(data(),sid),cid),balance=paymentTotal(latest,kind)-flightTotal(latest,kind);
+ const school=data(),student=studentById(school,sid),course=courseById(student,cid),sim=kind==='simulador',services=rateServices(school).filter(x=>sim?x.category==='simulador':['vuelo','rpa'].includes(x.category));
+ const selectedService=!sim&&course.type==='rpa'?'RPA':'';
+ const selector='<label>'+ (sim?'Servicio de simulador':'Aeronave / servicio')+'<select name="serviceId"'+(!sim?' required':'')+'><option value="">'+(sim?'Ingresar equipo y tarifa manualmente':'Seleccionar…')+'</option>'+services.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===selectedService?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>';
+ modal(sim?'Registrar horas de simulador':course.type==='rpa'?'Registrar horas de RPA':'Registrar horas de vuelo / RPA',dateField('date','Fecha de la sesión',today(),true)+selector+(sim?input('equipment','Simulador / equipo','','text','required maxlength="160"'):'')+input('hours','Horas realizadas','','number','min="0.01" max="99999.99" step="0.01" required')+amountField('rate','Tarifa por hora (USD)',school.rates[selectedService]?.cents)+'<p class="school-full school-muted" id="school-flight-estimate"></p>'+input('instructor','Instructor / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
+  errorDate(f,[['date',true]]);const hours100=cents(f.hours),rate=cents(f.rate),service=services.find(x=>x.id===f.serviceId);
+  if(!hours100||rate===null)throw Error('Revisa las horas y la tarifa.');if(!sim&&!service)throw Error('Selecciona una aeronave o servicio.');if(sim&&!f.equipment.trim())throw Error('Ingresa el simulador o equipo.');if(rate===0&&!f.note.trim())throw Error('Explica en la observación por qué la sesión no tiene cargo.');
+  const costCents=Math.round(hours100*rate/100);if(!Number.isSafeInteger(costCents))throw Error('El importe excede el rango permitido.');const latest=courseById(studentById(data(),sid),cid),balance=paymentTotal(latest,kind)-flightTotal(latest,kind);
   if(costCents>balance&&!window.confirm('El cargo es '+money(costCents)+' y el saldo disponible es '+money(balance)+'. ¿Registrar la sesión y dejar el saldo negativo?'))return;
-  await change(s=>courseById(studentById(s,sid),cid).flights.push({id:uid(),fee:kind,date:isoFecha(f.date),aircraft:sim?'Simulador':f.aircraft,equipment:sim?f.equipment.trim():'',hours100,rateCents:rate,costCents,instructor:f.instructor.trim(),note:f.note.trim(),createdAt:new Date().toISOString()}));
+  await change(s=>courseById(studentById(s,sid),cid).flights.push({id:uid(),fee:kind,date:isoFecha(f.date),aircraft:sim?'Simulador':service.id==='RPA'?'RPA':service.name,serviceId:service?.id||'',equipmentKind:sim?'simulador':service.category,equipment:sim?f.equipment.trim():'',hours100,rateCents:rate,costCents,instructor:f.instructor.trim(),note:f.note.trim(),createdAt:new Date().toISOString()}));
  },dialog=>{
   const calc=()=>{const h=cents(dialog.querySelector('[name="hours"]').value)||0,r=cents(dialog.querySelector('[name="rate"]').value)||0;dialog.querySelector('#school-flight-estimate').textContent='Cargo: '+money(Math.round(h*r/100))+' · Saldo actual: '+money(paymentTotal(course,kind)-flightTotal(course,kind));};
   dialog.querySelector('[name="hours"]').addEventListener('input',calc);dialog.querySelector('[name="rate"]').addEventListener('input',calc);
-  const ac=dialog.querySelector('[name="aircraft"]');if(ac)ac.onchange=()=>{const rate=school.rates[ac.value]?.cents;dialog.querySelector('[name="rate"]').value=rate==null?'':numeric(rate);calc();};calc();
+  dialog.querySelector('[name="serviceId"]').onchange=e=>{const service=services.find(x=>x.id===e.target.value),rate=school.rates[service?.id]?.cents;dialog.querySelector('[name="rate"]').value=rate==null?'':numeric(rate);if(sim)dialog.querySelector('[name="equipment"]').value=service?.name||'';calc();};calc();
  });
 }
 function voidEntry(sid,cid,kind,id){
@@ -299,8 +321,8 @@ function voidEntry(sid,cid,kind,id){
  });
 }
 function editRate(reg){
- const current=data().rates[reg];
- modal('Tarifa por hora · '+reg,amountField('rate','Precio de la hora de vuelo (USD)',current?.cents)+'<p class="school-full school-muted">Se usará en nuevos registros. Las sesiones anteriores conservan la tarifa cobrada.</p>',async f=>{
+ const current=data().rates[reg],service=rateServices().find(s=>s.id===reg);
+ modal('Tarifa · '+(service?.name||reg),amountField('rate',service?.category==='otro'?'Precio por servicio (USD)':'Precio por hora (USD)',current?.cents)+'<p class="school-full school-muted">Se usará en nuevos registros. Las sesiones anteriores conservan la tarifa cobrada.</p>',async f=>{
   const rate=cents(f.rate);if(rate===null)throw Error('Revisa la tarifa.');
   await change(school=>{const old=school.rates[reg];school.rates[reg]={cents:rate,updatedAt:new Date().toISOString(),history:[...list(old?.history),...(old?[{cents:old.cents,updatedAt:old.updatedAt}]:[])]};});
  });
@@ -329,7 +351,7 @@ function courseHtml(student,c){
  return '<section class="card school-course"><div class="school-row"><div><h3>'+spec.name+'</h3><span class="school-tag">'+esc(schoolDisplayText(c.status))+'</span></div>'+'<div class="school-actions">'+button('Modificar curso','edit-course',sid)+button('Eliminar','delete-course',sid)+'</div>'+'</div><div class="school-course-dates">Inicio: '+esc(fechaVista(c.startDate)||'')+' · Fin: '+esc(fechaVista(c.endDate)||'')+(c.licenseDate?'<br>Licencia / habilitación: '+esc(fechaVista(c.licenseDate))+' · '+esc(c.licenseNumber||''):'')+'</div>'+
   spec.fees.map(fee=>{const total=Number(c.budgets?.[fee]||0),paid=paymentTotal(c,fee),pct=total>0?Math.min(100,Math.round(paid/total*100)):0,complete=total>0&&paid>=total;
    return '<div class="school-fee"><div class="school-row"><strong>'+FEES[fee]+'</strong>'+button('+ Abono','payment',sid+' data-fee="'+fee+'"')+'</div><div class="school-fee-figures"><span>Monto: '+money(total)+'</span><span>Abonado: '+money(paid)+'</span><span>'+(!total?'Monto por definir':paid>total?'Crédito: '+money(paid-total):'Pendiente: '+money(total-paid))+'</span></div><div class="school-progress-row"><div class="school-progress" role="progressbar" aria-label="Pagos de '+FEES[fee]+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><span style="width:'+pct+'%"></span></div><b class="school-paid">'+(complete?'✓':pct+'%')+'</b></div></div>';
-  }).join('')+'<div class="school-balances"><div><small>Saldo disponible · vuelos</small><b class="'+(sum.flightBalance<0?'school-negative':'')+'">'+money(sum.flightBalance)+'</b><small>'+numeric(hoursTotal(c,'vuelo'))+' h realizadas · cargos '+money(flightTotal(c,'vuelo'))+'</small></div>'+(spec.fees.includes('simulador')?'<div><small>Saldo disponible · simulador</small><b class="'+(sum.simBalance<0?'school-negative':'')+'">'+money(sum.simBalance)+'</b><small>'+numeric(hoursTotal(c,'simulador'))+' h realizadas</small></div>':'')+'</div><div class="school-actions">'+button('+ Horas de vuelo','flight',sid)+(spec.fees.includes('simulador')?button('+ Simulador','simulator',sid):'')+'</div>'+historyHtml(student,c)+'</section>';
+  }).join('')+'<div class="school-balances"><div><small>Saldo disponible · vuelos</small><b class="'+(sum.flightBalance<0?'school-negative':'')+'">'+money(sum.flightBalance)+'</b><small>'+numeric(hoursTotal(c,'vuelo'))+' h realizadas · cargos '+money(flightTotal(c,'vuelo'))+'</small></div>'+(spec.fees.includes('simulador')?'<div><small>Saldo disponible · simulador</small><b class="'+(sum.simBalance<0?'school-negative':'')+'">'+money(sum.simBalance)+'</b><small>'+numeric(hoursTotal(c,'simulador'))+' h realizadas</small></div>':'')+'</div><div class="school-actions">'+button(c.type==='rpa'?'+ Horas de RPA':'+ Horas de vuelo / RPA','flight',sid)+(spec.fees.includes('simulador')?button('+ Simulador','simulator',sid):'')+'</div>'+historyHtml(student,c)+'</section>';
 }
 function historyHtml(student,c){
  const attrs='data-student="'+esc(student.id)+'" data-course="'+esc(c.id)+'"';
@@ -362,17 +384,17 @@ function printStudent(id){
 function equipmentHours(student){
  const groups=new Map();
  for(const course of list(student.courses))for(const flight of active(course.flights)){
-  const simulator=flight.fee==='simulador'||flight.aircraft==='Simulador';
+  const category=sessionCategory(flight,course),simulator=category==='simulador';
   const label=simulator?'Simulador'+(flight.equipment?' · '+flight.equipment:''):(flight.aircraft==='RPA'?'RPA (Drone)':flight.aircraft||'Equipo sin registrar');
-  const key=(simulator?'sim:':'flight:')+label;
-  if(!groups.has(key))groups.set(key,{label,simulator,hours100:0});
+  const key=category+':'+label;
+  if(!groups.has(key))groups.set(key,{label,simulator,category,hours100:0});
   groups.get(key).hours100+=Number(flight.hours100)||0;
  }
  return [...groups.values()].sort((a,b)=>Number(a.simulator)-Number(b.simulator)||a.label.localeCompare(b.label,'es'));
 }
 function equipmentHoursHtml(student){
- const groups=equipmentHours(student),total=sim=>groups.filter(g=>g.simulator===sim).reduce((n,g)=>n+g.hours100,0);
- return '<div class="school-equipment-hours"><small>Horas por equipo</small><b>'+numeric(total(false))+' h de vuelo</b><small>'+numeric(total(true))+' h de simulador</small><div class="school-equipment-list">'+(groups.length?groups.map(g=>'<div class="school-equipment-line"><span>'+esc(g.label)+'</span><strong>'+numeric(g.hours100)+' h</strong></div>').join(''):'<small>Sin horas registradas</small>')+'</div></div>';
+ const groups=equipmentHours(student),total=kind=>groups.filter(g=>g.category===kind).reduce((n,g)=>n+g.hours100,0);
+ return '<div class="school-equipment-hours"><small>Horas por equipo</small><div class="school-hour-total"><span>Horas de vuelo:</span> <strong>'+numeric(total('vuelo'))+' h</strong></div><div class="school-hour-total"><span>Horas de simulador:</span> <strong>'+numeric(total('simulador'))+' h</strong></div><div class="school-hour-total"><span>Horas de RPA:</span> <strong>'+numeric(total('rpa'))+' h</strong></div>'+(total('unknown')?'<div class="school-hour-total">Horas sin clasificar: '+numeric(total('unknown'))+' h</div>':'')+'<div class="school-equipment-list">'+(groups.length?groups.map(g=>'<div class="school-equipment-line"><span>'+esc(g.label)+'</span><strong>'+numeric(g.hours100)+' h</strong></div>').join(''):'<small>Sin horas registradas</small>')+'</div></div>';
 }
 function profileHtml(s){
  const courses=list(s.courses),totals=courses.map(courseSummary),sum=key=>totals.reduce((n,t)=>n+t[key],0),licenses=courses.filter(c=>c.licenseDate&&c.status===COURSES[c.type].states.at(-1));
@@ -385,7 +407,7 @@ function render(){
  const school=data();
  panel.innerHTML='<div class="school-header"><div><div class="aircraft-reg" style="font-size:20px">ESTUDIANTES</div><p class="school-muted">HP Flight School · Seguimiento académico y financiero</p></div>'+'<div class="school-actions">'+button('Imprimir formulario en blanco','blank-registration')+button('+ Nuevo estudiante','new-student')+'</div></div><div class="school-nav">'+[['students','Expedientes'],['rates','Tarifas de aeronaves'],['course-rates','Tarifas de cursos'],['intakes','Próximos cursos y correos']].map(([key,label])=>'<button class="record-btn" data-action="view" data-view="'+key+'" aria-pressed="'+(view===key)+'">'+label+'</button>').join('')+'</div><div id="school-content"></div>';
  const body=panel.querySelector('#school-content');
- if(view==='rates'){body.innerHTML='<div class="card"><h3>Tarifas por aeronave</h3><p class="school-muted">Precios por hora en USD. También disponibles en el encabezado de cada aeronave.</p><div class="school-rate-grid">'+fleet.map(a=>'<div class="school-rate"><b>'+esc(a.reg)+'</b><span>'+esc(a.model)+'</span><strong>'+ (school.rates[a.reg]?money(school.rates[a.reg].cents)+'/h':'Sin tarifa')+'</strong>'+button('Editar tarifa','rate','data-reg="'+esc(a.reg)+'"')+'</div>').join('')+'</div></div>';return;}
+ if(view==='rates'){body.innerHTML=ratesHtml(school);return;}
  if(view==='course-rates'){body.innerHTML=courseRatesHtml();return;}
  if(view==='intakes'){renderIntakes(body,school);return;}
  body.innerHTML='<div class="school-workspace"><aside class="card school-directory"><label>Buscar estudiante<input id="school-search" type="search" value="'+esc(query)+'" placeholder="Nombre, cédula, correo o celular"></label><label>Etapa<select id="school-stage"><option value="">Todas</option>'+options(STAGES,stageFilter)+'</select></label><div id="school-student-list"></div></aside><div id="school-student-profile"></div></div>';
@@ -404,6 +426,7 @@ function renderIntakes(body,school){
 panel.addEventListener('click',event=>{
  const b=event.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,s=b.dataset.student,c=b.dataset.course;
  const handlers={
+  'add-service':()=>editService(),'edit-service':()=>editService(b.dataset.service),
   'blank-registration':()=>printSchoolHtml(blankRegistrationHtml(),'school-blank-print'),'delete-student':()=>deleteStudent(s),'delete-archived-course':()=>deleteArchivedCourse(s,c),statement:()=>showStatement(s),'course-rate':()=>editCourseRate(b.dataset.type),expense:()=>addExtra(s,'expenses'),'extra-payment':()=>addExtra(s,'extraPayments'),'void-extra':()=>voidExtra(s,b.dataset.kind,b.dataset.entry),
   'new-student':()=>editStudent(), 'edit-student':()=>editStudent(s),'print-student':()=>printStudent(s),select:()=>{selected=s;render();},view:()=>{view=b.dataset.view;render();},
   'add-course':()=>addCourse(s),'edit-course':()=>editCourse(s,c),'delete-course':()=>deleteCourse(s,c),payment:()=>addPayment(s,c,b.dataset.fee),flight:()=>logFlight(s,c),simulator:()=>logFlight(s,c,'simulador'),
@@ -423,6 +446,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
