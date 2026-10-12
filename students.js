@@ -471,6 +471,9 @@ function decorateAircraftPanel(acPanel,reg){
 }
 function decorateRates(){fleet.forEach((ac,idx)=>{const p=document.getElementById('panel-'+idx);if(p)decorateAircraftPanel(p,ac.reg);const t=document.querySelector('#sidebar-tabs .aircraft-tab[data-idx="'+idx+'"]');if(t){let label=t.querySelector('.school-tab-rate');if(!label){label=document.createElement('div');label.className='school-tab-rate';t.appendChild(label);}const rate=data().rates[ac.reg];label.textContent=rate?money(rate.cents)+'/h':'Tarifa sin definir';}});}
 const PAYMENT_CONCEPTS={matricula:'Matrícula',material:'Material de estudio',teoria:'Curso teórico',vuelo:'Horas de vuelo',simulador:'Horas de SIM',tutoria:'Tutoría',charter:'Chárter',general:'Otros / cuenta general'};
+// Banco options based on the Superintendencia de Bancos directory; custom banks remain editable.
+const PAYMENT_BANKS=['Banco General','Banco Nacional de Panamá','Caja de Ahorros','Banistmo','BAC International Bank','Global Bank','Banesco','BANISI','Banco Davivienda (Panamá)','Banco Aliado','Credicorp Bank','Towerbank','Banco Lafise Panamá','Banco Delta'];
+function paymentReceivers(){return window.getPaymentReceivers?.()||[];}
 const PAYMENT_METHODS=['ACH','Yappy','TC','Efectivo'];
 function paymentService(fee){return fee==='charter'?'charter':fee==='vuelo'?'flight':fee==='simulador'?'simulator':fee==='general'?'other':'courses';}
 function receiptPerson(school,key){const i=key.indexOf(':'),kind=key.slice(0,i),id=key.slice(i+1);if(!['student','client'].includes(kind))throw Error('Selecciona estudiante o cliente.');return {kind,record:kind==='student'?studentById(school,id):clientById(school,id)};}
@@ -496,7 +499,7 @@ function recordReceipt(school,key,f,id,attachment=null){
  if(!PAYMENT_METHODS.includes(f.method))throw Error('Selecciona cómo se realizó el pago.');
  const reference=String(f.reference||'').trim();
  if(['ACH','Yappy'].includes(f.method)&&!reference)throw Error('Ingresa el número de transferencia.');
- if(!String(f.receivedBy||'').trim())throw Error('Indica quién recibió el pago.');
+ const receiver=paymentReceivers().find(user=>user.uid===f.receivedByUid);if(!receiver)throw Error('Selecciona un usuario autorizado para recibir el abono.');
  const {kind,record}=receiptPerson(school,key),lines=[];
  for(const [fee,label] of Object.entries(PAYMENT_CONCEPTS)){
   const raw=String(f['amount_'+fee]||'').trim();if(!raw)continue;const amount=cents(raw);
@@ -513,7 +516,7 @@ function recordReceipt(school,key,f,id,attachment=null){
   lines[0].label=selectedService.label;lines[0].serviceId=selectedService.serviceId;
  }
  const sequence=Math.max(0,...school.paymentReceipts.map(r=>Number(r.sequence)||0))+1;
- const receipt={id,sequence,number:'HP-'+String(sequence).padStart(6,'0'),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:f.receivedBy.trim(),method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
+ const receipt={id,sequence,number:'HP-'+String(sequence).padStart(6,'0'),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:receiver.label,receivedByUid:receiver.uid,method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
  for(const line of lines){
   const payment={id:line.id,receiptId:id,receiptNumber:receipt.number,serviceId:line.serviceId||'',fee:line.fee,service:paymentService(line.fee),date:receipt.date,cents:line.cents,source:receipt.source,method:receipt.method,reference:receipt.reference,note:receipt.note,description:'Abono · '+line.label,createdAt:receipt.createdAt};
   if(line.courseId){const c=courseById(record,line.courseId);c.payments ||= [];c.payments.push(payment);}
@@ -553,7 +556,7 @@ function showReceipt(id){
 }
 function openPayment(key,defaultFee='',defaultCourse=''){
  const person=receiptPerson(data(),key),id=uid(),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
- modal('Crear abono · '+person.record.name,amountField('amount','Monto a abonar (USD)')+input('serviceName','Servicio',PAYMENT_CONCEPTS[defaultFee]||'','text','list="payment-services" required maxlength="160"')+'<datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist><label>Aplicar al curso<select name="targetCourse"><option value="">Cuenta general</option></select></label>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','maxlength="120"')+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+input('receivedBy','Recibido por','','text','required maxlength="160"')+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
+ modal('Crear abono · '+person.record.name,amountField('amount','Monto a abonar (USD)')+input('serviceName','Servicio',PAYMENT_CONCEPTS[defaultFee]||'','text','list="payment-services" required maxlength="160"')+'<datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist><label>Aplicar al curso<select name="targetCourse"><option value="">Cuenta general</option></select></label>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label)+'</option>').join('')+'</select></label>'+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
   const attachment=await paymentPhoto(form.querySelector('[name="proof"]').files[0]);
   await change(school=>recordReceipt(school,key,f,id,attachment));
   setTimeout(()=>showReceipt(id),0);
@@ -589,6 +592,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
