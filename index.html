@@ -821,6 +821,8 @@
 .payment-page-heading{font-size:clamp(18px,2vw,25px);font-weight:800;letter-spacing:2px;color:#123d68;margin:8px 0 24px}.payment-launch{position:relative;max-width:760px;margin:0 auto 24px;padding:clamp(24px,5vw,48px);border:1px solid #c8def3;border-radius:24px;background:radial-gradient(ellipse at top right,#d9f4ff 0,transparent 65%),linear-gradient(130deg,#fff,#edf4ff);box-shadow:0 18px 45px #123d6814;display:grid;gap:22px}.payment-orbit{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:#123d68;color:#fff;font-size:32px;box-shadow:0 6px 20px #123d6826}.payment-launch label{display:grid;gap:10px;color:#123d68;font-size:13px;font-weight:700}.payment-launch select{width:100%;min-height:52px;border:1px solid #aec7e0;border-radius:12px;padding:12px;background:#fff;color:#142e47;font:inherit}.payment-launch .school-actions{justify-content:flex-end}.payment-launch [data-payment-add]{min-height:48px;border-radius:12px;padding:12px 30px;background:linear-gradient(120deg,#123d68,#087da3);border:0;color:#fff;font-weight:700;box-shadow:0 6px 16px #087da326}.payment-launch [data-payment-add]:disabled{opacity:.45;box-shadow:none}.payment-history{max-width:100%;margin-top:12px}.payment-history>summary{cursor:pointer;padding:16px;color:#123d68;font-weight:600;border-bottom:1px solid #d6e2ef}.payment-launch select:focus-visible,.payment-launch button:focus-visible{outline:3px solid #1599c1;outline-offset:3px}
 header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!important;max-height:none!important;margin:0!important;object-fit:contain;background:#000;border-radius:10px}.payment-launch .hp-payment-logo{display:block;width:150px;height:76px;object-fit:contain;background:#000;border-radius:14px;box-shadow:0 8px 20px #09142a20}@media(max-width:600px){header>.logo .hp-brand-logo{width:86px!important;height:44px!important}.payment-launch .hp-payment-logo{width:126px;height:64px}}
 .payment-allocation{display:grid;grid-template-columns:1.3fr .8fr 1fr auto;gap:10px;align-items:end;padding:12px 0;border-bottom:1px solid #cbd5e1}.payment-allocation label{min-width:0}.payment-allocation input,.payment-allocation select{width:100%;box-sizing:border-box}@media(max-width:650px){.payment-allocation{grid-template-columns:1fr 1fr}.payment-allocation label:nth-child(3){grid-column:1/-1}}
+
+.payment-person-combo{position:relative;min-width:0}.payment-person-combo input{width:100%;box-sizing:border-box}.payment-person-options{position:absolute;top:100%;left:0;right:0;z-index:50;max-height:260px;overflow-y:auto;background:#fff;border:1px solid #94a3b8;border-radius:10px;box-shadow:0 8px 24px #0f172a25}.payment-person-options[hidden]{display:none}.payment-person-options button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e2e8f0;padding:10px 12px;background:#fff;color:#0f172a;cursor:pointer;font:inherit}.payment-person-options button:hover,.payment-person-options button[aria-selected="true"]{background:#dbeafe}.payment-person-options small{display:block;color:#475569;font-size:11px}.payment-person-options p{padding:10px}
 </style>
   
   
@@ -930,9 +932,10 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261012-28"></script>
+<script src="cloud.js?v=20261012-29"></script>
 </body>
 </html>
+
 
 
 
