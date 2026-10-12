@@ -837,6 +837,20 @@
 @media print{.app-calendar,.school-country-options{display:none!important}}
 
 </style>
+<style>
+/* Expand the fleet vertically without navigating away or closing the mobile drawer. */
+.sidebar-aircraft-group{margin:0;border:0}
+.sidebar-aircraft-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 14px 19px;cursor:pointer;list-style:none;font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;color:var(--text);letter-spacing:1px}
+.sidebar-aircraft-toggle::-webkit-details-marker{display:none}
+.sidebar-aircraft-toggle::after{content:'▾';font-family:Arial,sans-serif;font-size:15px;transition:transform .15s}
+.sidebar-aircraft-group[open]>.sidebar-aircraft-toggle::after{transform:rotate(180deg)}
+.sidebar-aircraft-toggle:hover,.sidebar-aircraft-toggle:focus-visible{background:var(--panel2);color:var(--accent)}
+.sidebar-aircraft-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.sidebar-aircraft-items{border-left:2px solid var(--border);margin-left:12px}
+.sidebar-aircraft-group:not([open])>.sidebar-aircraft-items{display:none}
+.sidebar-aircraft-items .sidebar-group-title{padding-left:12px}
+
+</style>
 </head>
 <body>
 <section id="access-screen"><div class="access-card"><h1>Control de Flota</h1><p>Helicópteros Personales S.A.</p><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
@@ -893,9 +907,10 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261012-3"></script>
+<script src="cloud.js?v=20261012-4"></script>
 </body>
 </html>
+
 
 
 
