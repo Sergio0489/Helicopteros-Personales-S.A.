@@ -258,36 +258,33 @@ function transportReport(data=previewData){
  }
  return [...groups.values()].sort((a,b)=>String(b.date).localeCompare(String(a.date))||a.service.localeCompare(b.service));
 }
-let aacAircraft='',aacMonth='';
-function aacReport(data=previewData,aircraft=aacAircraft,month=aacMonth){
- const copy={school:{registry:{entries:arr(registry(data).entries).filter(e=>e.aircraft===aircraft&&String(e.date).slice(0,7)===month)}}};
+let aacMonth='';
+function aacReport(data=previewData,month=aacMonth){
+ const copy={school:{registry:{entries:arr(registry(data).entries).filter(e=>String(e.date).slice(0,7)===month)}}};
  return transportReport(copy).sort((a,b)=>a.date.localeCompare(b.date)||a.service.localeCompare(b.service)).map(g=>({...g,service:g.service.toUpperCase(),flights:g.flights.map(f=>({...f,route:f.route.replaceAll(' → ','-')}))}));
 }
 function renderReport(){
  const target=document.getElementById('registro-transport-report');if(!target)return;
  const entries=arr(registry().entries).filter(e=>!e.voidedAt&&!e.deletedAt&&!isSim(e.aircraft));
- const aircrafts=[...new Set([...fleet.map(a=>a.reg),...entries.map(e=>e.aircraft)])].filter(a=>!isSim(a));
- if(!aircrafts.includes(aacAircraft))aacAircraft=entries[0]?.aircraft||aircrafts[0]||'';
  if(!aacMonth)aacMonth=panamaISO().slice(0,7);
  const months=[...new Set([aacMonth,panamaISO().slice(0,7),...entries.map(e=>String(e.date).slice(0,7))])].filter(m=>/^\d{4}-\d{2}$/.test(m)).sort().reverse();
  const groups=aacReport(),count=Math.max(1,...groups.map(g=>g.flights.length)),flights=groups.reduce((n,g)=>n+g.flights.length,0),hours=groups.reduce((n,g)=>n+g.hours100,0);
- target.innerHTML='<div class="school-row"><h3>Estadísticas para AAC</h3><button type="button" class="save-btn" data-aac-download'+(!groups.length?' disabled':'')+'>Descargar Excel</button></div><div class="school-row"><label>Aeronave <select data-aac-aircraft>'+aircrafts.map(a=>'<option value="'+esc(a)+'"'+(a===aacAircraft?' selected':'')+'>'+esc(equipmentName(a))+'</option>').join('')+'</select></label><label>Mes <select data-aac-month>'+months.map(m=>'<option value="'+esc(m)+'"'+(m===aacMonth?' selected':'')+'>'+m.slice(5)+'/'+m.slice(0,4)+'</option>').join('')+'</select></label></div><p class="school-muted">Un registro de bitácora = un vuelo. Horas según tiempo de vuelo registrado. No incluye simulador ni registros eliminados.</p><div style="overflow-x:auto"><table class="aac-table"><thead><tr><th>FECHA</th><th>CANTIDAD<br>DE VUELOS</th><th>HORAS<br>VOLADAS</th><th>TIPO DE SERVICIO DE TRANSPORTE<br>AÉREO EFECTUADO</th><th colspan="'+count+'" aria-label="Rutas de los vuelos"></th></tr></thead><tbody>'+groups.map(g=>'<tr><td>'+esc(fechaVista(g.date))+'</td><td>'+g.flights.length+'</td><td>'+flightHours(g.hours100)+'</td><td><em>'+g.service+'</em></td>'+Array.from({length:count},(_,i)=>'<td class="aac-route">'+(g.flights[i]?esc(g.flights[i].route):'')+'</td>').join('')+'</tr>').join('')+'</tbody><tfoot><tr><th>TOTALES</th><td>'+flights+'</td><td>'+flightHours(hours)+'</td><td colspan="'+(count+1)+'"></td></tr></tfoot></table></div>'+(!groups.length?'<p class="school-muted">Sin vuelos registrados para esta aeronave en el mes seleccionado.</p>':'')+(groups.some(g=>g.flights.some(f=>/Sin código|sin registrar/.test(f.route)))?'<p class="school-muted">Revisa las rutas señaladas sin código OACI o sin origen antes de presentar el reporte.</p>':'');
- target.querySelector('[data-aac-aircraft]').onchange=e=>{aacAircraft=e.target.value;renderReport();};
+ target.innerHTML='<div class="school-row"><h3>Estadísticas para AAC</h3><button type="button" class="save-btn" data-aac-download'+(!groups.length?' disabled':'')+'>Descargar Excel</button></div><div class="school-row"><label>Mes <select data-aac-month>'+months.map(m=>'<option value="'+esc(m)+'"'+(m===aacMonth?' selected':'')+'>'+m.slice(5)+'/'+m.slice(0,4)+'</option>').join('')+'</select></label></div><p class="school-muted">Todas las aeronaves. Un registro de bitácora = un vuelo. Horas según tiempo de vuelo registrado. No incluye simulador ni registros eliminados.</p><div style="overflow-x:auto"><table class="aac-table"><thead><tr><th>FECHA</th><th>CANTIDAD<br>DE VUELOS</th><th>HORAS<br>VOLADAS</th><th>TIPO DE SERVICIO DE TRANSPORTE<br>AÉREO EFECTUADO</th><th colspan="'+count+'" aria-label="Rutas de los vuelos"></th></tr></thead><tbody>'+groups.map(g=>'<tr><td>'+esc(fechaVista(g.date))+'</td><td>'+g.flights.length+'</td><td>'+flightHours(g.hours100)+'</td><td><em>'+g.service+'</em></td>'+Array.from({length:count},(_,i)=>'<td class="aac-route">'+(g.flights[i]?esc(g.flights[i].route):'')+'</td>').join('')+'</tr>').join('')+'</tbody><tfoot><tr><th>TOTALES</th><td>'+flights+'</td><td>'+flightHours(hours)+'</td><td colspan="'+(count+1)+'"></td></tr></tfoot></table></div>'+(!groups.length?'<p class="school-muted">Sin vuelos registrados en el mes seleccionado.</p>':'')+(groups.some(g=>g.flights.some(f=>/Sin código|sin registrar/.test(f.route)))?'<p class="school-muted">Revisa las rutas señaladas sin código OACI o sin origen antes de presentar el reporte.</p>':'');
  target.querySelector('[data-aac-month]').onchange=e=>{aacMonth=e.target.value;renderReport();};
  target.querySelector('[data-aac-download]').onclick=()=>{
-  const blob=new Blob([aacWorkbook(aacReport(),aacAircraft,aacMonth)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='Estadisticas_AAC_'+aacAircraft.replace(/[^a-z0-9-]/gi,'_')+'_'+aacMonth+'.xlsx';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+  const blob=new Blob([aacWorkbook(aacReport(),aacMonth)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='Estadisticas_AAC_Todas_las_aeronaves_'+aacMonth+'.xlsx';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
  };
 }
 // Small, dependency-free OOXML export. Text is always stored as text, never as a formula.
-function aacWorkbook(groups,aircraft,month){
+function aacWorkbook(groups,month){
  const xml=s=>String(s??'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
  const col=n=>{let r='';for(n++;n;n=Math.floor((n-1)/26))r=String.fromCharCode(65+(n-1)%26)+r;return r;};
  const count=Math.max(1,...groups.map(g=>g.flights.length)),last=col(3+count),rows=[];
  const text=(r,c,v,style=0)=>'<c r="'+col(c)+r+'" s="'+style+'" t="inlineStr"><is><t xml:space="preserve">'+xml(v)+'</t></is></c>';
  const num=(r,c,v,style=2,formula='')=>'<c r="'+col(c)+r+'" s="'+style+'">'+(formula?'<f>'+formula+'</f>':'')+'<v>'+v+'</v></c>';
  rows.push('<row r="1" ht="25" customHeight="1">'+text(1,0,'Estadísticas para AAC',4)+'</row>');
- rows.push('<row r="2" ht="22" customHeight="1">'+text(2,0,'Aeronave: '+aircraft+'     Mes: '+month.slice(5)+'/'+month.slice(0,4),4)+'</row>');
+ rows.push('<row r="2" ht="22" customHeight="1">'+text(2,0,'Todas las aeronaves     Mes: '+month.slice(5)+'/'+month.slice(0,4),4)+'</row>');
  rows.push('<row r="3" ht="40" customHeight="1">'+['FECHA','CANTIDAD DE VUELOS','HORAS VOLADAS','TIPO DE SERVICIO DE TRANSPORTE AÉREO EFECTUADO',...Array(count).fill('')].map((v,c)=>text(3,c,v,1)).join('')+'</row>');
  groups.forEach((g,i)=>{const r=i+4,date=(Date.parse(g.date+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000;rows.push('<row r="'+r+'" ht="24" customHeight="1">'+num(r,0,date,3)+num(r,1,g.flights.length)+num(r,2,g.hours100/100,5)+text(r,3,g.service,6)+Array.from({length:count},(_,c)=>text(r,c+4,g.flights[c]?.route||'')).join('')+'</row>');});
  const r=groups.length+4,totalFlights=groups.reduce((n,g)=>n+g.flights.length,0),totalHours=groups.reduce((n,g)=>n+g.hours100,0)/100;
@@ -321,6 +318,7 @@ window.Registro={renderReport,edit,deleteEntry,hasDraft:()=>dirty||pending,refre
 const previousDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!previousDraft?.()||dirty||pending;
 render();renderReport();window.REGISTRO_READY=true;
 })();
+
 
 
 
