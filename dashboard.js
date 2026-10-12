@@ -95,6 +95,8 @@ async function undoAircraft(idx){
   let restored;
   if(aircraftDirty.has(idx)) restored=decodeAircraft(next.fleet[key]);
   else {const history=next.undoFleet[key]||[];if(!history.length)return;restored=decodeAircraft(history.pop());next.fleet[key]=restored;}
+  const linked=d=>(d.bitacora_tac||[]).filter(r=>r.registryId).map(r=>[r.registryId,r.anterior,r.actual,r.hv]);
+  if(!aircraftDirty.has(idx)&&JSON.stringify(linked(previewData.fleet[key]||{}))!==JSON.stringify(linked(restored))){alert('Este cambio está vinculado a Registro. Usa Corregir horas / TAC allí para mantener la sincronización.');return;}
   if(!await commitPreview(next))return;
   state[idx]=structuredClone(restored);aircraftDirty.delete(idx);
   const old=document.getElementById('panel-'+idx),replacement=buildPanel(fleet[idx],state[idx],idx);
@@ -1076,6 +1078,7 @@ function editarFechaBitacora(idx, ri, isoValue) {
 
 
 function eliminarHoraBitacora(idx, ri) {
+  const linked=state[idx].bitacora_horas?.[ri]?.registryId;if(linked){window.Registro.edit(linked);return;}
   if (!window.confirm("¿Eliminar este registro de horas de vuelo? Sus horas se descontarán de los acumulados de inspección.")) return;
   const d = state[idx];
   if (!d.bitacora_horas || !d.bitacora_horas[ri]) return;
@@ -1148,6 +1151,7 @@ function establecerTotalVenc(tipo, idx, val) {
 
 
 function revertirVenc(idx) {
+  if(state[idx].ultimo_venc_registry_id){window.Registro.edit(state[idx].ultimo_venc_registry_id);return;}
   if (!window.confirm("¿Revertir el último ingreso de horas? Sus horas se descontarán de los acumulados de vencimiento.")) return;
   const d = state[idx];
   if (!d.ultimo_venc_hv) return;
@@ -1249,6 +1253,7 @@ function renderTACLogs(idx){
  ):'<div class="record-empty">Sin inspecciones registradas</div>';
 }
 async function openRecordEditor(kind,idx,ri=-1,tipo=50){
+ if(kind==='tac'&&state[idx].bitacora_tac?.[ri]?.registryId){window.Registro.edit(state[idx].bitacora_tac[ri].registryId);return;}
  if(aircraftDirty.has(idx)&&!await savePanel(idx))return;
  const d=state[idx],newInspection=kind==='inspection'&&ri===-1;
  const r=newInspection?{fecha:getFechaPanama(),tipo,tac:d.tac_anterior||'',proxima:tipo===50?100:50}:kind==='tac'?d.bitacora_tac[ri]:d.bitacora_inspecciones[ri];
@@ -1275,6 +1280,7 @@ function adjustRecordedHours(d,r,delta){
 }
 function fleetRecordReg(d){return d.audit_aircraft_reg||'';}
 async function applyRecordChange(kind,idx,ri,f){
+ if(kind==='tac'&&state[idx].bitacora_tac?.[ri]?.registryId)return 'Corrige este registro desde Registro para mantener las horas sincronizadas.';
  if(!Number.isFinite(dayNumber(f.fecha)))return 'Ingresa una fecha válida DD/MM/AAAA.';
  if(ri>=0&&!String(f.razon||'').trim())return 'El motivo de la modificación es obligatorio.';
  const original=structuredClone(state[idx]),d=structuredClone(state[idx]);d.audit_aircraft_reg=fleet[idx].reg;
@@ -1423,6 +1429,7 @@ async function savePanelLegacy(idx) {
       if (hiddenEl) hiddenEl.value = d[map.dataField];
     });
     // Save ultimo registro
+    delete d.ultimo_venc_registry_id;
     d.ultimo_venc_hv = hvVencDia.toFixed(2);
     d.ultimo_venc_fecha = fechaV + ' ' + horaV;
     const ulDiv = document.getElementById('ultimo-venc-' + idx);
@@ -1742,7 +1749,7 @@ empresaPanel.id = 'panel-empresa';
 empresaPanel.innerHTML = `
   <div class="aircraft-header">
     <div>
-      <div class="aircraft-reg">HP Chartes</div>
+      <div class="aircraft-reg">HP CHARTERS</div>
       <div class="aircraft-model-line">ADMINISTRATIVOS · DOCUMENTOS EMPRESA</div>
     </div>
   </div>
@@ -2364,7 +2371,7 @@ sidebarEl.appendChild(escuelaTab);
 // Empresa tab
 const empresaTab = document.createElement('div');
 empresaTab.className = 'aircraft-tab';
-empresaTab.innerHTML = '<div class="tab-reg" style="font-size:10px">HP Chartes</div>';
+empresaTab.innerHTML = '<div class="tab-reg" style="font-size:10px">HP CHARTERS</div>';
 empresaTab.addEventListener('click', () => {
   document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
@@ -3496,3 +3503,4 @@ function organizeSidebar(){
  // Students inserts its tab immediately after Itinerario when its module loads.
 }
 organizeSidebar();
+
