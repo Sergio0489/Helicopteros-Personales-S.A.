@@ -1591,7 +1591,7 @@ pilotosPanel.id = 'panel-pilotos';
 pilotosPanel.innerHTML = `
   <div class="aircraft-header">
     <div>
-      <div class="aircraft-reg" >VIGENCIA PILOTOS</div>
+      <div class="aircraft-reg" >PILOTOS</div>
       <div class="aircraft-model-line">ADMINISTRATIVOS · LICENCIAS Y HABILITACIONES</div>
     </div>
   </div>
@@ -1742,7 +1742,7 @@ empresaPanel.id = 'panel-empresa';
 empresaPanel.innerHTML = `
   <div class="aircraft-header">
     <div>
-      <div class="aircraft-reg">EMPRESA</div>
+      <div class="aircraft-reg">HP Chartes</div>
       <div class="aircraft-model-line">ADMINISTRATIVOS · DOCUMENTOS EMPRESA</div>
     </div>
   </div>
@@ -2340,7 +2340,7 @@ sidebarEl.appendChild(adminHdr);
 // Vigencia Pilotos tab
 const pilotosTab = document.createElement('div');
 pilotosTab.className = 'aircraft-tab';
-pilotosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">VIGENCIA PILOTOS</div>';
+pilotosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">PILOTOS</div>';
 pilotosTab.addEventListener('click', () => {
   document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
@@ -2364,7 +2364,7 @@ sidebarEl.appendChild(escuelaTab);
 // Empresa tab
 const empresaTab = document.createElement('div');
 empresaTab.className = 'aircraft-tab';
-empresaTab.innerHTML = '<div class="tab-reg" style="font-size:10px">EMPRESA</div>';
+empresaTab.innerHTML = '<div class="tab-reg" style="font-size:10px">HP Chartes</div>';
 empresaTab.addEventListener('click', () => {
   document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
@@ -2376,7 +2376,7 @@ sidebarEl.appendChild(empresaTab);
 // Itinerarios tab
 const itinerariosTab = document.createElement('div');
 itinerariosTab.className = 'aircraft-tab';
-itinerariosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">✈ ITINERARIOS</div>';
+itinerariosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">✈ ITINERARIO</div>';
 itinerariosTab.addEventListener('click', () => {
   document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
@@ -2393,7 +2393,7 @@ itinerariosPanel.id = 'panel-itinerarios';
 itinerariosPanel.innerHTML = `
   <div class="aircraft-header">
     <div>
-      <div class="aircraft-reg" style="font-size:20px">✈ ITINERARIOS</div>
+      <div class="aircraft-reg" style="font-size:20px">✈ ITINERARIO</div>
       <div class="aircraft-model-line">PROGRAMACIÓN DE VUELOS</div>
     </div>
   </div>
@@ -3480,3 +3480,19 @@ function selectScheduleOffset(offset){
 }
 
 
+
+
+// Keep the existing tab nodes and their click/save handlers while grouping the fleet.
+function organizeSidebar(){
+ const group=document.createElement('details');group.id='sidebar-aircraft-group';group.className='sidebar-aircraft-group';
+ const summary=document.createElement('summary');summary.className='sidebar-aircraft-toggle';summary.textContent='AERONAVES';
+ const items=document.createElement('div');items.id='sidebar-aircraft-items';items.className='sidebar-aircraft-items';summary.setAttribute('aria-controls',items.id);
+ group.append(summary,items);
+ Array.from(sidebarEl.children).forEach(node=>{
+  if(node.matches('.aircraft-tab[data-idx]')||(node.classList.contains('sidebar-group-title')&&['MONOMOTOR','MULTIMOTOR','HELICÓPTERO'].includes(node.textContent.trim())))items.appendChild(node);
+ });
+ adminHdr.remove();
+ sidebarEl.replaceChildren(dailyScheduleTab,resumenTab,group,pilotosTab,itinerariosTab,escuelaTab,empresaTab,statsTab);
+ // Students inserts its tab immediately after Itinerario when its module loads.
+}
+organizeSidebar();
