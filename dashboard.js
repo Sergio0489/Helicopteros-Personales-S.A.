@@ -1793,14 +1793,12 @@ statsPanel.innerHTML = `
     <div class="card-title" style="margin-bottom:10px">📈 Total de Horas Voladas — Flota Completa</div>
     <div style="height:260px"><canvas id="stats-chart-total"></canvas></div>
   </div>
-  <div id="estadisticas-content"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);padding:20px 0">Cargando...</div></div>
   <section class="card" id="registro-transport-report" style="margin-bottom:18px;padding:18px"></section>
 `;
 contentEl.insertBefore(statsPanel, resumenPanel.nextSibling);
 
 function buildEstadisticas() {
   window.Registro?.renderReport();
-  const container = document.getElementById('estadisticas-content');
 
   // Parse "MM/DD/YYYY" (es-PA locale format used by getFechaPanama) -> {year, month, monthKey "YYYY-MM"}
   function parseFecha(fecha) {
@@ -1833,10 +1831,7 @@ function buildEstadisticas() {
     dataByAc.push({ reg: fleet[idx].reg, model: fleet[idx].model, monthly, total });
   });
 
-  if (monthSet.size === 0) {
-    container.innerHTML = `<div style="text-align:center;padding:40px 0;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)">Sin registros de horas voladas todavía</div>`;
-    return;
-  }
+  if (monthSet.size === 0) return;
 
   // Sort months chronologically
   const months = Array.from(monthSet).sort();
@@ -2002,46 +1997,7 @@ function buildEstadisticas() {
     });
   }
 
-  // Build table: rows = aircraft, columns = months (+ total)
-  let html = `<div class="card" style="overflow-x:auto;padding:0">
-    <table style="width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11px">
-      <thead>
-        <tr style="background:var(--panel2)">
-          <th style="text-align:left;padding:10px 14px;border-bottom:2px solid var(--border);position:sticky;left:0;background:var(--panel2);white-space:nowrap">Matrícula</th>
-          ${months.map(m => `<th style="text-align:right;padding:10px 14px;border-bottom:2px solid var(--border);white-space:nowrap">${monthLabel(m)}</th>`).join('')}
-          <th style="text-align:right;padding:10px 14px;border-bottom:2px solid var(--border);white-space:nowrap;color:var(--accent)">Total</th>
-        </tr>
-      </thead>
-      <tbody>`;
 
-  dataByAc.forEach(ac => {
-    html += `<tr>
-      <td style="padding:9px 14px;border-bottom:1px solid var(--border);font-weight:700;color:var(--text);position:sticky;left:0;background:var(--panel);white-space:nowrap">
-        ${ac.reg}<div style="font-weight:400;color:var(--muted);font-size:9px;margin-top:2px">${ac.model||''}</div>
-      </td>`;
-    months.forEach(m => {
-      const hrs = ac.monthly[m];
-      html += `<td style="text-align:right;padding:9px 14px;border-bottom:1px solid var(--border);color:${hrs ? 'var(--text)' : 'var(--dim)'}">${hrs ? hrs.toFixed(2) : '—'}</td>`;
-    });
-    html += `<td style="text-align:right;padding:9px 14px;border-bottom:1px solid var(--border);font-weight:700;color:var(--accent)">${ac.total.toFixed(2)}</td>`;
-    html += `</tr>`;
-  });
-
-  // Totals row across fleet
-  html += `<tr style="background:var(--panel2)">
-    <td style="padding:9px 14px;border-top:2px solid var(--border);font-weight:900;color:var(--accent);position:sticky;left:0;background:var(--panel2)">FLOTA TOTAL</td>`;
-  let grandTotal = 0;
-  months.forEach(m => {
-    let monthTotal = 0;
-    dataByAc.forEach(ac => { monthTotal += (ac.monthly[m] || 0); });
-    grandTotal += monthTotal;
-    html += `<td style="text-align:right;padding:9px 14px;border-top:2px solid var(--border);font-weight:700;color:var(--text)">${monthTotal ? monthTotal.toFixed(2) : '—'}</td>`;
-  });
-  html += `<td style="text-align:right;padding:9px 14px;border-top:2px solid var(--border);font-weight:900;color:var(--accent)">${grandTotal.toFixed(2)}</td>`;
-  html += `</tr>`;
-
-  html += `</tbody></table></div>`;
-  container.innerHTML = html;
 }
 
 function buildResumen() {
@@ -3505,6 +3461,7 @@ function organizeSidebar(){
  // Students inserts its tab immediately after Itinerario when its module loads.
 }
 organizeSidebar();
+
 
 
 
