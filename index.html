@@ -863,6 +863,7 @@
 .school-balance-credit{color:var(--signal-green,#087F3E)!important;font-weight:700;text-shadow:0 0 3px rgba(16,185,87,.3)}.school-balance-debt{color:#d00020!important;font-weight:700}.school-balance-neutral{color:var(--text,#09142a)}.school-statement-dialog .school-statement-actions:last-child{justify-content:flex-end;margin-top:24px;padding-top:14px;border-top:1px solid var(--border)}.school-statement-dialog .school-statement-table{min-width:1060px}.school-statement-dialog .school-statement-table-wrap{overflow-x:auto}
 @media print{.school-statement-print .school-statement-table{min-width:0!important;width:100%;font-size:8px;table-layout:auto}.school-statement-print .school-statement-table th,.school-statement-print .school-statement-table td{padding:4px 2px;overflow-wrap:anywhere}.school-statement-print .school-statement-table-wrap{overflow:visible!important}.school-balance-credit,.school-balance-debt{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style>
+<style>.school-service-heading th{background:#dfebf7;color:#163a64;text-align:left;padding:10px!important;font-weight:800}.school-service-total td{font-weight:700;border-top:1px solid var(--border)}@media print{.school-service-heading th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style>
 </head>
 <body>
 <section id="access-screen"><div class="access-card"><h1>Control de Flota</h1><p>Helicópteros Personales S.A.</p><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
@@ -919,9 +920,10 @@
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261012-8"></script>
+<script src="cloud.js?v=20261012-9"></script>
 </body>
 </html>
+
 
 
 
