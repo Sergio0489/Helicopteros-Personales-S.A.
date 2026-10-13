@@ -900,7 +900,20 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <style>.school-service-heading th{background:#dfebf7;color:#163a64;text-align:left;padding:10px!important;font-weight:800}.school-service-total td{font-weight:700;border-top:1px solid var(--border)}@media print{.school-service-heading th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style>
 <style>#schedule-tab-day{text-transform:uppercase;font-weight:800;letter-spacing:.5px;display:block}#sidebar-tabs .tab-reg{white-space:normal;overflow-wrap:normal}#panel-registro-pago>.card{margin:16px 0;padding:20px}#panel-registro-pago .school-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}#panel-registro-pago select{width:100%;min-width:0}#panel-registro-pago .school-actions{justify-content:flex-end;margin-top:16px}@media(max-width:600px){#panel-registro-pago .school-form{grid-template-columns:1fr}#panel-registro-pago .aircraft-reg{font-size:22px}}</style>
 <style>.school-statement-table tr.school-statement-void,.school-statement-table tr.school-statement-void *{color:#888888!important;text-shadow:none!important;box-shadow:none!important}</style>
-<style>#panel-usuarios{padding:24px;font-family:'IBM Plex Sans',sans-serif;font-size:13px}#panel-usuarios input,#panel-usuarios select,#panel-usuarios button,#panel-usuarios table{font-family:inherit;font-size:13px}#panel-usuarios h1{color:#163a64}.users-controls{display:flex;flex-wrap:wrap;align-items:end;gap:16px}.users-controls label{display:grid;gap:6px;font-weight:700}.users-controls input,.users-controls select{min-height:44px}.users-table{overflow:auto}.users-table table{width:100%;border-collapse:collapse}.users-table th,.users-table td{text-align:left;padding:14px;border-bottom:1px solid #d9e1ea;vertical-align:top}.users-table td{overflow-wrap:anywhere}.users-table select,.users-table button{display:block;margin-bottom:8px;min-height:38px}.users-verified{color:#07833d;font-weight:700}.users-table details{font-size:12px;margin-top:8px}@media(max-width:600px){#panel-usuarios{padding:14px}.users-controls label{width:100%}.users-table table{min-width:850px}}</style></head>
+<style>#panel-usuarios{padding:24px;font-family:'IBM Plex Sans',sans-serif;font-size:13px}#panel-usuarios input,#panel-usuarios select,#panel-usuarios button,#panel-usuarios table{font-family:inherit;font-size:13px}#panel-usuarios h1{color:#163a64}.users-controls{display:flex;flex-wrap:wrap;align-items:end;gap:16px}.users-controls label{display:grid;gap:6px;font-weight:700}.users-controls input,.users-controls select{min-height:44px}.users-table{overflow:auto}.users-table table{width:100%;border-collapse:collapse}.users-table th,.users-table td{text-align:left;padding:14px;border-bottom:1px solid #d9e1ea;vertical-align:top}.users-table td{overflow-wrap:anywhere}.users-table select,.users-table button{display:block;margin-bottom:8px;min-height:38px}.users-verified{color:#07833d;font-weight:700}.users-table details{font-size:12px;margin-top:8px}@media(max-width:600px){#panel-usuarios{padding:14px}.users-controls label{width:100%}.users-table table{min-width:850px}}</style>
+<style id="sidebar-title-style">
+/* Unified left navigation titles, including active and expanded groups. */
+#sidebar .tab-reg,
+#sidebar .sidebar-group-title,
+#sidebar .sidebar-aircraft-toggle,
+#sidebar #schedule-tab-day {
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+#sidebar .tab-reg { text-transform: uppercase; }
+#role-legacy-portal nav button { color: #000 !important; font-weight: 700 !important; }
+</style>
+</head>
 <body>
 <section id="access-screen"><div class="access-card"><img class="login-company-logo" src="receipt-logo.svg" width="360" height="115" alt="Helicópteros Personales S.A."><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button><button type="button" id="forgot-password">Olvidé mi contraseña</button><button type="button" id="create-account">Crear usuario</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
 <div id="cloud-busy" hidden role="status">Guardando en Firebase…</div>
@@ -956,12 +969,13 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261013-6"></script>
+<script src="cloud.js?v=20261013-7"></script>
 <script src="role-main-view.js?v=20261013-2"></script>
 <script src="role-portal.js?v=20261013-3"></script>
-<script src="registration.js?v=20261013-4"></script>
+<script src="registration.js?v=20261013-5"></script>
 </body>
 </html>
+
 
 
 
