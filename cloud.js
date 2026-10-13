@@ -6,6 +6,7 @@ window.getPaymentReceivers=()=>{
 };
 
 let cloudETag=null,cloudVersion=0,cloudBusy=false,cloudBlocked=false,appLoaded=false,importData=null;
+let lastCloudPayload=null;
 const el=id=>document.getElementById(id);
 function accessMessage(text){el('access-message').textContent=text;}
 function setCloudStatus(text){
@@ -18,33 +19,35 @@ function setCloudStatus(text){
 }
 function showCloudError(error){setCloudStatus(error.message||'No se pudo guardar.');}
 window.showCloudError=showCloudError;
-async function cloudRequest(method,body,etag){
+async function cloudRequest(method,body,etag,{silent=false,path=""}={}){
  const user=firebase.auth().currentUser;
  if(!user||user.uid!==ADMIN_UID)throw Error('Inicia sesión con el usuario autorizado.');
  const token=await user.getIdToken();
- const url=new URL(window.FIREBASE_CONFIG.databaseURL.replace(/\/$/,'')+'/dashboard.json');url.searchParams.set('auth',token);
+ const url=new URL(window.FIREBASE_CONFIG.databaseURL.replace(/\/$/,'')+'/dashboard'+path+'.json');url.searchParams.set('auth',token);if(silent)url.searchParams.set('print','silent');
  const headers={'X-Firebase-ETag':'true'};if(etag)headers['if-match']=etag;if(body)headers['Content-Type']='application/json';
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
  try{
   const response=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});
   if(response.status===412)throw Error('Hay cambios guardados desde otro equipo. Descarga un respaldo y pulsa Actualizar datos antes de continuar.');
   if(!response.ok)throw Error(response.status===401||response.status===403?'Acceso denegado. Revisa las reglas de Firebase y el usuario autorizado.':'Firebase no pudo completar la operación.');
-  return {value:await response.json(),etag:response.headers.get('ETag')};
+  return {value:response.status===204?null:await response.json(),etag:response.headers.get('ETag')};
  }catch(error){if(error.name==='AbortError')throw Error('No se pudo confirmar el guardado. Actualiza los datos antes de volver a guardar.');throw error;}finally{clearTimeout(timer);}
 }
 window.cloudWrite=async function(data){
  if(cloudBusy)throw Error('Espera a que termine el guardado actual.');
  if(cloudBlocked||!cloudETag)throw Error('Actualiza los datos antes de guardar para evitar sobrescribir cambios.');
+ const payload=JSON.stringify(data);
+ if(payload===lastCloudPayload){setCloudStatus('✓ Sin cambios pendientes');return true;}
  cloudBusy=true;el('dashboard-app').inert=true;el('cloud-busy').hidden=false;
  setCloudStatus('Guardando en Firebase…');
  const operation=crypto.randomUUID();
- const envelope={schemaVersion:1,revision:cloudVersion+1,operation,updatedAt:new Date().toISOString(),updatedBy:ADMIN_UID,payload:JSON.stringify(data)};
+ const envelope={schemaVersion:1,revision:cloudVersion+1,operation,updatedAt:new Date().toISOString(),updatedBy:ADMIN_UID,payload};
  try{
-  const result=await cloudRequest('PUT',envelope,cloudETag);
-  window.failedCloudData=null;cloudVersion=envelope.revision;cloudETag=result.etag;
+  const result=await cloudRequest('PUT',envelope,cloudETag,{silent:true});
+  window.failedCloudData=null;lastCloudPayload=payload;cloudVersion=envelope.revision;cloudETag=result.etag;
   if(!cloudETag){
     // Never replace a newer snapshot silently while obtaining the next ETag.
-    try{const latest=await cloudRequest('GET');if(latest.value?.operation===operation)cloudETag=latest.etag;}catch{}
+    try{const latest=await cloudRequest('GET',null,null,{silent:true});const marker=await cloudRequest('GET',null,null,{path:'/operation'});if(marker.value===operation)cloudETag=latest.etag;}catch{}
   }
   cloudBlocked=!cloudETag;
   setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado en Firebase');
@@ -83,7 +86,7 @@ async function openDashboard(data){
 async function refreshCloud(){
  const result=await cloudRequest('GET');cloudETag=result.etag;cloudVersion=result.value?.revision||0;
  if(!cloudETag)throw Error('No se pudo verificar la versión de los datos. Recarga la página.');
- if(result.value){if(result.value.schemaVersion!==1||typeof result.value.payload!=='string')throw Error('Formato de base de datos no reconocido.');await openDashboard(JSON.parse(result.value.payload));}
+ if(result.value){if(result.value.schemaVersion!==1||typeof result.value.payload!=='string')throw Error('Formato de base de datos no reconocido.');lastCloudPayload=result.value.payload;await openDashboard(JSON.parse(result.value.payload));}
  else{el('login-form').hidden=true;el('import-panel').hidden=false;el('access-logout').hidden=false;accessMessage('Tu acceso está listo. Falta importar el respaldo inicial.');}
 }
 function confirmLeaving(){return !cloudBusy&&(!(profileDirty||window.hasDraftChanges?.()||cloudBlocked)||confirm('Hay cambios pendientes o un guardado sin confirmar. Descarga un respaldo antes de continuar. ¿Deseas continuar?'));}
@@ -251,6 +254,7 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
 
 
 
