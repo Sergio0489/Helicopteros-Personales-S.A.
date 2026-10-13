@@ -1,11 +1,24 @@
 'use strict';
 // The same templates as the director, running without credentials or network access.
 (()=>{
- let bundle;
+ let bundle,chartBundle;
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
- async function assets(){if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js'].map(async p=>{const r=await fetch(p+'?native=20261013-1');if(!r.ok)throw Error('No se pudo cargar el diseño principal.');return r.text();})).catch(e=>{bundle=null;throw e;});return bundle;}
+ async function asset(path){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+  try{const r=await fetch(path+'?native=20261013-2',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
+  finally{clearTimeout(timer);}
+ }
+ async function assets(page){
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
+  return [...await bundle,page==='estadisticas'?await chartBundle:''];
+ }
  function start(){
   const cfg=window.ROLE_VIEW,has=a=>cfg.areas[a]===true;
+  const send=(action,page)=>parent.postMessage({channel:cfg.channel,action,page},'*');
+  window.addEventListener('error',event=>send('load-error',event.message||'Error al cargar la página.'));
+  window.addEventListener('unhandledrejection',event=>send('load-error',event.reason?.message||'Error al cargar la página.'));
   const blocked=()=>{throw Error('Esta sesión es de consulta.');};
   window.cloudWrite=async()=>blocked();window.showCloudError=()=>{};
   window.fetch=blocked;window.XMLHttpRequest=undefined;window.WebSocket=undefined;
@@ -14,7 +27,6 @@
   document.getElementById('access-screen').remove();document.getElementById('dashboard-app').hidden=false;
   document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>Solo consulta</span><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
   document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;
-  const send=(action,page)=>parent.postMessage({channel:cfg.channel,action,page},'*');
   document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>send('logout');
   const safeAction=new Set(['select','statement','view']);
   function readonlyControl(e){
@@ -32,6 +44,7 @@
   document.addEventListener('click',e=>{const control=e.target.closest('button,a,input,select,textarea,[onclick],[data-action]');if(control&&!readonlyControl(control)){e.preventDefault();e.stopImmediatePropagation();}},true);
   document.addEventListener('submit',e=>{if(!e.target.matches('[data-aac-filters],[data-hp-filters]')){e.preventDefault();e.stopImmediatePropagation();}},true);
   window.finishRoleView=()=>{
+   document.getElementById('drawerCloseBtn').onclick=()=>closeDrawer();
    const tabs={horario:dailyScheduleTab,pendientes:resumenTab,pilotos:pilotosTab,itinerario:itinerariosTab,escuela:escuelaTab,charter:empresaTab,estadisticas:statsTab};
    const panels={horario:'panel-horario-dia',pendientes:'panel-resumen',pilotos:'panel-pilotos',itinerario:'panel-itinerarios',escuela:'panel-escuela',charter:'panel-empresa',estadisticas:'panel-estadisticas',estudiantes:'panel-estudiantes',bitacora:'panel-registro',pagos:'panel-registro-pago',saldos:'panel-alerta-saldos'};
    if(tabs[cfg.page])tabs[cfg.page].click();
@@ -74,8 +87,9 @@
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,chart]=await assets();
-  const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script').forEach(n=>n.remove());
+  const [html,dashboard,students,registro,schoolCSS,chart]=await assets(page);
+  const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
+  const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
   const csp=document.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: "+location.origin+"; connect-src 'none'; form-action 'none';";doc.head.prepend(csp);
   const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+page;frame.setAttribute('sandbox','allow-scripts allow-modals');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
@@ -83,12 +97,28 @@
   const cfg={...result.native,page,pages:result.pages,name:result.name,role:result.role,channel};
   const add=code=>{const s=doc.createElement('script');s.textContent=code;doc.body.appendChild(s);};
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
-  // Chart rendering is optional; operational templates do not depend on its network CDN.
+  // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
   add(dashboard);add(students);add(registro);add('window.finishRoleView();');
-  const listener=e=>{if(e.source===frame.contentWindow&&e.data?.channel===channel)onAction(e.data);};window.addEventListener('message',listener);
-  container.replaceChildren(frame);frame.srcdoc='<!DOCTYPE html>'+doc.documentElement.outerHTML;
-  return ()=>window.removeEventListener('message',listener);
+  let settled=false,timer,resolveReady,rejectReady;
+  const ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
+  const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
+  const listener=e=>{
+   if(e.source!==frame.contentWindow||e.data?.channel!==channel)return;
+   if(e.data.action==='load-error'){
+    if(!settled){settled=true;rejectReady(Error(e.data.page||'No se pudo abrir la página.'));}
+    else onAction({action:'load-error',message:'La página no pudo completar una operación. Actualiza o usa el visor de consulta.'});
+    return;
+   }
+   if(e.data.action==='ready'){if(!settled){settled=true;resolveReady();}return;}
+   if(settled)onAction(e.data);
+  };
+  window.addEventListener('message',listener);
+  frame.style.visibility='hidden';frame.style.position='absolute';
+  container.appendChild(frame);frame.srcdoc='<!DOCTYPE html>'+doc.documentElement.outerHTML;
+  timer=setTimeout(()=>{if(!settled){settled=true;rejectReady(Error('La página no terminó de cargar. Puedes usar el visor de consulta.'));}},12000);
+  try{await ready;clearTimeout(timer);frame.style.visibility='';frame.style.position='';container.replaceChildren(frame);return dispose;}
+  catch(error){dispose();throw error;}
  }
  window.RoleMainView={mount};
 })();
