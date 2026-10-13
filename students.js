@@ -454,7 +454,7 @@ function render(){
 function renderDirectory(){
  const element=panel.querySelector('#school-student-list');if(!element)return;
  const students=data().students.filter(s=>(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.name.localeCompare(b.name,'es'));
- element.innerHTML='<p class="school-muted">'+students.length+' estudiantes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('');
+ element.innerHTML='<p class="school-muted">'+students.length+' estudiantes / clientes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('');
 }
 function renderIntakes(body,school){
  const rows=noticeRows(school);
@@ -629,8 +629,22 @@ function filterPaymentPeople(people,kind,query){return people.filter(p=>(kind===
 const paymentPanel=document.createElement('div');paymentPanel.className='aircraft-panel';paymentPanel.id='panel-registro-pago';contentEl.appendChild(paymentPanel);
 const paymentTab=document.createElement('div');paymentTab.className='aircraft-tab';paymentTab.id='tab-registro-pago';paymentTab.innerHTML='<div class="tab-reg" style="font-size:10px">💳 REGISTRO DE PAGO</div>';itinerariosTab.insertAdjacentElement('beforebegin',paymentTab);
 paymentTab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab,.aircraft-panel').forEach(e=>e.classList.remove('active'));paymentTab.classList.add('active');paymentPanel.classList.add('active');renderPayments();});
+function balanceActivity(record){
+ const entries=items=>list(items).map(e=>[e.id||'',e.date||'',e.fee||'',Number(e.cents||0),Number(e.costCents||0),e.voidedAt||'']).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+ return JSON.stringify({courses:list(record.courses).map(c=>({id:c.id,type:c.type,charges:courseFees(c).filter(f=>!['vuelo','simulador'].includes(f)).map(f=>[f,courseAmount(c,f)]),payments:entries(c.payments),flights:entries(c.flights)})).sort((a,b)=>String(a.id).localeCompare(String(b.id))),payments:entries(record.extraPayments),flights:entries(record.registryFlights),expenses:entries(record.expenses)});
+}
+function balanceAlertPeople(school){return [...list(school.students).map(student=>({student,key:'student:'+student.id,kind:'Estudiante'})),...list(school.registry?.clients).map(c=>({student:clientStatement(c),key:'client:'+c.id,kind:'Cliente'}))];}
 function lowBalanceStudents(school=data()){
- return list(school.students).map(student=>({student,balance:(-statementData(student).servicesBalance || 0)})).filter(row=>row.balance<50000).sort((a,b)=>a.balance-b.balance||a.student.name.localeCompare(b.student.name,'es'));
+ return balanceAlertPeople(school).map(row=>({...row,balance:(-statementData(row.student).servicesBalance||0)})).filter(row=>row.balance<50000&&school.balanceAlertDismissals?.[row.key]?.activity!==balanceActivity(row.student)).sort((a,b)=>a.balance-b.balance||a.student.name.localeCompare(b.student.name,'es'));
+}
+function dismissZeroBalanceAlert(school,key){
+ const row=balanceAlertPeople(school).find(row=>row.key===key);if(!row)throw Error('No se encontró el expediente.');
+ if(statementData(row.student).servicesBalance!==0)throw Error('Solo puedes quitar de la lista un saldo de $0.00.');
+ school.balanceAlertDismissals ||= {};school.balanceAlertDismissals[key]={activity:balanceActivity(row.student),dismissedAt:new Date().toISOString()};
+}
+async function hideZeroBalanceAlert(key){
+ if(!window.confirm('¿Quitar este saldo de $0.00 de la lista de alertas? El expediente y sus movimientos no se modificarán. Volverá a aparecer si cambia su actividad de saldo y queda por debajo de $500.00.'))return;
+ try{await change(school=>dismissZeroBalanceAlert(school,key));}catch(error){window.alert(error.message);}
 }
 function renderBalanceAlerts(){
  let panel=document.getElementById('panel-alerta-saldos');
@@ -641,8 +655,9 @@ function renderBalanceAlerts(){
   tab.onclick=()=>{document.querySelectorAll('.aircraft-tab,.aircraft-panel').forEach(e=>e.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');renderBalanceAlerts();};
  }
  const rows=lowBalanceStudents();
- panel.innerHTML='<div class="school-header"><div><div class="aircraft-reg">🚨 ALERTA DE SALDOS</div><p class="school-muted">Saldo disponible menor de $500.00 · '+rows.length+' estudiantes</p></div></div><section class="card"><p class="school-muted">Abonos menos cargos por servicios registrados, según el estado de cuenta. Incluye saldos en cero y deudas.</p><div class="school-statement-table-wrap"><table class="school-statement-table"><thead><tr><th>Estudiante</th><th>Celular</th><th>Saldo disponible</th><th>Estado</th><th></th></tr></thead><tbody>'+rows.map(({student:s,balance})=>'<tr><td>'+esc(s.name)+'</td><td>'+esc(s.phone||'')+'</td><td style="color:'+(balance<0?'#d90020':'#996600')+';font-weight:700">'+money(balance)+'</td><td>'+(balance<0?'Deuda':balance===0?'Sin saldo':'Saldo bajo')+'</td><td><button class="record-btn" data-balance-student="'+esc(s.id)+'">Estado de cuenta</button></td></tr>').join('')+'</tbody></table></div>'+(!rows.length?'<p>Sin estudiantes con saldo menor de $500.00.</p>':'')+'</section>';
- panel.querySelectorAll('[data-balance-student]').forEach(b=>b.onclick=()=>showStatement(b.dataset.balanceStudent));
+ panel.innerHTML='<div class="school-header"><div><div class="aircraft-reg">🚨 ALERTA DE SALDOS</div><p class="school-muted">Saldo disponible menor de $500.00 · '+rows.length+' estudiantes / clientes</p></div></div><section class="card"><p class="school-muted">Abonos menos cargos por servicios registrados, según el estado de cuenta. Incluye saldos en cero y deudas.</p><div class="school-statement-table-wrap"><table class="school-statement-table"><thead><tr><th>Estudiante / Cliente</th><th>Celular</th><th>Saldo disponible</th><th>Estado</th><th></th></tr></thead><tbody>'+rows.map(({student:s,balance,key,kind})=>'<tr><td>'+esc(s.name)+'</td><td>'+esc(s.phone||'')+'</td><td style="color:'+(balance<0?'#d90020':'#996600')+';font-weight:700">'+money(balance)+'</td><td>'+(balance<0?'Deuda':balance===0?'Sin saldo':'Saldo bajo')+'</td><td><button class="record-btn" data-balance-person="'+esc(key)+'">Estado de cuenta</button>'+(balance===0?'<button class="record-btn" data-hide-balance="'+esc(key)+'">Quitar de la lista</button>':'')+'</td></tr>').join('')+'</tbody></table></div>'+(!rows.length?'<p>Sin estudiantes o clientes con saldo menor de $500.00.</p>':'')+'</section>';
+ panel.querySelectorAll('[data-balance-person]').forEach(b=>b.onclick=()=>{const key=b.dataset.balancePerson;if(key.startsWith('student:'))showStatement(key.slice(8));else showStatementRecord(()=>clientStatement(clientById(data(),key.slice(7))));});
+ panel.querySelectorAll('[data-hide-balance]').forEach(b=>b.onclick=()=>hideZeroBalanceAlert(b.dataset.hideBalance));
 }
 function renderPayments(){
  renderBalanceAlerts();
@@ -680,6 +695,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
