@@ -25,7 +25,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  }
  if(!['submit','status'].includes(action)){res.status(400).json({error:'Operación no válida.'});return;}
  if(action==='submit'){
-  const profile=cleanProfile(req.body.profile||{});await ref.transaction(old=>({...old,profile,email:user.email,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}));
+  const profile=cleanProfile(req.body.profile||{});await ref.transaction(old=>({...old,role:old?.role||'Estudiante',profile,email:user.email,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}));
  }
  let account=(await ref.get()).val();if(!account){res.json({needsProfile:true,email:user.email,verified:user.emailVerified});return;}
  if(user.emailVerified){
@@ -34,6 +34,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(student){const profile={...account.profile};for(const field of fields)if(student[field]!=null&&student[field]!==''&&(!Array.isArray(student[field])||student[field].length))profile[field]=student[field];patch.profile=profile;patch.studentId=student.id;patch.syncStatus='matched';}else{patch.studentId=null;patch.syncStatus='no-unique-match';}
   await ref.update(patch);account=(await ref.get()).val();
  }
- res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||null,matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
+ res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
