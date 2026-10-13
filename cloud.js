@@ -2,7 +2,7 @@
 const ADMIN_UID='glCsyjLhlyNRmazYA6Y9Gj3u0l13';
 window.getPaymentReceivers=()=>{
  const user=firebase.auth().currentUser;
- return user&&user.uid===ADMIN_UID?[{uid:user.uid,label:user.displayName||previewData.school?.paymentReceiverNames?.[user.uid]||''}]:[];
+ return user&&user.uid===ADMIN_UID?[{uid:user.uid,label:profileName(user)}]:[];
 };
 
 let cloudETag=null,cloudVersion=0,cloudBusy=false,cloudBlocked=false,appLoaded=false,importData=null;
@@ -86,7 +86,7 @@ async function refreshCloud(){
  if(result.value){if(result.value.schemaVersion!==1||typeof result.value.payload!=='string')throw Error('Formato de base de datos no reconocido.');await openDashboard(JSON.parse(result.value.payload));}
  else{el('login-form').hidden=true;el('import-panel').hidden=false;el('access-logout').hidden=false;accessMessage('Tu acceso está listo. Falta importar el respaldo inicial.');}
 }
-function confirmLeaving(){return !cloudBusy&&(!(window.hasDraftChanges?.()||cloudBlocked)||confirm('Hay cambios pendientes o un guardado sin confirmar. Descarga un respaldo antes de continuar. ¿Deseas continuar?'));}
+function confirmLeaving(){return !cloudBusy&&(!(profileDirty||window.hasDraftChanges?.()||cloudBlocked)||confirm('Hay cambios pendientes o un guardado sin confirmar. Descarga un respaldo antes de continuar. ¿Deseas continuar?'));}
 el('cloud-reload').onclick=()=>{if(confirmLeaving())location.reload();};
 async function logout(){if(!confirmLeaving())return;await firebase.auth().signOut();location.reload();}
 el('cloud-logout').onclick=logout;el('access-logout').onclick=logout;
@@ -98,7 +98,7 @@ el('import-confirm').onclick=async()=>{
  if(!importData||cloudBusy)return;el('import-confirm').disabled=true;
  try{await window.cloudWrite(importData);await openDashboard(importData);}catch(error){accessMessage(error.message);}
 };
-window.addEventListener('beforeunload',event=>{if(cloudBusy||cloudBlocked||window.hasDraftChanges?.()){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if(cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.()){event.preventDefault();event.returnValue='';}});
 try{
  firebase.initializeApp(window.FIREBASE_CONFIG);
  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION).then(()=>{
@@ -151,3 +151,28 @@ window.addEventListener('online',()=>{if(!cloudBlocked){el('cloud-connection').d
 
 
 
+
+
+let profileDirty=false;
+function profileUser(){const user=firebase.auth().currentUser;if(!user||user.uid!==ADMIN_UID)throw Error('Inicia sesión con el usuario autorizado.');return user;}
+function profileName(user){return previewData.school?.userProfiles?.[user.uid]?.name||user.displayName||previewData.school?.paymentReceiverNames?.[user.uid]||'';}
+function profileError(error){return ({'auth/wrong-password':'La contraseña actual no es correcta.','auth/invalid-credential':'No se pudo verificar la contraseña actual.','auth/weak-password':'La contraseña nueva no cumple los requisitos de Firebase.','auth/requires-recent-login':'Vuelve a iniciar sesión e inténtalo de nuevo.','auth/too-many-requests':'Demasiados intentos. Espera unos minutos.','auth/network-request-failed':'No se pudo conectar. Revisa tu conexión.','auth/email-already-in-use':'Ese correo ya está asociado a otra cuenta.','auth/invalid-email':'El correo no es válido.'})[error.code]||error.message||'No se pudo completar la operación.';}
+function openUserProfile(){
+ const user=profileUser(),stored=previewData.school?.userProfiles?.[user.uid]||{};
+ el('profile-menu').open=false;
+ const dialog=document.createElement('dialog');dialog.className='user-profile-dialog';
+ dialog.innerHTML='<div class="profile-heading"><h2>Mi perfil</h2><button type="button" data-profile-close aria-label="Cerrar">×</button></div><form data-profile-info><label>Nombre completo<input name="name" required maxlength="160" autocomplete="name"></label><label>Teléfono<input name="phone" type="tel" maxlength="40" autocomplete="tel"></label><label>Cargo<input name="role" maxlength="100" autocomplete="organization-title"></label><label>Correo actual<input name="email" type="email" readonly></label><button type="submit">Guardar información</button></form><details><summary>Cambiar contraseña</summary><form data-profile-password><label>Contraseña actual<input name="current" type="password" required autocomplete="current-password"></label><label>Nueva contraseña<input name="next" type="password" required minlength="6" autocomplete="new-password"></label><label>Confirmar nueva contraseña<input name="confirm" type="password" required minlength="6" autocomplete="new-password"></label><button type="submit">Cambiar contraseña</button></form></details><details><summary>Cambiar correo electrónico</summary><form data-profile-email><label>Nuevo correo<input name="email" type="email" required autocomplete="email"></label><label>Contraseña actual<input name="password" type="password" required autocomplete="current-password"></label><button type="submit">Enviar verificación al nuevo correo</button></form></details><p data-profile-status role="status" aria-live="polite"></p><button type="button" data-profile-logout class="profile-logout">Cerrar sesión</button>';
+ document.body.appendChild(dialog);const info=dialog.querySelector('[data-profile-info]');info.elements.name.value=profileName(user);info.elements.phone.value=stored.phone||'';info.elements.role.value=stored.role||'';info.elements.email.value=user.email||'';
+ let saving=false;const status=dialog.querySelector('[data-profile-status]');
+ const run=async task=>{if(saving)return;saving=true;dialog.querySelectorAll('button').forEach(b=>b.disabled=true);status.textContent='Procesando…';try{status.textContent=await task();profileDirty=false;}catch(error){status.textContent=profileError(error);}finally{saving=false;dialog.querySelectorAll('button').forEach(b=>b.disabled=false);}};
+ dialog.oninput=()=>{profileDirty=true;};
+ const close=()=>{if(saving)return;if(profileDirty&&!confirm('¿Cerrar el perfil sin guardar los cambios pendientes?'))return;profileDirty=false;dialog.close();};
+ dialog.querySelector('[data-profile-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>{dialog.remove();profileDirty=false;});
+ info.onsubmit=event=>{event.preventDefault();run(async()=>{const current=profileUser(),name=info.elements.name.value.trim();if(!name||name.includes('@'))throw Error('Ingresa tu nombre completo, sin correo electrónico.');const next=structuredClone(previewData);next.school ||= {};next.school.userProfiles ||= {};next.school.paymentReceiverNames ||= {};next.school.userProfiles[current.uid]={...next.school.userProfiles[current.uid],name,phone:info.elements.phone.value.trim(),role:info.elements.role.value.trim(),updatedAt:new Date().toISOString()};next.school.paymentReceiverNames[current.uid]=name;if(!await commitPreview(next))throw Error('No se pudo guardar el perfil. Revisa la conexión.');window.School?.refresh();return 'Información del perfil guardada.';});};
+ const password=dialog.querySelector('[data-profile-password]');password.onsubmit=event=>{event.preventDefault();run(async()=>{const current=profileUser();if(password.elements.next.value!==password.elements.confirm.value)throw Error('Las contraseñas nuevas no coinciden.');if(password.elements.next.value.length<6)throw Error('La contraseña debe tener al menos 6 caracteres.');try{await current.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(current.email,password.elements.current.value));await current.updatePassword(password.elements.next.value);return 'Contraseña actualizada. Usa la nueva contraseña en tu próximo inicio de sesión.';}finally{password.reset();}});};
+ const email=dialog.querySelector('[data-profile-email]');email.onsubmit=event=>{event.preventDefault();run(async()=>{const current=profileUser(),address=email.elements.email.value.trim();if(address===current.email)throw Error('Escribe un correo diferente al actual.');try{await current.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(current.email,email.elements.password.value));await current.verifyBeforeUpdateEmail(address);return 'Revisa el nuevo correo y abre el enlace de Firebase para confirmar el cambio. Hasta entonces seguirá activo el correo actual.';}finally{email.elements.password.value='';}});};
+ dialog.querySelector('[data-profile-logout]').onclick=()=>{logout().catch(error=>{status.textContent=profileError(error);});};dialog.showModal();
+}
+el('profile-edit').onclick=openUserProfile;
+el('profile-logout').onclick=()=>logout().catch(error=>showCloudError(error));
+document.addEventListener('click',event=>{const menu=el('profile-menu');if(menu&&!menu.contains(event.target))menu.open=false;});
