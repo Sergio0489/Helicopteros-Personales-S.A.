@@ -836,6 +836,15 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 .user-profile-dialog .profile-photo-add{width:44px;height:44px;padding:0;border-radius:50%;font-size:30px;line-height:1;margin:auto;display:grid;place-items:center}.profile-verified{color:#00a63c;font-size:12px;font-weight:800;margin-left:6px}
 
 .role-permissions-dialog{width:min(1100px,calc(100vw - 24px));max-height:92vh;overflow:auto;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:14px;padding:22px;color:#0f172a;background:#fff}.role-permissions-dialog::backdrop{background:#0f172a88}.role-permissions-dialog select,.role-permissions-dialog button{padding:9px;border:1px solid #94a3b8;border-radius:6px}.role-permissions-dialog button{cursor:pointer}.role-pending{padding:12px;background:#fff4cc;border-left:4px solid #d49d00;font-size:13px}.role-matrix{overflow:auto;margin:16px 0}.role-matrix table{width:100%;border-collapse:collapse;min-width:800px}.role-matrix th,.role-matrix td{padding:12px 8px;border:1px solid #dbe3ed;text-align:center;vertical-align:top}.role-matrix th{background:#eef4fa;color:#12385c;font-size:12px}.role-matrix td:first-child{text-align:left;min-width:210px}.role-matrix td select{display:block;width:100%;margin:8px 0}.role-matrix input{accent-color:#0059b3;width:18px;height:18px}.role-matrix details label{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0}.role-buttons{display:flex;justify-content:flex-end;gap:10px}.role-buttons [data-save]{background:#0059b3;color:white}.role-permissions-dialog button:disabled{opacity:.5}
+.role-permissions-dialog{display:none;flex-direction:column;overflow:hidden;max-height:92dvh;font-family:inherit}
+.role-permissions-dialog[open]{display:flex}
+.role-permissions-dialog>.profile-heading,.role-permissions-dialog>p,.role-permissions-dialog>label,.role-footer{flex-shrink:0}
+.role-permissions-dialog .role-matrix{min-height:0;overflow:auto}
+.role-footer{border-top:1px solid #dbe3ed;padding-top:12px;background:#fff}
+.role-footer [data-role-status]{margin:8px 0 0;font-size:13px;overflow-wrap:anywhere}
+.role-footer [data-role-status][data-state="error"]{color:#b91c1c}
+.role-footer [data-role-status][data-state="success"]{color:#137333}
+@media(max-width:600px){.role-permissions-dialog{padding:12px}.role-permissions-dialog>p{font-size:12px;margin:6px 0}.role-buttons button{flex:1;min-width:0}}
 
 #account-waiting{min-height:100vh;display:grid;place-items:center;padding:24px;background:#edf3f8}#account-waiting button{margin:5px}.signup-dialog{width:min(640px,calc(100vw - 24px))}.signup-dialog fieldset label{display:flex;align-items:center;gap:10px}.signup-dialog fieldset input{width:auto}.signup-dialog textarea{min-height:70px;width:100%;box-sizing:border-box}
 </style>
@@ -947,7 +956,7 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261013-4"></script>
+<script src="cloud.js?v=20261013-5"></script>
 <script src="role-portal.js?v=20261013-1"></script>
 <script src="registration.js?v=20261013-4"></script>
 </body>
