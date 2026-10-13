@@ -502,6 +502,7 @@ function recordReceipt(school,key,f,id,attachment=null){
  const reference=String(f.reference||'').trim();
  if(['ACH','Yappy'].includes(f.method)&&!reference)throw Error('Ingresa el número de transferencia.');
  const receiver=paymentReceivers().find(user=>user.uid===f.receivedByUid);if(!receiver)throw Error('Selecciona un usuario autorizado para recibir el abono.');
+ const receiverName=String(receiver.label||f.receiverName||'').trim();if(!receiverName||receiverName.includes('@'))throw Error('Ingresa el nombre del usuario que recibe, sin correo electrónico.');
  const {kind,record}=receiptPerson(school,key),lines=[];
  for(const item of allocations){
   const selected=resolvePaymentService(school,item.serviceName),fee=selected.fee,label=selected.label;if(!label)throw Error('Selecciona o escribe el servicio.');
@@ -520,14 +521,14 @@ function recordReceipt(school,key,f,id,attachment=null){
   line.serviceId=service.serviceId;
  }
  const sequence=Math.max(Number(school.lastReceiptSequence)||0,...school.paymentReceipts.map(r=>Number(r.sequence)||0))+1;school.lastReceiptSequence=sequence;
- const receipt={id,sequence,number:String(sequence).padStart(6,'0')+'-'+panamaISO().slice(2,4),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:receiver.label,receivedByUid:receiver.uid,method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
+ const receipt={id,sequence,number:String(sequence).padStart(6,'0')+'-'+panamaISO().slice(2,4),date:isoFecha(f.date),createdAt:new Date().toISOString(),issuedAt:emittedAt(),personKey:key,personName:record.name,identity:record.identity||'',payer:String(f.payer||record.name).trim(),receivedBy:receiverName,receivedByUid:receiver.uid,method:f.method,source:f.source,reference,bank:String(f.bank||'').trim(),note:String(f.note||'').trim(),lines,totalCents:total,attachment};
  for(const line of lines){
   const payment={id:line.id,receiptId:id,receiptNumber:receipt.number,serviceId:line.serviceId||'',fee:line.fee,service:paymentService(line.fee),date:receipt.date,cents:line.cents,source:receipt.source,method:receipt.method,reference:receipt.reference,note:receipt.note,description:'Abono · '+line.label,createdAt:receipt.createdAt};
   if(line.courseId){const c=courseById(record,line.courseId);c.payments ||= [];c.payments.push(payment);}
   else{const field=kind==='student'?'extraPayments':'payments';record[field] ||= [];record[field].push(payment);}
  }
  if(kind==='student'&&!manualStage(record.stage)){record.stage='En formación';record.enrolledDate ||= receipt.date;}
- school.paymentReceipts.push(receipt);return receipt;
+ school.paymentReceiverNames ||= {};school.paymentReceiverNames[receiver.uid]=receiverName;school.paymentReceipts.push(receipt);return receipt;
 }
 async function paymentPhoto(file){
  if(!file?.size)return null;
@@ -582,8 +583,13 @@ function receiptNumber(r){
  const year=r.createdAt?new Intl.DateTimeFormat('en',{year:'2-digit',timeZone:'America/Panama'}).format(new Date(r.createdAt)):(r.date||panamaISO()).slice(2,4);
  return String(r.sequence||Number(r.number.slice(3))).padStart(6,'0')+'-'+year;
 }
+function receiptReceiverName(r){
+ if(r.receivedBy&&!r.receivedBy.includes('@')&&r.receivedBy!=='Administrador autorizado')return r.receivedBy;
+ const name=data().paymentReceiverNames?.[r.receivedByUid]||paymentReceivers().find(u=>u.uid===r.receivedByUid)?.label||'';
+ return name&&!name.includes('@')?name:'Nombre pendiente de registrar';
+}
 function receiptHtml(r,status=''){
- const copy=label=>'<article class="payment-receipt"><div class="receipt-company"><img class="receipt-logo" src="receipt-logo.svg" alt="Helicópteros Personales S.A."><p>R.U.C. 1117805-1-563687 D.V. 07</p><p>TELS.: (507) 315-0887 / 315-1797</p><p>Albrook, Aeropuerto Marcos A. Gelabert, Hangar 4G.</p><h3>Recibo de pago '+esc(receiptNumber(r))+'</h3><b>'+label+'</b></div>'+(status?'<p class="payment-void">'+esc(status)+'</p>':'')+'<div class="payment-receipt-grid"><span><b>Fecha:</b> '+esc(fechaVista(r.date))+'</span><span><b>Emitido:</b> '+esc(r.issuedAt)+' · Panamá</span><span><b>Estudiante / Cliente:</b> '+esc(r.personName)+'</span><span><b>Identificación:</b> '+esc(r.identity)+'</span><span><b>Método de pago:</b> '+esc(r.method)+'</span><span><b>Número de transferencia:</b> '+esc(r.reference)+'</span>'+(r.method==='Efectivo'?'':'<span><b>Banco:</b> '+esc(r.bank)+'</span>')+'<span><b>Fondos:</b> '+esc(r.source)+'</span></div><table><thead><tr><th>Concepto</th><th>Curso / cuenta</th><th>Abono (USD)</th></tr></thead><tbody>'+r.lines.map(l=>'<tr><td>'+esc(l.label)+'</td><td>'+esc(l.courseName||'Cuenta general')+'</td><td>'+money(l.cents)+'</td></tr>').join('')+'</tbody><tfoot><tr><th colspan="2">TOTAL RECIBIDO</th><th>'+money(r.totalCents)+'</th></tr></tfoot></table>'+(r.note?'<p><b>Observaciones:</b> '+esc(r.note)+'</p>':'')+'<div class="receipt-signatures"><div><span><b>Pagado por:</b> '+esc(r.payer)+'</span><span class="receipt-sign-line">Firma</span></div><div><span><b>Recibido por:</b> '+esc(r.receivedBy)+'</span><span class="receipt-sign-line">Firma</span></div></div></article>';
+ const copy=label=>'<article class="payment-receipt"><div class="receipt-number">Recibo de pago '+esc(receiptNumber(r))+'</div><div class="receipt-company"><img class="receipt-logo" src="receipt-logo.svg" alt="Helicópteros Personales S.A."><p>R.U.C. 1117805-1-563687 D.V. 07</p><p>TELS.: (507) 315-0887 / 315-1797</p><p>Albrook, Aeropuerto Marcos A. Gelabert, Hangar 4G.</p><b>'+label+'</b></div>'+(status?'<p class="payment-void">'+esc(status)+'</p>':'')+'<div class="payment-receipt-grid"><span><b>Fecha de emisión:</b> '+esc(r.issuedAt||fechaVista(r.date))+'</span><span><b>Estudiante / Cliente:</b> '+esc(r.personName)+'</span><span><b>Identificación:</b> '+esc(r.identity)+'</span><span><b>Método de pago:</b> '+esc(r.method)+'</span><span><b>Número de transferencia:</b> '+esc(r.reference)+'</span>'+(r.method==='Efectivo'?'':'<span><b>Banco:</b> '+esc(r.bank)+'</span>')+'<span><b>Fondos:</b> '+esc(r.source)+'</span></div><table><thead><tr><th>Concepto</th><th>Curso / cuenta</th><th>Abono (USD)</th></tr></thead><tbody>'+r.lines.map(l=>'<tr><td>'+esc(l.label)+'</td><td>'+esc(l.courseName||'Cuenta general')+'</td><td>'+money(l.cents)+'</td></tr>').join('')+'</tbody><tfoot><tr><th colspan="2">TOTAL RECIBIDO</th><th>'+money(r.totalCents)+'</th></tr></tfoot></table>'+(r.note?'<p><b>Observaciones:</b> '+esc(r.note)+'</p>':'')+'<div class="receipt-signatures"><div><span><b>Pagado por:</b> '+esc(r.payer)+'</span><span class="receipt-sign-line">Firma</span></div><div><span><b>Recibido por:</b> '+esc(receiptReceiverName(r))+'</span><span class="receipt-sign-line">Firma</span></div></div></article>';
  return copy('COPIA DEL CLIENTE')+copy('COPIA DE ARCHIVO');
 }
 function showReceipt(id){
@@ -594,7 +600,7 @@ function showReceipt(id){
 }
 function openPayment(key,defaultFee='',defaultCourse=''){
  const person=receiptPerson(data(),key),id=uid(),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
- modal('Crear abono · '+person.record.name,'<div class="school-full" data-payment-lines></div><button type="button" class="record-btn" data-add-payment-line>+ Agregar servicio / curso</button><p class="school-full"><b>Total del abono: <span data-payment-total>$0.00</span></b></p><datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label)+'</option>').join('')+'</select></label>'+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
+ modal('Crear abono · '+person.record.name,'<div class="school-full" data-payment-lines></div><button type="button" class="record-btn" data-add-payment-line>+ Agregar servicio / curso</button><p class="school-full"><b>Total del abono: <span data-payment-total>$0.00</span></b></p><datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label||'Usuario autorizado · registrar nombre')+'</option>').join('')+'</select></label>'+(paymentReceivers().some(user=>!user.label)?input('receiverName','Nombre del usuario que recibe','','text','required maxlength="160"'): '')+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
   f.allocations=[...form.querySelectorAll('[data-payment-line]')].map(row=>({serviceName:row.querySelector('[name="serviceName"]').value,amount:row.querySelector('[name="amount"]').value,targetCourse:row.querySelector('[name="targetCourse"]').value}));
   const attachment=await paymentPhoto(form.querySelector('[name="proof"]').files[0]);
   await change(school=>recordReceipt(school,key,f,id,attachment));
@@ -674,6 +680,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 
