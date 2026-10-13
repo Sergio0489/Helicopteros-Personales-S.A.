@@ -105,7 +105,7 @@ try{
  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION).then(()=>{
   firebase.auth().onAuthStateChanged(async user=>{
    if(!user){if(appLoaded){location.reload();return;}accessMessage('Ingresa con tu usuario autorizado.');return;}
-   if(user.uid!==ADMIN_UID){await firebase.auth().signOut();accessMessage('Este usuario no tiene acceso al dashboard.');return;}
+   if(user.uid!==ADMIN_UID){if(window.AccountRegistration)await window.AccountRegistration.landing();else accessMessage('Recarga la página para consultar tu solicitud.');return;}
    el('login-form').hidden=true;el('access-logout').hidden=false;accessMessage('Cargando datos…');
    try{await refreshCloud();}catch(error){accessMessage(error.message);}
   });
@@ -250,3 +250,4 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
