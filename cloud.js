@@ -80,7 +80,7 @@ async function openDashboard(data){
  window.REGISTRO_READY=false;
  const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261012-15';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
- appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ window.AccountRegistration?.installUsersPage();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
@@ -254,6 +254,7 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
 
 
 
