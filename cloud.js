@@ -100,7 +100,8 @@ el('import-confirm').onclick=async()=>{
 };
 window.addEventListener('beforeunload',event=>{if(cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.()){event.preventDefault();event.returnValue='';}});
 try{
- firebase.initializeApp(window.FIREBASE_CONFIG);
+ if(typeof firebase==='undefined'||typeof firebase.auth!=='function')throw Error('No se descargó el módulo de acceso. Recarga la página y comprueba que el navegador permita cargar www.gstatic.com.');
+ if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);
  firebase.auth().languageCode='es';
  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION).then(()=>{
   firebase.auth().onAuthStateChanged(async user=>{
@@ -116,7 +117,7 @@ try{
   catch(error){accessMessage(error.code==='auth/too-many-requests'?'Demasiados intentos. Espera unos minutos.':'No se pudo ingresar. Revisa tu correo, contraseña y conexión.');}
   finally{button.disabled=false;}
  };
-}catch{accessMessage('No se pudo conectar con Firebase. Revisa tu conexión y recarga la página.');}
+}catch(error){accessMessage(error.code==='app/duplicate-app'?'La sesión ya está iniciada en esta página. Recarga para continuar.':error.message||'No se pudo iniciar el módulo de acceso. Recarga la página.');}
 
 document.addEventListener('click',event=>{const menu=el('cloud-menu');if(menu&&!menu.contains(event.target))menu.open=false;});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=el('cloud-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
@@ -250,5 +251,6 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
 
 
