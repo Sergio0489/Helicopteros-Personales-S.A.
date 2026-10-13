@@ -151,7 +151,7 @@ function studentInfoItem(label,value){
 }
 function studentPersonalHtml(s,printing=false){
  const values=[['Nombre completo',s.name],['Cédula o pasaporte',s.identity],['Fecha de nacimiento',fechaVista(s.birthDate||'')],['Nacionalidad',s.nationality],['Dirección',s.address],['Celular',s.phone],['Teléfono residencial',s.residentialPhone],['Correo electrónico',s.email],['Contacto de emergencia',s.emergencyName],['Celular de emergencia',s.emergencyPhone],['Nombre del padre',s.fatherName],['Nombre de la madre',s.motherName],['Colegio de procedencia',s.previousSchool],['Ingreso al sistema',fechaVista(s.createdDate||'')],['Fecha de matrícula',fechaVista(s.enrolledDate||'')],['Etapa',s.stage],['Financiamiento',s.funding],['Cursos de interés',list(s.interests).map(k=>COURSES[k]?.name||k).join(', ')],['Culminación',fechaVista(s.completedDate||'')],['Cursos culminados',list(s.completedCourses).map(c=>COURSES[c.type]?.name||c.name).join(', ')],['Motivo del retiro',s.withdrawalReason],['Observaciones',s.notes],['Quién lo recomienda',s.referredBy]];
- const ordered=printing?[...values.filter(([label])=>label!=='Nombre completo'&&label!=='Quién lo recomienda'),['Quién lo recomienda',s.referredBy]]:values;
+ const ordered=printing?[...values.filter(([label])=>label!=='Nombre completo'&&label!=='Ingreso al sistema'&&label!=='Quién lo recomienda'),['Quién lo recomienda',s.referredBy]]:values;
  return ordered.map(([label,value])=>studentInfoItem(label,value)).join('');
 }
 function editStudent(id){
@@ -245,7 +245,7 @@ async function printSchoolHtml(html,kind=''){
  document.getElementById('school-print-sheet')?.remove();const sheet=document.createElement('section');sheet.id='school-print-sheet';sheet.className=kind;sheet.innerHTML=html;document.body.appendChild(sheet);document.body.classList.add('school-printing');
  const cleanup=()=>{document.body.classList.remove('school-printing');sheet.remove();};window.addEventListener('afterprint',cleanup,{once:true});try{await Promise.all([...sheet.querySelectorAll('img')].map(img=>img.decode().catch(()=>{})));window.print();}catch(e){cleanup();throw Error('No se pudo abrir la impresión.');}
 }
-function blankRegistrationHtml(){const labels=['Nombre completo','Cédula o pasaporte','Fecha de nacimiento','Nacionalidad','Dirección','Celular','Teléfono residencial','Correo electrónico','Contacto de emergencia · nombre','Contacto de emergencia · celular','Nombre del padre','Nombre de la madre','Colegio de procedencia','Ingreso al sistema','Fecha de matrícula','Etapa','Financiamiento','Cursos de interés','Culminación','Cursos culminados','Motivo del retiro','Observaciones','Quién lo recomienda'];return '<div class="school-print-heading"><h1>HP Flight School</h1><h2>Formulario de registro</h2></div><div class="school-blank-fields">'+labels.map(label=>'<div class="school-blank-row"><strong>'+esc(label)+':</strong><span></span></div>').join('')+'<div class="school-blank-row"><strong>Firma del estudiante:</strong><span></span></div></div>';}
+function blankRegistrationHtml(){const labels=['Nombre completo','Cédula o pasaporte','Fecha de nacimiento','Nacionalidad','Dirección','Celular','Teléfono residencial','Correo electrónico','Contacto de emergencia · nombre','Contacto de emergencia · celular','Nombre del padre','Nombre de la madre','Colegio de procedencia','Fecha de matrícula','Etapa','Financiamiento','Cursos de interés','Culminación','Cursos culminados','Motivo del retiro','Observaciones','Quién lo recomienda'];return '<div class="school-print-heading school-registration-heading"><img class="school-registration-logo" src="receipt-logo.svg" alt="Helicópteros Personales S.A."><h2>Formulario de registro</h2></div><div class="school-blank-fields">'+labels.map(label=>'<div class="school-blank-row"><strong>'+esc(label)+':</strong><span></span></div>').join('')+'<div class="school-blank-row"><strong>Firma del estudiante:</strong><span></span></div></div>';}
 function showStatement(sid){showStatementRecord(()=>studentById(data(),sid));}
 function showStatementRecord(getRecord){
  const s=getRecord(),dialog=document.createElement('dialog');dialog.className='record-dialog school-statement-dialog';const actions='<div class="school-actions school-statement-actions"><button type="button" class="record-btn" data-print>Imprimir / guardar PDF</button><button type="button" class="record-btn" data-close>Cerrar</button></div>';dialog.innerHTML=actions+statementHtml(s)+actions;document.body.appendChild(dialog);dialog.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dialog.close());dialog.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printSchoolHtml(statementHtml(getRecord()),'school-statement-print'));dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
@@ -382,16 +382,16 @@ function studentPrintHtml(student){
  const now=new Date();
  const date=new Intl.DateTimeFormat('es-GB',{timeZone:'America/Panama',day:'2-digit',month:'2-digit',year:'numeric'}).format(now);
  const time=new Intl.DateTimeFormat('es-PA',{timeZone:'America/Panama',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(now);
- return '<div class="school-print-heading"><h1>HP Flight School</h1><h2>'+esc(student.name||'')+'</h2><p>Emitido: '+esc(date)+' · '+esc(time)+' · Panamá</p></div><div class="school-print-fields">'+studentPersonalHtml(student,true)+'</div>';
+ return '<div class="school-print-heading school-registration-heading"><img class="school-registration-logo" src="receipt-logo.svg" alt="Helicópteros Personales S.A."><h2>'+esc(student.name||'')+'</h2><p>Emitido: '+esc(date)+' · '+esc(time)+' · Panamá</p></div><div class="school-print-fields">'+studentPersonalHtml(student,true)+'</div>';
 }
-function printStudent(id){
+async function printStudent(id){
  const student=studentById(data(),id);
  document.getElementById('school-print-sheet')?.remove();
  const sheet=document.createElement('section');sheet.id='school-print-sheet';sheet.innerHTML=studentPrintHtml(student);
  document.body.appendChild(sheet);document.body.classList.add('school-printing');
  const cleanup=()=>{document.body.classList.remove('school-printing');sheet.remove();};
  window.addEventListener('afterprint',cleanup,{once:true});
- try{window.print();}catch(e){cleanup();throw Error('No se pudo abrir la impresión. Intenta desde el menú de impresión del navegador.');}
+ try{await Promise.all([...sheet.querySelectorAll('img')].map(img=>img.decode()));window.print();}catch(e){cleanup();throw Error('No se pudo cargar el formulario o abrir la impresión. Intenta nuevamente.');}
 }
 
 function equipmentHours(student){
