@@ -4,6 +4,7 @@ const {initializeApp}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
 const {getDatabase}=require('firebase-admin/database');
 initializeApp();
+const {policyFor,visiblePages,projectPage}=require('./access');
 const DIRECTOR='glCsyjLhlyNRmazYA6Y9Gj3u0l13';
 const fields=['name','identity','birthDate','nationality','address','previousSchool','residentialPhone','phone','fatherName','motherName','emergencyName','emergencyPhone','funding','interests','notes','referredBy'];
 const roles=['Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
@@ -32,6 +33,15 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!token){res.status(401).json({error:'Inicia sesión.'});return;}
  const claims=await getAuth().verifyIdToken(token,true),user=await getAuth().getUser(claims.uid),action=req.body?.action,db=getDatabase(),ref=db.ref('accountRequests/'+user.uid);
  if(!user.email){res.status(400).json({error:'La cuenta necesita correo electrónico.'});return;}
+ if(action==='access'){
+  if(!user.emailVerified||user.disabled){res.status(403).json({error:'Verifica tu correo para consultar el acceso.'});return;}
+  let account=(await ref.get()).val();
+  const root=(await db.ref('dashboard').get()).val();const data=root?.payload?JSON.parse(root.payload):{};
+  account=await syncAccount(db,user,account,root?.operation,async()=>root);
+  const policy=policyFor(data,account),pages=visiblePages(policy);
+  if(req.body.page&&!pages.some(p=>p.id===req.body.page)){res.status(403).json({error:'No tienes permiso para consultar esta página.'});return;}
+  res.json({mode:'read-only',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,page:req.body.page?projectPage(data,account,policy,req.body.page):null});return;
+ }
  if(action==='list'||action==='users'||action==='assign'){
   if(user.uid!==DIRECTOR){res.status(403).json({error:'Solo el Director puede asignar cargos.'});return;}
   if(action==='users'){
@@ -57,6 +67,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 
