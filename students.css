@@ -158,3 +158,8 @@
 
 .school-hour-total{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;margin-top:8px;font-size:12px;line-height:1.5}.school-hour-total strong{font-size:13px;white-space:nowrap}
 @media print{.school-hour-total,.school-hour-total strong{font-size:9pt}}
+
+@media print {
+ .school-registration-heading { padding-top: 8mm !important; }
+ .school-registration-logo { display:block; width:62mm; height:23mm; object-fit:contain; margin:0 auto 4mm; }
+}
