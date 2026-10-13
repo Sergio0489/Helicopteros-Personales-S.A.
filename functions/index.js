@@ -9,7 +9,7 @@ const fields=['name','identity','birthDate','nationality','address','previousSch
 const roles=['Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
 function cleanProfile(input){const profile={};for(const key of fields){if(key==='interests'){profile[key]=(Array.isArray(input[key])?input[key]:[]).filter(v=>['privado','comercial','ifr','multimotor','rpa','instructor'].includes(v));continue;}profile[key]=String(input[key]||'').trim().slice(0,key==='notes'?4000:500);}if(input.photo){if(typeof input.photo!=='string'||input.photo.length>300000||!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(input.photo))throw Error('Foto no válida.');profile.photo=input.photo;}if(!profile.name)throw Error('Ingresa el nombre completo.');if(profile.birthDate&&!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate))throw Error('Revisa la fecha de nacimiento.');return profile;}
 function matchStudent(payload,email,uid){const matches=(payload.school?.students||[]).filter(s=>String(s.email||'').trim().toLowerCase()===email.toLowerCase());if(matches.length!==1||matches[0].authUid&&matches[0].authUid!==uid)return null;return matches[0];}
-exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],maxInstances:5},async(req,res)=>{
+exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2},async(req,res)=>{
  res.set('Cache-Control','no-store');if(req.method==='GET'){res.json({ready:true});return;}if(req.method!=='POST'){res.status(405).end();return;}
  try{
  const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!token){res.status(401).json({error:'Inicia sesión.'});return;}
@@ -25,16 +25,20 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  }
  if(!['submit','status'].includes(action)){res.status(400).json({error:'Operación no válida.'});return;}
  if(action==='submit'){
-  const profile=cleanProfile(req.body.profile||{});await ref.transaction(old=>({...old,role:old?.role||'Estudiante',profile,email:user.email,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}));
+  const profile=cleanProfile(req.body.profile||{});await ref.transaction(old=>({...old,role:old?.role||'Estudiante',profile,email:user.email,syncedOperation:null,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}));
  }
  let account=(await ref.get()).val();if(!account){res.json({needsProfile:true,email:user.email,verified:user.emailVerified});return;}
  if(user.emailVerified){
+  const marker=(await db.ref('dashboard/operation').get()).val();
+  if(!account.verified||account.email!==user.email||!marker||account.syncedOperation!==marker){
   const root=(await db.ref('dashboard').get()).val();let payload={};if(root?.payload)payload=JSON.parse(root.payload);
-  const student=matchStudent(payload,user.email,user.uid);const patch={verified:true,email:user.email,verifiedAt:account.verifiedAt||new Date().toISOString()};
+  const student=matchStudent(payload,user.email,user.uid);const patch={verified:true,email:user.email,verifiedAt:account.verifiedAt||new Date().toISOString(),syncedOperation:root?.operation||null};
   if(student){const profile={...account.profile};for(const field of fields)if(student[field]!=null&&student[field]!==''&&(!Array.isArray(student[field])||student[field].length))profile[field]=student[field];patch.profile=profile;patch.studentId=student.id;patch.syncStatus='matched';}else{patch.studentId=null;patch.syncStatus='no-unique-match';}
-  await ref.update(patch);account=(await ref.get()).val();
+  await ref.update(patch);account={...account,...patch};
+  }
  }
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
