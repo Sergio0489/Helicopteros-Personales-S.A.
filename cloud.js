@@ -1,8 +1,18 @@
 'use strict';
 const ADMIN_UID='glCsyjLhlyNRmazYA6Y9Gj3u0l13';
+let directorSessionUid=null;
+function isDirectorUser(user=firebase.auth().currentUser){return !!user&&(user.uid===ADMIN_UID||directorSessionUid===user.uid);}
+async function loadDirectorSession(user){
+ if(user.uid===ADMIN_UID)return true;
+ const token=await user.getIdToken();
+ const response=await fetch('https://us-central1-helicopteros-personales.cloudfunctions.net/accountRegistration',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'session'}),signal:AbortSignal.timeout(15000)});
+ if(response.status===400)return false;
+ if(!response.ok)throw Error('No se pudo verificar tu cargo. Recarga la página.');
+ const session=await response.json();directorSessionUid=session.director?user.uid:null;return isDirectorUser(user);
+}
 window.getPaymentReceivers=()=>{
  const user=firebase.auth().currentUser;
- return user&&user.uid===ADMIN_UID?[{uid:user.uid,label:profileName(user)}]:[];
+ return isDirectorUser(user)?[{uid:user.uid,label:profileName(user)}]:[];
 };
 
 let cloudETag=null,cloudVersion=0,cloudBusy=false,cloudBlocked=false,appLoaded=false,importData=null;
@@ -21,7 +31,7 @@ function showCloudError(error){setCloudStatus(error.message||'No se pudo guardar
 window.showCloudError=showCloudError;
 async function cloudRequest(method,body,etag,{silent=false,path=""}={}){
  const user=firebase.auth().currentUser;
- if(!user||user.uid!==ADMIN_UID)throw Error('Inicia sesión con el usuario autorizado.');
+ if(!isDirectorUser(user))throw Error('Inicia sesión con el usuario autorizado.');
  const token=await user.getIdToken();
  const url=new URL(window.FIREBASE_CONFIG.databaseURL.replace(/\/$/,'')+'/dashboard'+path+'.json');url.searchParams.set('auth',token);if(silent)url.searchParams.set('print','silent');
  const headers={'X-Firebase-ETag':'true'};if(etag)headers['if-match']=etag;if(body)headers['Content-Type']='application/json';
@@ -45,7 +55,7 @@ window.cloudWrite=async function(data){
  cloudBusy=true;el('dashboard-app').inert=true;el('cloud-busy').hidden=false;
  setCloudStatus('Guardando en Firebase…');
  const operation=crypto.randomUUID();
- const envelope={schemaVersion:1,revision:cloudVersion+1,operation,updatedAt:new Date().toISOString(),updatedBy:ADMIN_UID,payload};
+ const envelope={schemaVersion:1,revision:cloudVersion+1,operation,updatedAt:new Date().toISOString(),updatedBy:firebase.auth().currentUser.uid,payload};
  try{
   // Keep conditional writes on the standard REST response path.
   const result=await cloudRequest('PUT',envelope,cloudETag);
@@ -113,8 +123,10 @@ try{
  firebase.auth().languageCode='es';
  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION).then(()=>{
   firebase.auth().onAuthStateChanged(async user=>{
+   directorSessionUid=null;
    if(!user){if(appLoaded){location.reload();return;}accessMessage('Ingresa con tu usuario autorizado.');return;}
-   if(user.uid!==ADMIN_UID){if(window.AccountRegistration)await window.AccountRegistration.landing();else accessMessage('Recarga la página para consultar tu solicitud.');return;}
+   let director=false;try{director=await loadDirectorSession(user);}catch(error){accessMessage(error.message);return;}
+   if(!director){if(window.AccountRegistration)await window.AccountRegistration.landing();else accessMessage('Recarga la página para consultar tu solicitud.');return;}
    el('login-form').hidden=true;el('access-logout').hidden=false;accessMessage('Cargando datos…');
    try{await refreshCloud();}catch(error){accessMessage(error.message);}
   });
@@ -164,7 +176,7 @@ window.addEventListener('online',()=>{if(!cloudBlocked){el('cloud-connection').d
 
 
 let profileDirty=false;
-function profileUser(){const user=firebase.auth().currentUser;if(!user||user.uid!==ADMIN_UID)throw Error('Inicia sesión con el usuario autorizado.');return user;}
+function profileUser(){const user=firebase.auth().currentUser;if(!isDirectorUser(user))throw Error('Inicia sesión con el usuario autorizado.');return user;}
 function profileName(user){return previewData.school?.userProfiles?.[user.uid]?.name||user.displayName||previewData.school?.paymentReceiverNames?.[user.uid]||(user.uid===ADMIN_UID?'Sergio Herrera C.':'');}
 function profileError(error){return ({'auth/wrong-password':'La contraseña actual no es correcta.','auth/invalid-credential':'No se pudo verificar la contraseña actual.','auth/weak-password':'La contraseña nueva no cumple los requisitos de Firebase.','auth/requires-recent-login':'Vuelve a iniciar sesión e inténtalo de nuevo.','auth/too-many-requests':'Demasiados intentos. Espera unos minutos.','auth/network-request-failed':'No se pudo conectar. Revisa tu conexión.','auth/email-already-in-use':'Ese correo ya está asociado a otra cuenta.','auth/invalid-email':'El correo no es válido.'})[error.code]||error.message||'No se pudo completar la operación.';}
 async function prepareProfilePhoto(file){
@@ -237,7 +249,7 @@ function normalizeRolePolicy(role,policy){
  return Object.fromEntries(ROLE_PAGES.map(page=>{const input=policy?.[page.id]||{},view=!!input.actions?.view;return [page.id,{actions:Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,view&&page.actions.includes(action)&&!!input.actions?.[action]])),areas:Object.fromEntries(page.areas.map(area=>[area,view&&!!input.areas?.[area]]))}];}));
 }
 function saveRoleConfiguration(data,role,policy,actorUid){
- if(actorUid!==ADMIN_UID)throw Error('Solo el Director puede administrar los permisos.');
+ if(!isDirectorUser()||actorUid!==firebase.auth().currentUser.uid)throw Error('Solo el Director puede administrar los permisos.');
  if(role==='Director')throw Error('El Director conserva acceso total.');
  const next=structuredClone(data);next.school ||= {};next.school.accessConfiguration ||= {version:1,status:'read-only-server-enforcement',roles:{}};
  next.school.accessConfiguration.roles ||= {};next.school.accessConfiguration.roles[role]=normalizeRolePolicy(role,policy);next.school.accessConfiguration.status='read-only-server-enforcement';next.school.accessConfiguration.updatedAt=new Date().toISOString();next.school.accessConfiguration.updatedBy=actorUid;return next;
@@ -245,7 +257,7 @@ function saveRoleConfiguration(data,role,policy,actorUid){
 function openRolePermissions(){
  profileUser();el('profile-menu').open=false;const dialog=document.createElement('dialog');dialog.className='role-permissions-dialog';
  const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- dialog.innerHTML='<div class="profile-heading"><h2>Roles y permisos</h2><button type="button" data-close>×</button></div><p>Director: <b>sergio_40h@msn.com</b> · acceso total, vinculado a su cuenta.</p><p class="role-pending">Consulta por páginas y secciones disponible al publicar la función actualizada. Crear, modificar, eliminar y resolver siguen pendientes de validación en el servidor.</p><label>Cargo<select data-role>'+STAFF_ROLES.map(role=>'<option>'+role+'</option>').join('')+'</select></label><p data-role-note></p><div class="role-matrix" data-matrix></div><div class="role-footer"><div class="role-buttons"><button type="button" data-reset>Restablecer sugerencia</button><button type="button" data-save>Guardar permisos del cargo</button></div><p data-role-status role="status" aria-live="polite"></p></div>';
+ dialog.innerHTML='<div class="profile-heading"><h2>Roles y permisos</h2><button type="button" data-close>×</button></div><p>Todos los usuarios con cargo <b>Director</b> tienen acceso total. Los cargos se asignan desde Usuarios.</p><p class="role-pending">Consulta por páginas y secciones disponible al publicar la función actualizada. Crear, modificar, eliminar y resolver siguen pendientes de validación en el servidor.</p><label>Cargo<select data-role>'+STAFF_ROLES.map(role=>'<option>'+role+'</option>').join('')+'</select></label><p data-role-note></p><div class="role-matrix" data-matrix></div><div class="role-footer"><div class="role-buttons"><button type="button" data-reset>Restablecer sugerencia</button><button type="button" data-save>Guardar permisos del cargo</button></div><p data-role-status role="status" aria-live="polite"></p></div>';
  document.body.appendChild(dialog);let role='Director',policy=suggestedRolePolicy(role),dirty=false,saving=false;
  const selector=dialog.querySelector('[data-role]'),matrix=dialog.querySelector('[data-matrix]'),status=dialog.querySelector('[data-role-status]');
  const render=()=>{const locked=role==='Director';dialog.querySelector('[data-save]').disabled=locked||saving;dialog.querySelector('[data-reset]').disabled=locked||saving;dialog.querySelector('[data-role-note]').textContent=locked?'El Director tiene todos los permisos. Este cargo no se puede quitar desde esta tabla.':role==='Estudiante'?'Sin acceso global por defecto. Su expediente personal requiere restringir los datos a su usuario antes de activar este cargo.':'Marca las acciones por página. En “Secciones visibles” puedes escoger la información que se mostrará. Eliminar no se incluye en las sugerencias.';
@@ -259,6 +271,7 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
 
 
 
