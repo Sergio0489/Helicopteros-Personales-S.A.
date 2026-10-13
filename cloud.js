@@ -160,7 +160,7 @@ window.addEventListener('online',()=>{if(!cloudBlocked){el('cloud-connection').d
 
 let profileDirty=false;
 function profileUser(){const user=firebase.auth().currentUser;if(!user||user.uid!==ADMIN_UID)throw Error('Inicia sesión con el usuario autorizado.');return user;}
-function profileName(user){return previewData.school?.userProfiles?.[user.uid]?.name||user.displayName||previewData.school?.paymentReceiverNames?.[user.uid]||'';}
+function profileName(user){return previewData.school?.userProfiles?.[user.uid]?.name||user.displayName||previewData.school?.paymentReceiverNames?.[user.uid]||(user.uid===ADMIN_UID?'Sergio Herrera C.':'');}
 function profileError(error){return ({'auth/wrong-password':'La contraseña actual no es correcta.','auth/invalid-credential':'No se pudo verificar la contraseña actual.','auth/weak-password':'La contraseña nueva no cumple los requisitos de Firebase.','auth/requires-recent-login':'Vuelve a iniciar sesión e inténtalo de nuevo.','auth/too-many-requests':'Demasiados intentos. Espera unos minutos.','auth/network-request-failed':'No se pudo conectar. Revisa tu conexión.','auth/email-already-in-use':'Ese correo ya está asociado a otra cuenta.','auth/invalid-email':'El correo no es válido.'})[error.code]||error.message||'No se pudo completar la operación.';}
 async function prepareProfilePhoto(file){
  if(!file)return null;if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('Selecciona una foto JPG, PNG o WebP.');if(file.size>10*1024*1024)throw Error('La foto debe pesar menos de 10 MB.');
@@ -254,6 +254,7 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
 
 
 
