@@ -3080,7 +3080,7 @@ function prepareDateInput(el){
  if(el.dataset.dateReady)return;el.dataset.dateReady='1';const native=el.type==='date',old=el.value;
  el.type='text';el.placeholder='DD/MM/AAAA';el.inputMode='numeric';el.autocomplete='off';el.dataset.fecha='1';el.classList.add('app-date-input');el.setAttribute('aria-haspopup','dialog');el.setAttribute('aria-expanded','false');
  if(native)Object.defineProperty(el,'value',{get(){return isoFecha(valueDescriptor.get.call(this));},set(v){valueDescriptor.set.call(this,fechaVista(v));},configurable:true});
- el.value=fechaVista(old||(!el.closest('.school-stage-panel[hidden]')?panamaISO():''));
+ el.value=fechaVista(old||(!window.ROLE_VIEW&&!el.closest('.school-stage-panel[hidden]')?panamaISO():''));
  const validate=()=>{const raw=valueDescriptor.get.call(el);el.setCustomValidity(raw&&!Number.isFinite(dayNumber(raw))?'Usa una fecha válida DD/MM/AAAA.':'');};
  el.addEventListener('input',()=>{const raw=valueDescriptor.get.call(el);if(/^\d{8}$/.test(raw))valueDescriptor.set.call(el,raw.slice(0,2)+'/'+raw.slice(2,4)+'/'+raw.slice(4));validate();});
  el.addEventListener('change',e=>{validate();if(!el.checkValidity()){el.reportValidity();e.stopImmediatePropagation();return;}el.value=fechaVista(el.value);},true);
