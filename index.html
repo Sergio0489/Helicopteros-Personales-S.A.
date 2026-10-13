@@ -828,6 +828,8 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 
 .payment-receipt .receipt-number{color:#ed001c!important;font-size:16px;font-weight:800;text-align:left;margin:0 0 8px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.payment-receipt .receipt-signatures{grid-template-columns:1fr 1fr;gap:24px}.payment-receipt .receipt-signatures>div{grid-template-columns:minmax(0,1fr) minmax(65px,.7fr);gap:10px;align-items:end}.receipt-signatures>div>span:first-child{overflow-wrap:anywhere}.payment-receipt-grid>span:first-child{grid-column:1/-1}
 .access-card .login-company-logo{display:block;width:100%;max-width:360px;height:auto;margin:0 auto 12px;object-fit:contain}
+
+.profile-menu summary{width:auto;padding:0 12px;font-size:13px;display:flex;gap:6px;min-height:36px}.user-profile-dialog{width:min(440px,calc(100vw - 32px));max-height:90vh;overflow:auto;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:16px;padding:24px;background:#fff;color:#0f172a}.user-profile-dialog::backdrop{background:#0f172a88}.profile-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.profile-heading h2{margin:0}.user-profile-dialog form{display:grid;gap:14px;margin:18px 0}.user-profile-dialog label{display:grid;gap:6px;font-size:13px;font-weight:600}.user-profile-dialog input{min-width:0;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px;padding:11px;font-size:16px}.user-profile-dialog button{padding:11px 14px;border:0;border-radius:8px;background:#0059b3;color:#fff;cursor:pointer}.user-profile-dialog button:disabled{opacity:.5}.user-profile-dialog details{padding:14px 0;border-top:1px solid #e2e8f0}.user-profile-dialog summary{cursor:pointer;font-weight:600}.user-profile-dialog .profile-logout{background:#d90020}.user-profile-dialog [data-profile-status]{font-size:13px;line-height:1.5}
 </style>
   
   
@@ -885,7 +887,7 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <body>
 <section id="access-screen"><div class="access-card"><img class="login-company-logo" src="receipt-logo.svg" width="360" height="115" alt="Helicópteros Personales S.A."><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
 <div id="cloud-busy" hidden role="status">Guardando en Firebase…</div>
-<div id="dashboard-app" hidden><div class="cloud-toolbar compact-cloud-toolbar"><div class="cloud-connection" id="cloud-connection" data-state="online"><span class="connection-dot" aria-hidden="true"></span><span id="preview-save" role="status">Conectado</span></div><details class="cloud-menu" id="cloud-menu"><summary aria-label="Opciones de conexión y cuenta" title="Opciones">⋮</summary><div class="cloud-menu-options"><button type="button" onclick="exportPreview();document.getElementById('cloud-menu').open=false">Descargar respaldo</button><button type="button" id="cloud-reload">Actualizar datos</button><button type="button" id="cloud-logout">Cerrar sesión</button></div></details><div id="cloud-status-detail" role="alert" hidden></div></div>
+<div id="dashboard-app" hidden><div class="cloud-toolbar compact-cloud-toolbar"><div class="cloud-connection" id="cloud-connection" data-state="online"><span class="connection-dot" aria-hidden="true"></span><span id="preview-save" role="status">Conectado</span></div><details class="cloud-menu" id="cloud-menu"><summary aria-label="Opciones de conexión y cuenta" title="Opciones">⋮</summary><div class="cloud-menu-options"><button type="button" onclick="exportPreview();document.getElementById('cloud-menu').open=false">Descargar respaldo</button><button type="button" id="cloud-reload">Actualizar datos</button><button type="button" id="cloud-logout">Cerrar sesión</button></div></details><details class="cloud-menu profile-menu" id="profile-menu"><summary aria-label="Perfil de usuario">👤 Perfil</summary><div class="cloud-menu-options"><button type="button" id="profile-edit">Mi perfil / Contraseña</button><button type="button" id="profile-logout">Cerrar sesión</button></div></details><div id="cloud-status-detail" role="alert" hidden></div></div>
 <header>
   <button class="hamburger-btn" id="hamburgerBtn" aria-label="Abrir menú" onclick="openDrawer()">
     <span></span><span></span><span></span>
@@ -937,9 +939,10 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261012-33"></script>
+<script src="cloud.js?v=20261012-34"></script>
 </body>
 </html>
+
 
 
 
