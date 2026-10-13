@@ -15,12 +15,17 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!token){res.status(401).json({error:'Inicia sesión.'});return;}
  const claims=await getAuth().verifyIdToken(token,true),user=await getAuth().getUser(claims.uid),action=req.body?.action,db=getDatabase(),ref=db.ref('accountRequests/'+user.uid);
  if(!user.email){res.status(400).json({error:'La cuenta necesita correo electrónico.'});return;}
- if(action==='list'||action==='assign'){
+ if(action==='list'||action==='users'||action==='assign'){
   if(user.uid!==DIRECTOR){res.status(403).json({error:'Solo el Director puede asignar cargos.'});return;}
+  if(action==='users'){
+   const page=await getAuth().listUsers(100,typeof req.body.pageToken==='string'?req.body.pageToken:undefined);
+   const users=await Promise.all(page.users.map(async u=>{const a=(await db.ref('accountRequests/'+u.uid).get()).val()||{};return {uid:u.uid,name:a.profile?.name||u.displayName||'',email:u.email||'',phone:a.profile?.phone||u.phoneNumber||'',role:u.uid===DIRECTOR?'Director':a.role||'Estudiante',verified:!!u.emailVerified,disabled:!!u.disabled,createdAt:u.metadata.creationTime||a.createdAt||'',lastSignIn:u.metadata.lastSignInTime||'',assignedAt:a.assignedAt||'',studentId:a.studentId||'',hasProfile:!!a.profile};}));
+   res.json({users,nextPageToken:page.pageToken||null});return;
+  }
   if(action==='list'){const snapshot=await db.ref('accountRequests').get();res.json({requests:Object.entries(snapshot.val()||{}).map(([uid,v])=>({uid,...v}))});return;}
   if(!roles.includes(req.body.role)||!req.body.uid||req.body.uid===DIRECTOR){res.status(400).json({error:'Cargo o usuario no válido.'});return;}
   const target=await getAuth().getUser(req.body.uid);if(!target.emailVerified){res.status(400).json({error:'El usuario debe verificar primero su correo.'});return;}
-  const targetRef=db.ref('accountRequests/'+target.uid);if(!(await targetRef.get()).exists()){res.status(404).json({error:'Solicitud no encontrada.'});return;}
+  const targetRef=db.ref('accountRequests/'+target.uid);
   await targetRef.update({role:req.body.role,assignedBy:user.uid,assignedAt:new Date().toISOString()});res.json({ok:true});return;
  }
  if(!['submit','status'].includes(action)){res.status(400).json({error:'Operación no válida.'});return;}
@@ -40,5 +45,6 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
