@@ -29,7 +29,11 @@ async function cloudRequest(method,body,etag,{silent=false,path=""}={}){
  try{
   const response=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});
   if(response.status===412)throw Error('Hay cambios guardados desde otro equipo. Descarga un respaldo y pulsa Actualizar datos antes de continuar.');
-  if(!response.ok)throw Error(response.status===401||response.status===403?'Acceso denegado. Revisa las reglas de Firebase y el usuario autorizado.':'Firebase no pudo completar la operación.');
+  if(!response.ok){
+   let detail='';try{const failure=await response.json();if(typeof failure?.error==='string')detail=failure.error.slice(0,400);}catch{}
+   const message=response.status===401||response.status===403?'Acceso denegado. Revisa las reglas de Firebase y el usuario autorizado.':'Firebase no pudo completar la operación';
+   throw Error(message+' (HTTP '+response.status+')'+(detail?': '+detail:'.'));
+  }
   return {value:response.status===204?null:await response.json(),etag:response.headers.get('ETag')};
  }catch(error){if(error.name==='AbortError')throw Error('No se pudo confirmar el guardado. Actualiza los datos antes de volver a guardar.');throw error;}finally{clearTimeout(timer);}
 }
@@ -43,7 +47,8 @@ window.cloudWrite=async function(data){
  const operation=crypto.randomUUID();
  const envelope={schemaVersion:1,revision:cloudVersion+1,operation,updatedAt:new Date().toISOString(),updatedBy:ADMIN_UID,payload};
  try{
-  const result=await cloudRequest('PUT',envelope,cloudETag,{silent:true});
+  // Keep conditional writes on the standard REST response path.
+  const result=await cloudRequest('PUT',envelope,cloudETag);
   window.failedCloudData=null;lastCloudPayload=payload;cloudVersion=envelope.revision;cloudETag=result.etag;
   if(!cloudETag){
     // Never replace a newer snapshot silently while obtaining the next ETag.
