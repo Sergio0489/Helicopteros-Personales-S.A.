@@ -1,3 +1,14 @@
+'use strict';
+(function(root){
+ const iso=v=>{const s=String(v||'');if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);return m?`${m[3]}-${m[2]}-${m[1]}`:'';};
+ function monthEnd(value){const m=String(value||'').match(/^(\d{2})\/(\d{4})$/)||String(value||'').match(/^(\d{4})-(\d{2})$/)?.slice(0,1).concat(String(value).slice(5,7),String(value).slice(0,4));if(!m||+m[1]<1||+m[1]>12)return '';return new Date(Date.UTC(+m[2],+m[1],0)).toISOString().slice(0,10);}
+ function items(p){return [['Licencia',p.licencia],['Licencia de instructor',p.instructorExpiry],['Instructor de RPA',p.rpaInstructorExpiry],['Certificado médico',monthEnd(iso(p.medico).slice(0,7))],['Verificación de chárter',p.charter],['Verificación de instrucción',p.escuela],...(p.verificaciones||[]).map(v=>['Verificación '+(v.nombre||''),v.fecha])].filter(([,d])=>iso(d)).map(([label,d])=>({label,date:iso(d)}));}
+ function alerts(p,date='',time='',now=Date.now()){const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Panama'}).format(now);const target=iso(date)||today;const at=Math.max(now,Date.parse(target+'T'+(time||'00:00')+':00-05:00')||now);return items(p).map(i=>{const days=Math.round((Date.parse(i.date)-Date.parse(target>today?target:today))/86400000),expired=at>=Date.parse(i.date+'T12:01:00-05:00');return {...i,days,expired,level:expired?'danger':days<=5?'orange':days<=30?'warn':'ok'};});}
+ function assertAssignment(pilots,names,date,time){for(const name of names.filter(Boolean)){const p=(pilots||[]).find(p=>String(p.nombre||'').trim().toLowerCase()===String(name).trim().toLowerCase());if(!p)continue;const expired=alerts(p,date,time).filter(a=>a.expired);if(expired.length)throw Error('No se puede asignar a '+name+': '+expired.map(a=>a.label+' vencido ('+a.date+')').join(', ')+'. Actualiza su expediente.');}}
+ function validateChanges(before,after){for(const [oldRows,newRows,registry]of [[before.itinerarios,after.itinerarios,false],[before.school?.registry?.entries,after.school?.registry?.entries,true]])for(const f of newRows||[]){const old=(oldRows||[]).find(x=>x.id===f.id);if(old&&(registry?['pilot','copilot','date','aircraft']:['piloto','fecha','horaInicio','horaFin','aeronave']).every(k=>old[k]===f[k]))continue;if(f.deleted||f.cancelled||f.anulado)continue;assertAssignment(before.pilotos,registry?[f.pilot,f.copilot]:[f.piloto],registry?f.date:f.fecha,registry?'':f.horaFin||f.horaInicio);}}
+ const api={iso,monthEnd,items,alerts,assertAssignment,validateChanges};if(typeof module==='object'&&module.exports)module.exports=api;else root.PilotValidity=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
 function isMultimotor(reg){return ['HP-880BL','HP-18BLM','HP-1805BLM','HP1186'].includes(reg);}
 // ===== DRAWER HAMBURGUESA (móvil) =====
 function openDrawer() {
@@ -71,6 +82,8 @@ function updateUndoButtons(){
   fleet.forEach((ac,idx)=>{const b=document.getElementById('undo-btn-'+idx);if(b)b.disabled=!aircraftDirty.has(idx)&&!(previewData.undoFleet[aircraftKey(ac.reg)]||[]).length;});
 }
 async function commitPreview(next){
+ try{PilotValidity.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
+
  try{await window.cloudWrite(next);previewData=structuredClone(next);return true;}
  catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
 }
@@ -1625,6 +1638,7 @@ pilotosPanel.innerHTML = `
 contentEl.appendChild(pilotosPanel);
 
 const pilotosData = [];
+function pilotExpiryBadge(date){const a=PilotValidity.alerts({licencia:date})[0];if(!a)return '';return '<span style="padding:3px 6px;color:#111;background:'+({danger:'#ef3333',orange:'#ff9900',warn:'#ffc600',ok:'#65bd85'})[a.level]+'">'+(a.expired?'VENCIDO':a.days+'d')+'</span>';}
 function renderPilotos() {
   const container = document.getElementById('pilotos-list');
   container.innerHTML = '';
@@ -1682,7 +1696,7 @@ function renderPilotos() {
           </div>
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Cert. Médico</div>
-            <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=this.value;renderPilotos();savePilotos()" style="width:100%">
+            <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()" style="width:100%">
             <div style="margin-top:3px">${daysBadge(daysUntil(p.medico))}</div>
           </div>
         </div>
@@ -1703,7 +1717,7 @@ function renderPilotos() {
         <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()">
         <input type="date" class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()">
         <span>${daysBadge(daysUntil(p.licencia))}</span>
-        <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=this.value;renderPilotos();savePilotos()">
+        <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()">
         <span>${daysBadge(daysUntil(p.medico))}</span>
         ${p.escuela==='na' ? 
           `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="pilotosData[${i}].escuela='';renderPilotos();savePilotos()">N/A</span><span></span>` : 
@@ -2094,37 +2108,7 @@ function buildResumen() {
     });
   });
 
-  // Check pilotos
-  pilotosData.forEach(p => {
-    if (!p.nombre) return;
-    if (p.licencia) {
-      const days = daysUntil(p.licencia);
-      if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Licencia', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days),days);
-      }
-    }
-    if (p.medico) {
-      const days = daysUntil(p.medico);
-      if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Cert. Médico', days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days),days);
-      }
-    }
-    if(p.charter && p.charter!=='na'){const days=daysUntil(p.charter);if(days!==null&&days<=DAYS_WARN)addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,'Verif. Chárter',days<0?'VENCIDA':`Vence en ${days} días`,dateAlertLevel(days),days);}
-    if (p.escuela && p.escuela !== 'na') {
-      const days = daysUntil(p.escuela);
-      if (days !== null && days <= DAYS_WARN) {
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Verif. Escuela', days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days),days);
-      }
-    }
-    (p.verificaciones || []).forEach(v => {
-      if (!v.fecha || v.fecha === 'na') return;
-      const days = daysUntil(v.fecha);
-      if (days !== null && days <= DAYS_WARN) {
-        const label = v.nombre ? `Verif. ${v.nombre}` : 'Verificación adicional';
-        addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, label, days < 0 ? 'VENCIDA' : `Vence en ${days} días`, dateAlertLevel(days),days);
-      }
-    });
-  });
+  pilotosData.forEach(p=>PilotValidity.alerts(p).filter(a=>a.level!=='ok').forEach(a=>addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,a.label,a.expired?'VENCIDO':`Vence en ${a.days} días`,a.level,a.days)));
 
   // Render - grouped by aircraft registration
   if (Object.keys(sections).length === 0) {
@@ -2719,42 +2703,8 @@ function renderDayFlights(dateStr) {
   container.innerHTML = html;
 }
 
-function getPilotoStatus(p) {
-  // Retorna: 'vencido', 'proximo', 'ok'
-  // Revisa licencia, medico, escuela y todas las verificaciones adicionales
-  const checks = [];
-  if (p.licencia) checks.push(daysUntil(p.licencia));
-  if (p.medico) checks.push(daysUntil(p.medico));
-  if (p.charter && p.charter !== 'na') checks.push(daysUntil(p.charter));
-  if (p.escuela && p.escuela !== 'na') checks.push(daysUntil(p.escuela));
-  (p.verificaciones || []).forEach(v => {
-    if (v.fecha && v.fecha !== 'na') checks.push(daysUntil(v.fecha));
-  });
-  const valid = checks.filter(d => d !== null);
-  if (valid.some(d => d < 0)) return 'vencido';
-  if (valid.some(d => d <= 5)) return 'urgente';
-  if (valid.some(d => d <= 30)) return 'proximo';
-  return 'ok';
-}
-
-function getPilotoVencimientos(p, flightDate=panamaISO()) {
-  const daysUntil=value=>flightDaysUntil(value,flightDate);
-  // Retorna lista de items vencidos o por vencer para mostrar al usuario
-  const items = [];
-  const check = (label, fecha) => {
-    if (!fecha || fecha === 'na') return;
-    const d = daysUntil(fecha);
-    if (d === null) return;
-    if (d < 0) items.push({ label, estado: 'VENCIDO', days: d });
-    else if (d <= 30) items.push({ label, estado: `vence en ${d}d`, days: d });
-  };
-  check('Licencia', p.licencia);
-  check('Cert. Médico', p.medico);
-  check('Verif. Chárter', p.charter);
-  check('Verif. Escuela', p.escuela);
-  (p.verificaciones || []).forEach(v => check(v.nombre || 'Verificación adicional', v.fecha));
-  return items;
-}
+function getPilotoStatus(p){const a=PilotValidity.alerts(p);return a.some(x=>x.expired)?'vencido':a.some(x=>x.level==='orange')?'urgente':a.some(x=>x.level==='warn')?'proximo':'ok';}
+function getPilotoVencimientos(p,flightDate=panamaISO(),time=''){return PilotValidity.alerts(p,flightDate,time).filter(a=>a.level!=='ok').map(a=>({...a,estado:a.expired?'VENCIDO':`vence en ${a.days}d`}));}
 
 function updatePilotDropdown() {
   const sel = document.getElementById('flight-pilot');
@@ -2789,7 +2739,7 @@ function addFlight() {
     }
   }
 
-  if(!confirmFlightScheduling({fecha,aeronave,piloto}))return;
+  if(!confirmFlightScheduling({fecha,aeronave,piloto,horaInicio,horaFin}))return;
 
   const person=resolveFlightPerson();
   if(estudiante&&!person){alert('Selecciona un estudiante o cliente de la lista de expedientes.');document.getElementById('flight-student').focus();return;}
@@ -3399,6 +3349,7 @@ function flightDaysUntil(value,flightDate) {
   return expiry-Math.max(today,Number.isFinite(scheduled)?scheduled:today);
 }
 function confirmFlightScheduling(flight) {
+  try{PilotValidity.assertAssignment(pilotosData,[flight.piloto],flight.fecha,flight.horaFin||flight.horaInicio);}catch(e){alert(e.message);return false;}
   const warnings=[];
   const pilot=pilotosData.find(p=>p.nombre===flight.piloto);
   if(pilot){
@@ -3519,3 +3470,5 @@ document.addEventListener('pointerdown',event=>{const box=document.getElementByI
 document.getElementById('flight-student')?.addEventListener('keydown',event=>{const box=document.getElementById('flight-person-options');if(event.key==='Escape')box.hidden=true;if(event.key==='ArrowDown'){event.preventDefault();if(box.hidden)renderFlightPeople();box.querySelector('button')?.focus();}});
 
 
+
+setInterval(()=>{if(!document.hidden){buildResumen();updatePilotDropdown();window.PilotDossiers?.refresh();}},30000);

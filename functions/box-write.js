@@ -12,8 +12,8 @@ function boxFor(path,root){
   if(field?.startsWith('emerg_'))return ['aeronaves','emergency'];
   for(const [box,fields]of Object.entries(aircraft))if(fields.has(field))return ['aeronaves',box];
  }
- if(top==='pilotos'&&['identity','birthDate','nationality','address','emergencyName','emergencyPhone','notes'].includes(field))return ['pilotos','dossier'];
- if(top==='pilotos')return ['pilotos',['licencia','numeroLicencia','tipo','habilitaciones'].includes(field)?'licenses':['medico','medicoClase','charter','escuela','verificaciones'].includes(field)?'documents':'pilots'];
+ if(top==='pilotos'&&['identity','birthDate','nationality','address','emergencyName','emergencyPhone','notes','peso','fechaInicioHP'].includes(field))return ['pilotos','dossier'];
+ if(top==='pilotos')return ['pilotos',['licencia','numeroLicencia','tipo','habilitaciones','licenseTypes','instructorRatings','instructorExpiry','rpaInstructor','rpaInstructorExpiry'].includes(field)?'licenses':['medico','medicoClase','charter','escuela','verificaciones'].includes(field)?'documents':'pilots'];
  if(top==='itinerarios')return ['itinerario','flights'];
  if(top==='school'){
   if(key==='rates'||key==='services')return ['estudiantes','rates'];
@@ -90,7 +90,7 @@ function applyChanges(current,before,after,policy,account){
   if(actual!==undefined&&actual!==null&&typeof actual==='object')checkTree(actual,path,context);
   checkTree(next===undefined?actual:next,path,context);return clone(next);
  }
- const result=merge(root,before,after,[]);return {data:result,writes};
+ const result=merge(root,before,after,[]);require('./pilot-validity').validateChanges(current,result);return {data:result,writes};
 }
 module.exports={boxFor,allowed,applyChanges};
 
