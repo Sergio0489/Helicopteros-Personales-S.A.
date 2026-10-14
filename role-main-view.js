@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261014-student-credentials-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261014-pilot-print-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -38,7 +38,7 @@
   window.getPaymentReceivers=()=>[{uid:cfg.uid,label:cfg.name||'Usuario'}];
 
   window.fetch=blocked;window.XMLHttpRequest=undefined;window.WebSocket=undefined;
-  window.open=()=>null;window.print=()=>{};
+  window.printPilotSheet=window.print.bind(window);window.open=()=>null;window.print=()=>{};
   window.CLOUD_INITIAL=cfg.data;
   document.getElementById('access-screen').remove();document.getElementById('dashboard-app').hidden=false;
   document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
@@ -48,7 +48,7 @@
   function readonlyControl(e){
    if(e.closest('#sidebar,#readonly-refresh,#readonly-logout,#hamburgerBtn,#drawerCloseBtn,#drawerOverlay'))return true;
    if(e.closest('[data-aac-filters],[data-hp-filters]'))return true;
-   if(e.matches('[data-pilot-select],[data-pilot-search]'))return true;
+   if(e.matches('[data-pilot-select],[data-pilot-search],[data-pilot-action="print"]'))return true;
    if(e.matches('[data-payment-person],[data-person-id],[role=option],[data-balance-person]'))return true;
    if(e.matches('#school-stage'))return true;
    if(e.matches('[data-action="view"]'))return true;
