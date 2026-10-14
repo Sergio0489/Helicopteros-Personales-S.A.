@@ -2414,14 +2414,15 @@ itinerariosPanel.innerHTML = `
           </div>
           <div class="form-field">
             <label class="form-label">Aeronave <span style="font-size:8px;color:var(--muted)">(opcional)</span></label>
+            <button type="button" class="flight-aircraft-picker record-btn" onclick="openFlightAircraftPicker()" aria-label="Elegir aeronave para el vuelo">Elegir aeronave</button>
             <select id="flight-ac" class="form-select">
               <option value="">Sin asignar</option>
               ${fleet.map(a => `<option value="${a.reg}">${a.reg} — ${a.model}</option>`).join('')}
             </select>
           </div>
           <div class="form-field" style="grid-column:1/-1">
-            <label class="form-label">Estudiante / Pasajero</label>
-            <input type="text" id="flight-student" class="maint-input" placeholder="Nombre..." style="font-size:11px">
+            <label class="form-label">Estudiante / Cliente</label>
+            <input type="search" id="flight-student" class="maint-input" placeholder="Buscar estudiante o cliente…" autocomplete="off" aria-label="Estudiante / Cliente" aria-controls="flight-person-options" oninput="this.dataset.personKey=\'\';renderFlightPeople()" onfocus="renderFlightPeople()"><div id="flight-person-options" class="flight-person-options" hidden></div>
           </div>
         </div>
         <button onclick="addFlight()" style="margin-top:10px;width:100%;padding:8px;background:linear-gradient(135deg,var(--accent2),var(--accent));border:none;border-radius:8px;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent">
@@ -2787,15 +2788,17 @@ function addFlight() {
 
   if(!confirmFlightScheduling({fecha,aeronave,piloto}))return;
 
-  const flight = { fecha, horaInicio, horaFin, aeronave, piloto, estudiante, id: Date.now() };
+  const person=resolveFlightPerson();
+  if(estudiante&&!person){alert('Selecciona un estudiante o cliente de la lista de expedientes.');document.getElementById('flight-student').focus();return;}
+  const flight = { fecha, horaInicio, horaFin, aeronave, piloto, estudiante:person?person.record.name:'', ...(person?{personId:person.record.id,personKind:person.kind}:{}), id: Date.now() };
   flightsData.push(flight);
   if (db) db.ref('itinerarios').set(flightsData);
 
   document.getElementById('flight-time-start').value = '';
   document.getElementById('flight-time-end').value = '';
-  document.getElementById('flight-ac').value = '';
+  document.getElementById('flight-ac').value = '';updateFlightAircraftPicker();
   document.getElementById('flight-pilot').value = '';
-  document.getElementById('flight-student').value = '';
+  document.getElementById('flight-student').value = '';document.getElementById('flight-student').dataset.personKey='';document.getElementById('flight-person-options').hidden=true;
 
   renderCalendar();
   if (calSelectedDate === fecha) renderDayFlights(fecha);
@@ -3296,7 +3299,7 @@ function plannerChooseSlot(idx,minutes) {
   const end=Math.min(minutes+60,next);
   if(end<=minutes)return;
   document.getElementById('flight-date').value=date;
-  document.getElementById('flight-ac').value=reg;
+  document.getElementById('flight-ac').value=reg;updateFlightAircraftPicker();
   document.getElementById('flight-time-start').value=plannerTime(minutes);
   document.getElementById('flight-time-end').value=plannerTime(end);
   document.getElementById('planner-form-context').textContent=reg+' · '+fechaVista(date)+' · '+fmt12h(plannerTime(minutes));
@@ -3465,3 +3468,48 @@ organizeSidebar();
 
 
 
+
+function updateFlightAircraftPicker(){
+ const select=document.getElementById('flight-ac'),button=document.querySelector('.flight-aircraft-picker');
+ if(select&&button)button.textContent=select.value||'Elegir aeronave';
+}
+function openFlightAircraftPicker(){
+ const select=document.getElementById('flight-ac');
+ if(!select||select.disabled||window.ROLE_VIEW)return;
+ closeDatePicker();
+ const dialog=document.createElement('dialog');dialog.className='flight-aircraft-dialog';
+ dialog.innerHTML='<div class="flight-aircraft-picker-heading"><strong>Seleccionar aeronave</strong><button type="button" class="record-btn" data-close aria-label="Cerrar">×</button></div><div class="flight-aircraft-options">'+Array.from(select.options).map((option,i)=>'<button type="button" data-option="'+i+'" aria-pressed="'+(option.value===select.value)+'" '+(option.disabled?'disabled':'')+'>'+escapeRecord(option.textContent)+'</button>').join('')+'</div>';
+ dialog.addEventListener('click',event=>{
+  const choice=event.target.closest('[data-option]');
+  if(choice&&!choice.disabled){select.selectedIndex=Number(choice.dataset.option);select.dispatchEvent(new Event('input',{bubbles:true}));select.dispatchEvent(new Event('change',{bubbles:true}));updateFlightAircraftPicker();dialog.close();}
+  else if(event.target.closest('[data-close]'))dialog.close();
+ });
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.appendChild(dialog);dialog.showModal();
+}
+document.getElementById('flight-ac')?.addEventListener('change',updateFlightAircraftPicker);
+updateFlightAircraftPicker();
+
+
+function flightPeople(){
+ const school=previewData.school||{};
+ return [...(Array.isArray(school.students)?school.students:[]).map(record=>({kind:'student',record})),...(Array.isArray(school.registry?.clients)?school.registry.clients:[]).map(record=>({kind:'client',record}))].filter(p=>p.record.id&&p.record.name).sort((a,b)=>a.record.name.localeCompare(b.record.name,'es'));
+}
+function flightPersonKey(p){return p.kind+':'+p.record.id;}
+function resolveFlightPerson(){
+ const input=document.getElementById('flight-student'),people=flightPeople();
+ const chosen=people.find(p=>flightPersonKey(p)===input.dataset.personKey&&p.record.name===input.value.trim());
+ if(chosen)return chosen;
+ const matches=people.filter(p=>p.record.name.trim().toLocaleLowerCase('es')===input.value.trim().toLocaleLowerCase('es'));
+ return matches.length===1?matches[0]:null;
+}
+function renderFlightPeople(){
+ const input=document.getElementById('flight-student'),box=document.getElementById('flight-person-options');
+ const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const q=normalize(input.value.trim()),people=flightPeople().filter(p=>normalize(p.record.name).includes(q));
+ box.innerHTML=people.length?people.map((p,i)=>'<button type="button" data-person-index="'+i+'"><strong>'+escapeRecord(p.record.name)+'</strong><small>'+ (p.kind==='student'?'Estudiante':'Cliente')+(p.record.identity?' · '+escapeRecord(p.record.identity):'')+'</small></button>').join(''):'<p>No hay expedientes coincidentes.</p>';
+ box.hidden=false;
+ box.onclick=event=>{const button=event.target.closest('[data-person-index]');if(!button)return;const p=people[Number(button.dataset.personIndex)];if(!p)return;input.value=p.record.name;input.dataset.personKey=flightPersonKey(p);box.hidden=true;input.dispatchEvent(new Event('change',{bubbles:true}));};
+}
+document.addEventListener('pointerdown',event=>{const box=document.getElementById('flight-person-options'),input=document.getElementById('flight-student');if(box&&event.target!==input&&!box.contains(event.target))box.hidden=true;});
+document.getElementById('flight-student')?.addEventListener('keydown',event=>{const box=document.getElementById('flight-person-options');if(event.key==='Escape')box.hidden=true;if(event.key==='ArrowDown'){event.preventDefault();if(box.hidden)renderFlightPeople();box.querySelector('button')?.focus();}});
