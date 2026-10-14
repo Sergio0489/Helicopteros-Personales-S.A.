@@ -3499,7 +3499,7 @@ function flightPersonKey(p){return p.kind+':'+p.record.id;}
 function resolveFlightPerson(){
  const input=document.getElementById('flight-student'),people=flightPeople();
  const chosen=people.find(p=>flightPersonKey(p)===input.dataset.personKey&&p.record.name===input.value.trim());
- if(chosen)return chosen;
+ if(input.dataset.personKey)return chosen||null;
  const matches=people.filter(p=>p.record.name.trim().toLocaleLowerCase('es')===input.value.trim().toLocaleLowerCase('es'));
  return matches.length===1?matches[0]:null;
 }
