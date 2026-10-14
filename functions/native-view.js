@@ -12,7 +12,7 @@ function nativeView(data,account,policy,page){
  const clients=list(s.registry?.clients).filter(p=>account.role!=='Estudiante'||(account.syncStatus==='matched'&&account.recordKind==='client'&&p.id===account.recordId));
  const ids=new Set([...students.map(p=>'student:'+p.id),...clients.map(p=>'client:'+p.id)]);
  const entries=list(s.registry?.entries).filter(e=>account.role!=='Estudiante'||ids.has(e.personKind+':'+e.personId));
- const personKeys='id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
+ const personKeys='medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
  const moneyKeys='expenses extraPayments registryFlights deletedCourses';
  const courseKeys='id type status state startDate endDate licenseDate licenseNumber createdAt';
  const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 voidedAt deletedAt createdAt';
