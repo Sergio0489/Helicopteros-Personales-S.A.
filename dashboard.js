@@ -3057,7 +3057,7 @@ function positionDatePicker(){
  datePicker.style.left=Math.max(8,Math.min(rect.left,innerWidth-w-8))+'px';
  datePicker.style.top=Math.max(8,rect.bottom+h+8<innerHeight?rect.bottom+5:rect.top-h-5)+'px';
 }
-function selectDate(value){const input=dateInput;if(!input)return;closeDatePicker();input.value=value;input.setCustomValidity('');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));if(input.isConnected)input.focus({preventScroll:true});}
+function selectInputDate(value){const input=dateInput;if(!input)return;closeDatePicker();input.value=value;input.setCustomValidity('');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));if(input.isConnected)input.focus({preventScroll:true});}
 function drawDatePicker(){
  const [year,month]=dateView.split('-').map(Number),selected=isoFecha(valueDescriptor.get.call(dateInput)),today=panamaISO();
  const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -3073,7 +3073,7 @@ function openDatePicker(input){
  datePicker=document.createElement('div');datePicker.className='app-calendar';datePicker.id='app-date-calendar';datePicker.setAttribute('role','dialog');datePicker.setAttribute('aria-label','Elegir fecha');
  input.setAttribute('aria-expanded','true');input.setAttribute('aria-controls',datePicker.id);(input.closest('dialog')||document.body).appendChild(datePicker);
  for(const type of ['pointerdown','input','change'])datePicker.addEventListener(type,e=>e.stopPropagation());
- datePicker.onclick=e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();if(b.dataset.day)return selectDate(b.dataset.day);if(b.hasAttribute('data-today'))return selectDate(panamaISO());if(b.hasAttribute('data-clear'))return selectDate('');if(b.hasAttribute('data-close')){closeDatePicker();input.focus();return;}if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){const next=shiftCalendarMonth(dateView,b.hasAttribute('data-prev')?-1:1);if(/^\d{4}-\d{2}$/.test(next)&&Number(next.slice(0,4))>=1900){dateView=next;drawDatePicker();}}};
+ datePicker.onclick=e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();if(b.dataset.day)return selectInputDate(b.dataset.day);if(b.hasAttribute('data-today'))return selectInputDate(panamaISO());if(b.hasAttribute('data-clear'))return selectInputDate('');if(b.hasAttribute('data-close')){closeDatePicker();input.focus();return;}if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){const next=shiftCalendarMonth(dateView,b.hasAttribute('data-prev')?-1:1);if(/^\d{4}-\d{2}$/.test(next)&&Number(next.slice(0,4))>=1900){dateView=next;drawDatePicker();}}};
  datePicker.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(e.target.tagName==='BUTTON')e.target.click();else e.target.dispatchEvent(new Event('change'));}});drawDatePicker();
 }
 function prepareDateInput(el){
