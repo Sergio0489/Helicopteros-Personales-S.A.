@@ -3189,8 +3189,9 @@ function dailyScheduleDate(now=new Date()) {
 }
 
 function dailyScheduleGroups(date) {
-  const groups=new Map(fleet.map(ac=>[ac.reg,[]]));
-  flightsData.filter(f=>isoFecha(f.fecha)===date).slice().sort((a,b)=>
+  const allowed=reg=>!window.ROLE_VIEW||HPBoxes.aircraftAllowed(window.ROLE_VIEW.policy,reg);
+  const groups=new Map(fleet.filter(ac=>allowed(ac.reg)).map(ac=>[ac.reg,[]]));
+  flightsData.filter(f=>isoFecha(f.fecha)===date&&allowed(f.aeronave)).slice().sort((a,b)=>
     (a.horaInicio||a.hora||'99:99').localeCompare(b.horaInicio||b.hora||'99:99')
   ).forEach(f=>{
     const reg=String(f.aeronave||'').trim();

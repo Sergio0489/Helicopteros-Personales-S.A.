@@ -1,5 +1,5 @@
 'use strict';
-const {catalog,permissions,normalize}=require('./boxes');
+const {catalog,permissions,normalize,aircraftAllowed}=require('./boxes');
 const {boxFor,allowed}=require('./box-write');
 const {nativeView}=require('./native-view');
 const clone=v=>JSON.parse(JSON.stringify(v));
@@ -16,6 +16,7 @@ function merge(a,b){if(b===undefined)return a;if(!a||typeof a!=='object'||!b||ty
 function boxView(data,account,rawPolicy,page){
  const policy=normalize(rawPolicy),base=nativeView(data,account,policy,page);
  const fine=filterTree(base.data,[],base.data,path=>{const pair=boxFor(path,base.data);if(!pair||pair[0]!==page)return true;return allowed(policy,path,base.data,'view');})||{};
+ if(page==='horario'){fine.itinerarios=(fine.itinerarios||[]).filter(f=>aircraftAllowed(policy,f.aeronave));return {...base,data:fine,policy,boxes:policy[page]?.boxes||{},editable:false};}
  // Include editable source records only when this role has explicit view access to them.
  const sources=clone(data);delete sources.undoFleet;if(sources.school)delete sources.school.paymentReceiverNames;
  if(account.role==='Estudiante'){

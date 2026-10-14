@@ -23,5 +23,6 @@
  add('usuarios','directory','Usuarios y cargos','Usuarios','#panel-usuarios .users-table');
  function permissions(policy,page,id){const box=catalog[page]?.find(b=>b.id===id),p=policy?.[page];if(!box||!p?.actions?.view)return {view:false,edit:false};const v=p.boxes?.[id];const view=v?v.view===true:p.areas?.[box.area]===true;return {view,edit:view&&box.editable&&p.actions?.edit===true&&v?.edit===true};}
  function normalize(policy){const out={};for(const [page,boxes]of Object.entries(catalog)){const p=policy?.[page]||{};out[page]={...p,actions:{...p.actions},areas:{},boxes:{}};for(const b of boxes){const rights=permissions(policy,page,b.id);out[page].boxes[b.id]=rights;if(rights.view)out[page].areas[b.area]=true;}}return out;}
- const api={catalog,permissions,normalize};if(typeof module!=='undefined')module.exports=api;else root.HPBoxes=api;
+ function aircraftAllowed(policy,reg){const scope=policy?.horario?.aircraft;if(scope==null||scope.mode==='all')return true;if(scope.mode!=='selected'||!Array.isArray(scope.registrations))return false;const key=v=>String(v||'').replace(/[^a-z0-9]/gi,'').toUpperCase();return scope.registrations.some(r=>key(r)===key(reg));}
+ const api={catalog,permissions,normalize,aircraftAllowed};if(typeof module!=='undefined')module.exports=api;else root.HPBoxes=api;
 })(typeof window==='undefined'?globalThis:window);

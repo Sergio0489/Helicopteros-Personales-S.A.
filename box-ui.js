@@ -2,6 +2,7 @@
 (()=>{
  const panels={horario:'#panel-horario-dia',pendientes:'#panel-resumen',aeronaves:'.aircraft-panel[id^="panel-"]',pilotos:'#panel-pilotos',bitacora:'#panel-registro',pagos:'#panel-registro-pago',itinerario:'#panel-itinerarios',estudiantes:'#panel-estudiantes',escuela:'#panel-escuela',charter:'#panel-empresa',estadisticas:'#panel-estadisticas',saldos:'#panel-alerta-saldos',usuarios:'#panel-usuarios'};
  function tag(el,page,b){if(!el)return;el.dataset.permissionPage=page;el.dataset.permissionBox=b.id;el.dataset.boxName=b.name;el.setAttribute('aria-label',b.name);el.title=b.name;}
+ const style=document.createElement('style');style.textContent='[data-box-caption]::before{content:attr(data-box-caption);display:block;font-size:10px;font-weight:700;line-height:1.35;text-align:left;grid-column:1/-1;flex-basis:100%;color:#173556;margin:0 0 6px;white-space:normal;pointer-events:none} @media print{[data-box-caption]::before{display:none}}';document.head.appendChild(style);
  function annotate(){
   for(const [page,boxes]of Object.entries(HPBoxes.catalog))for(const panel of document.querySelectorAll(panels[page])){
    if(page==='aeronaves'&&!/^panel-\d+$/.test(panel.id))continue;
@@ -24,6 +25,10 @@
    student.querySelectorAll('.card').forEach(c=>{if(c.querySelector('h3')?.textContent==='Horas sin curso asignado')tag(c,'estudiantes',box('hours'));});
    student.querySelectorAll('.school-fee,.school-balances,.school-ledger').forEach(c=>tag(c,'estudiantes',box('account')));
   }
+  document.querySelectorAll('[data-permission-box]').forEach(el=>{if(el.matches('input,button,select,textarea,option,canvas,table,thead,tbody,tr,td,th,h1,h2,h3,p,a,span,small,label')||el.closest('.school-account-button'))return;const parent=el.parentElement.closest('[data-permission-box]');if(parent?.dataset.permissionBox===el.dataset.permissionBox)return;el.dataset.boxCaption=el.dataset.boxName;});
+  document.querySelectorAll('#pilotos-list').forEach(el=>{el.dataset.boxCaption='Datos de pilotos · Licencias y habilitaciones · Vencimientos y documentos';});
+  document.querySelectorAll('.users-table').forEach(el=>{if(el.parentElement)el.parentElement.dataset.boxCaption='Usuarios y cargos';});
+  document.querySelectorAll('.daily-schedule-aircraft').forEach(el=>{el.dataset.boxCaption='Vuelos por aeronave · '+(el.querySelector('h2')?.textContent||'');});
  }
  const actionBox={ 'new-student':'personal','edit-student':'personal','delete-student':'personal','print-student':'personal','blank-registration':'personal','new-client':'clients','client-statement':'account','client-payment':'account','add-course':'courses','edit-course':'courses','delete-course':'courses','add-tutoring':'account','delete-archived-course':'archived',payment:'account','extra-payment':'account','void-extra':'account',expense:'expenses',statement:'account',flight:'hours',simulator:'hours',rate:'rates','course-rate':'course-rates','add-service':'rates','edit-service':'rates',intake:'intakes',brochure:'mail',email:'mail'};
  function owner(el){

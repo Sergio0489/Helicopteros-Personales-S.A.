@@ -19,3 +19,11 @@ const created=applyChanges(data,{itinerarios:data.itinerarios},{itinerarios:[...
 const isolatedData=copy(data);isolatedData.school.students.push({id:'two',name:'Other confidential',courses:[]});isolatedData.school.paymentReceipts=[{id:'r2',personKey:'student:two',personName:'Other confidential'}];isolatedData.school.registry.entries=[{id:'reg2',personKind:'student',personId:'two',personName:'Other confidential'}];
 const studentView=boxView(isolatedData,{role:'Estudiante',syncStatus:'matched',recordKind:'student',recordId:'one'},all,'estudiantes');assert(!JSON.stringify(studentView.data).includes('Other confidential'));assert.equal(studentView.data.pilotos?.length||0,0);
 console.log('PASS malicious baseline rejection, create cannot edit existing flights, student data isolation');
+const scope=copy(all);scope.horario.aircraft={mode:'selected',registrations:['HP1784']};
+const scheduleData=copy(data);scheduleData.itinerarios.push({id:2,fecha:'2026-10-14',aeronave:'HP1186',piloto:'Hidden pilot'});
+assert.equal(boxView(scheduleData,actor,scope,'horario').data.itinerarios.length,1);
+assert(!JSON.stringify(boxView(scheduleData,actor,scope,'horario').data).includes('Hidden pilot'));
+scope.horario.aircraft.registrations=[];assert.equal(boxView(scheduleData,actor,scope,'horario').data.itinerarios.length,0);
+delete scope.horario.aircraft;assert.equal(boxView(scheduleData,actor,scope,'horario').data.itinerarios.length,2);
+assert.equal(boxView(scheduleData,actor,scope,'itinerario').data.itinerarios.length,2);
+console.log('PASS schedule aircraft selection, empty selection, legacy all, independent itinerary');
