@@ -18,6 +18,7 @@
  add('horario','schedule','Vuelos por aeronave','Vuelos y rutas','.daily-schedule-flight>.flight-time',false);add('horario','crew','Tripulación y pasajeros','Tripulación y pasajeros','.daily-schedule-person',false);
  for(const [id,name,area]of [['aircraft','Alertas de aeronaves','Alertas de aeronaves'],['pilots','Alertas de pilotos','Alertas de pilotos']])add('pendientes',id,name,area,'[data-alert-kind="'+id+'"]',false);
  add('escuela','information','Información de la escuela','Información y documentos','#panel-escuela .card',false);add('charter','information','Información de HP CHARTER','Información de la empresa','#panel-empresa .card',false);
+ add('estadisticas','winners','Ganadores del mes','Ganadores del mes','#monthly-winners',false);
  add('estadisticas','ranking','Horas por aeronave: año','Estadísticas generales','#stats-chart-ranking',false);add('estadisticas','monthly','Horas por aeronave: meses','Estadísticas generales','#stats-chart',false);add('estadisticas','aac','Estadísticas para AAC','Estadísticas para AAC','#registro-transport-report',false);add('estadisticas','company','Estadísticas Helicópteros Personales','Estadísticas Helicópteros Personales','#registro-personal-report',false);
  add('saldos','students','Alertas de saldos: estudiantes','Estudiantes','[data-balance-person^="student:"]');add('saldos','clients','Alertas de saldos: clientes','Clientes','[data-balance-person^="client:"]');
  add('usuarios','directory','Usuarios y cargos','Usuarios','#panel-usuarios .users-table');

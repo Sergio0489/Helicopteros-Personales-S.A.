@@ -38,7 +38,7 @@ function nativeView(data,account,policy,page){
   const personal=page==='estudiantes'&&has('Datos personales'),finance=page==='saldos'||has('Estado de cuenta y abonos'),courses=page==='estudiantes'&&has('Cursos y licencias'),hours=page==='estudiantes'&&has('Horas registradas');
   if(page==='saldos')out.school.balanceAlertDismissals=Object.fromEntries(Object.entries(s.balanceAlertDismissals||{}).filter(([key])=>ids.has(key)));
   const project=p=>{
-   const q=pick(p,personal?personKeys:'id name stage phone');q.courses=[];
+   const q=pick(p,personal?personKeys:finance?'id name identity':'id name stage phone');q.courses=[];
    if(finance)Object.assign(q,pick(p,moneyKeys));
    if(hours&&!finance)q.registryFlights=list(p.registryFlights).map(f=>pick(f,'id date aircraft equipment hours100 kind fee note voidedAt'));
    if(finance||courses||hours)q.courses=list(p.courses).map(c=>({...pick(c,courseKeys),payments:finance?copy(list(c.payments)):[],flights:finance?copy(list(c.flights)):hours?list(c.flights).map(f=>pick(f,'id date aircraft equipment hours100 kind fee note voidedAt')):[],...(finance?pick(c,'budgets tutoriaEnabled'): {})}));
@@ -82,3 +82,4 @@ function nativeView(data,account,policy,page){
  return {data:out,areas,notice:page==='pendientes'&&!has('Alertas de aeronaves')&&(!has('Alertas de pilotos')||account.role==='Estudiante')?'No hay una fuente de alertas disponible para las categorías autorizadas en este cargo.':null};
 }
 module.exports={nativeView};
+

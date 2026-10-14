@@ -2,6 +2,7 @@
 const {catalog,permissions,normalize,aircraftAllowed}=require('./boxes');
 const {boxFor,allowed}=require('./box-write');
 const {nativeView}=require('./native-view');
+const {report:monthlyReport}=require('./monthly-winners');
 const clone=v=>JSON.parse(JSON.stringify(v));
 function filterTree(value,path,data,test){
  if(value===null||typeof value!=='object')return test(path)?value:undefined;
@@ -15,6 +16,8 @@ function filterTree(value,path,data,test){
 function merge(a,b){if(b===undefined)return a;if(!a||typeof a!=='object'||!b||typeof b!=='object')return b;if(Array.isArray(b)){if(!Array.isArray(a))return b;const out=a.slice();b.forEach((v,i)=>{const j=v?.id!=null?out.findIndex(x=>x?.id===v.id):i;if(j<0)out.push(v);else out[j]=merge(out[j],v);});return out;}const out={...a};for(const k of Object.keys(b))out[k]=merge(out[k],b[k]);return out;}
 function boxView(data,account,rawPolicy,page){
  const policy=normalize(rawPolicy),base=nativeView(data,account,policy,page);
+ if(page==='estadisticas'&&permissions(policy,page,'winners').view)base.monthlyWinners=monthlyReport(data);
+ if(page==='estudiantes'&&account.role==='Estudiante'&&permissions(policy,page,'account').view){return {...base,policy,boxes:policy[page].boxes,editable:false,ownStatement:true};}
  const fine=filterTree(base.data,[],base.data,path=>{const pair=boxFor(path,base.data);if(!pair||pair[0]!==page)return true;return allowed(policy,path,base.data,'view');})||{};
  if(page==='horario'){fine.itinerarios=(fine.itinerarios||[]).filter(f=>aircraftAllowed(policy,f.aeronave));return {...base,data:fine,policy,boxes:policy[page]?.boxes||{},editable:false};}
  // Include editable source records only when this role has explicit view access to them.
