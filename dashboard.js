@@ -1619,7 +1619,7 @@ pilotosPanel.innerHTML = `
   <div class="card">
     <div class="card-title">👨‍✈️ Registro de Vigencias</div>
     <div style="overflow-x:auto">
-    <div class="pilotos-table-header" style="display:grid;grid-template-columns:minmax(150px,1fr) 140px 64px 140px 64px minmax(180px,1fr) minmax(200px,1fr) 24px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:1104px">
+    <div class="pilotos-table-header" style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1.4fr) minmax(0,1.4fr) 18px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:0;width:100%">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">NOMBRE DEL PILOTO</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VEN. LICENCIA</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
@@ -1641,7 +1641,16 @@ const pilotTableStyle=document.createElement('style');pilotTableStyle.textConten
 #pilotos-list p{margin:5px 0;font-size:11px;line-height:1.5}
 #pilotos-list .pilot-vigency-row>span{font-size:10px;white-space:normal}
 #pilotos-list .pilot-vigency-row>button{justify-self:center}
-@media(max-width:768px){#panel-pilotos .pilotos-table-header{display:none!important}}
+#pilotos-list .pilot-vigency-row{column-gap:4px!important}
+#panel-pilotos .pilotos-table-header{column-gap:4px!important}
+#panel-pilotos .pilotos-table-header>span{min-width:0;font-size:8px!important;overflow-wrap:anywhere}
+#pilotos-list .pilot-vigency-row .maint-input{font-size:10px!important;padding:4px;min-height:26px;border-radius:5px}
+#pilotos-list .pilot-vigency-row .app-date-input{background-size:12px;background-position:right 3px center;padding-right:17px!important;font-variant-numeric:tabular-nums}
+#pilotos-list .pilot-vigency-row small,#pilotos-list .pilot-vigency-row p{font-size:9px;line-height:1.35}
+#pilotos-list .pilot-vigency-row b{font-size:10px}
+#pilotos-list .pilot-vigency-row>span>span{font-size:9px!important;padding:2px!important;display:inline-block;max-width:100%;box-sizing:border-box}
+
+@media(max-width:1100px){#panel-pilotos .pilotos-table-header{display:none!important}}
 `;document.head.appendChild(pilotTableStyle);
 contentEl.appendChild(pilotosPanel);
 
@@ -1650,7 +1659,7 @@ function pilotExpiryBadge(date){const a=PilotValidity.alerts({licencia:date})[0]
 function renderPilotos() {
   const container = document.getElementById('pilotos-list');
   container.innerHTML = '';
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = window.innerWidth <= 1100;
 
   pilotosData.forEach((p, i) => {
     if (!Array.isArray(p.verificaciones)) p.verificaciones = [];
@@ -1699,7 +1708,7 @@ function renderPilotos() {
     } else {
       // ===== LAYOUT DESKTOP: tabla horizontal =====
       row.className='pilot-vigency-row';
-      row.style = 'display:grid;grid-template-columns:minmax(150px,1fr) 140px 64px 140px 64px minmax(180px,1fr) minmax(200px,1fr) 24px;gap:6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:1104px';
+      row.style = 'display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1.4fr) minmax(0,1.4fr) 18px;gap:6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:0;width:100%';
       row.innerHTML = `
         <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()">
         <div><input type="date" data-preserve-empty class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()">${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</div>
