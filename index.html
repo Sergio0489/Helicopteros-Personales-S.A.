@@ -953,7 +953,25 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 #sidebar .tab-reg { text-transform: uppercase; }
 #role-legacy-portal nav button { color: #000 !important; font-weight: 700 !important; }
 </style>
-</head>
+<style>
+#panel-itinerarios .flight-aircraft-picker{display:none}
+.flight-aircraft-dialog{width:min(440px,calc(100vw - 24px));max-height:80dvh;overflow:auto;box-sizing:border-box;border:1px solid #b7ccde;border-radius:14px;padding:16px;background:#fff;color:#163a64;font-family:'IBM Plex Sans',sans-serif}
+.flight-aircraft-dialog::backdrop{background:#0f233d88}
+.flight-aircraft-picker-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.flight-aircraft-options{display:grid;gap:8px}
+.flight-aircraft-options button{min-height:48px;padding:12px;text-align:left;border:1px solid #bed1e1;border-radius:8px;background:#f2f7fc;color:#163a64;font:600 15px 'IBM Plex Sans',sans-serif;touch-action:manipulation}
+.flight-aircraft-options button[aria-pressed="true"]{background:#dcefff;border-color:#0059b3}
+@media(pointer:coarse),(max-width:768px){
+ #panel-itinerarios .flight-aircraft-picker{display:block;width:100%;min-height:48px;font-size:16px;text-align:left}
+ #panel-itinerarios #flight-ac{display:none}
+ #panel-itinerarios .add-flight-form :is(input,select){font-size:16px!important;min-height:44px}
+}
+#panel-itinerarios .flight-person-options{max-height:240px;overflow:auto;border:1px solid #b8cede;border-radius:8px;background:#fff}
+#panel-itinerarios .flight-person-options button{display:block;width:100%;min-height:48px;text-align:left;padding:10px 12px;border:0;border-bottom:1px solid #e1eaf2;background:white;color:#173a59;font:14px 'IBM Plex Sans',sans-serif;cursor:pointer;touch-action:manipulation}
+#panel-itinerarios .flight-person-options button:hover,#panel-itinerarios .flight-person-options button:focus-visible{background:#e7f3ff}
+#panel-itinerarios .flight-person-options small{display:block;color:#52697b;font-size:11px;margin-top:3px}
+#panel-itinerarios .flight-person-options p{padding:12px;font-size:13px}
+</style></head>
 <body>
 <section id="access-screen"><div class="access-card"><img class="login-company-logo" src="receipt-logo.svg" width="360" height="115" alt="Helicópteros Personales S.A."><form id="login-form"><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button><button type="button" id="forgot-password">Olvidé mi contraseña</button><button type="button" id="create-account">Crear usuario</button></form><p id="access-message" role="status">Conectando…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
 <div id="cloud-busy" hidden role="status">Guardando en Firebase…</div>
@@ -1009,8 +1027,8 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="cloud.js?v=20261014-1"></script>
-<script src="role-main-view.js?v=20261014-1"></script>
+<script src="cloud.js?v=20261014-2"></script>
+<script src="role-main-view.js?v=20261014-2"></script>
 <script src="role-portal.js?v=20261013-3"></script>
 <script src="registration.js?v=20261013-6"></script>
 </body>
