@@ -6,6 +6,9 @@ const {getDatabase}=require('firebase-admin/database');
 initializeApp();
 const {policyFor,visiblePages,projectPage}=require('./access');
 const {nativeView}=require('./native-view');
+const {boxView}=require('./box-view');
+const {applyChanges}=require('./box-write');
+const {randomUUID}=require('node:crypto');
 const DIRECTOR='glCsyjLhlyNRmazYA6Y9Gj3u0l13';
 const fields=['name','identity','birthDate','nationality','address','previousSchool','residentialPhone','phone','fatherName','motherName','emergencyName','emergencyPhone','funding','interests','notes','referredBy'];
 const roles=['Director','Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
@@ -37,6 +40,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const actorAccount=(await ref.get()).val();
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:2,boxEditing:true});return;}
  if(action==='access'){
   if(!user.emailVerified||user.disabled){res.status(403).json({error:'Verifica tu correo para consultar el acceso.'});return;}
   let account=(await ref.get()).val();
@@ -44,7 +48,21 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   account=await syncAccount(db,user,account,root?.operation,async()=>root);
   const policy=policyFor(data,account),pages=visiblePages(policy);
   if(req.body.page&&!pages.some(p=>p.id===req.body.page)){res.status(403).json({error:'No tienes permiso para consultar esta página.'});return;}
-  res.json({mode:'read-only',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native:req.body.page&&req.body.layout==='main'?nativeView(data,account,policy,req.body.page):null,page:req.body.page&&req.body.layout!=='main'?projectPage(data,account,policy,req.body.page):null});return;
+  res.json({mode:'box-permissions',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native:req.body.page&&req.body.layout==='main'?{...boxView(data,account,policy,req.body.page),operation:root.operation,uid:user.uid}:null,page:req.body.page&&req.body.layout!=='main'?projectPage(boxView(data,account,policy,req.body.page).data,account,policy,req.body.page):null});return;
+ }
+ if(action==='box-save'){
+  if(!user.emailVerified||user.disabled||!actorAccount?.assignedAt){res.status(403).json({error:'Tu cuenta no tiene acceso de edición.'});return;}
+  if(typeof req.body.operation!=='string'||JSON.stringify(req.body).length>12000000){res.status(400).json({error:'Solicitud no válida.'});return;}
+  let failure='',writes=0;const operation=randomUUID();
+  const result=await db.ref('dashboard').transaction(root=>{
+   failure='';writes=0;if(root===null){failure='No hay datos disponibles para guardar.';return null;}if(root.operation!==req.body.operation){failure='Los datos cambiaron. Actualiza la página antes de guardar.';return;}
+   try{const data=JSON.parse(root.payload),policy=policyFor(data,actorAccount);if(!visiblePages(policy).some(p=>p.id===req.body.page))throw Error('Ya no tienes acceso a esta página.');
+    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid});writes=applied.writes;
+    return {...root,payload:JSON.stringify(applied.data),revision:(root.revision||0)+1,operation,updatedBy:user.uid,updatedAt:new Date().toISOString()};
+   }catch(e){failure=e.message;return;}
+  },undefined,false);
+  if(!result.committed||failure){res.status(409).json({error:failure||'No se pudo guardar. Actualiza la página.'});return;}
+  res.json({ok:true,operation,writes});return;
  }
  if(action==='list'||action==='users'||action==='assign'){
   if(!isDirector){res.status(403).json({error:'Solo el Director puede asignar cargos.'});return;}
@@ -58,7 +76,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!roles.includes(req.body.role)||!req.body.uid||req.body.uid===DIRECTOR||req.body.uid===user.uid){res.status(400).json({error:'Cargo o usuario no válido.'});return;}
   const target=await getAuth().getUser(req.body.uid);if(!target.emailVerified||target.disabled){res.status(400).json({error:'El usuario debe verificar primero su correo.'});return;}
   const targetRef=db.ref('accountRequests/'+target.uid);
-  await targetRef.update({role:req.body.role,assignedBy:user.uid,assignedAt:new Date().toISOString()});res.json({ok:true});return;
+  const assignedAt=new Date().toISOString();await db.ref().update({['accountRequests/'+target.uid+'/role']:req.body.role,['accountRequests/'+target.uid+'/assignedBy']:user.uid,['accountRequests/'+target.uid+'/assignedAt']:assignedAt,'dashboard/operation':randomUUID(),'dashboard/updatedAt':assignedAt,'dashboard/updatedBy':user.uid});res.json({ok:true});return;
  }
  if(!['submit','status'].includes(action)){res.status(400).json({error:'Operación no válida.'});return;}
  if(action==='submit'){
@@ -71,6 +89,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 

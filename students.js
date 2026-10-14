@@ -22,8 +22,8 @@ const money=c=>new Intl.NumberFormat('es-PA',{style:'currency',currency:'USD'}).
 const list=x=>Array.isArray(x)?x:[];
 let selected=null,view='students',query='',stageFilter='',busy=false,activeDialog=null;
 function manualStage(stage){return ['Culminado','Carrera culminada','Retirado'].includes(stage);}
-function automaticStage(student,stage,enrolledDate){
- if(window.ROLE_VIEW)return stage||'';
+function automaticStage(student,stage,enrolledDate,explicit=false){
+ if(window.ROLE_VIEW){if(!explicit||manualStage(stage)||stage==='En formación')return stage||'';return enrolledDate&&validDate(enrolledDate)?'Matriculado':stage||'Interesado';}
  if(manualStage(stage))return stage==='Carrera culminada'?'Culminado':stage;
  if(list(student.courses).some(c=>paymentTotal(c)>0)||active(student.extraPayments).some(p=>p.cents>0))return 'En formación';
  if(enrolledDate&&validDate(enrolledDate))return 'Matriculado';
@@ -39,7 +39,7 @@ function bindStudentStage(dialog,student){
  const stage=dialog.querySelector('[name="stage"]'),enrolled=dialog.querySelector('[name="enrolledDate"]');
  const retirement=dialog.querySelector('[data-retirement]'),completion=dialog.querySelector('[data-completion]');
  const sync=()=>{
-  stage.value=automaticStage(student,stage.value,enrolled.value);
+  stage.value=automaticStage(student,stage.value,enrolled.value,true);
   retirement.hidden=stage.value!=='Retirado';completion.hidden=stage.value!=='Culminado';
   dialog.querySelector('[name="withdrawalReason"]').required=!retirement.hidden;
   const completedDate=dialog.querySelector('[name="completedDate"]');completedDate.required=!completion.hidden;completedDate.disabled=completion.hidden;if(!completion.hidden&&!completedDate.value)completedDate.value=fechaVista(today());
@@ -161,7 +161,7 @@ function editStudent(id){
  const interests=Object.entries(COURSES).map(([key,c])=>'<label class="school-check"><input type="checkbox" name="interest" value="'+key+'"'+(list(s.interests).includes(key)?' checked':'')+'>'+c.name+'</label>').join('');
  modal(id?'Editar estudiante':'Nuevo estudiante','<h4 class="school-form-section">Datos personales</h4>'+input('name','Nombre completo',s.name,'text','required maxlength="160"')+input('identity','Cédula o pasaporte',s.identity||'','text','maxlength="60"')+nationalityField(s.nationality)+dateField('birthDate','Fecha de nacimiento',s.birthDate)+input('address','Dirección',s.address||'','text','maxlength="500"')+input('previousSchool','Colegio de procedencia',s.previousSchool||'','text','maxlength="200"')+'<h4 class="school-form-section">Contacto</h4>'+input('residentialPhone','Teléfono residencial',s.residentialPhone||'','tel','maxlength="40"')+input('phone','Celular',s.phone||'','tel','maxlength="40"')+input('email','Correo electrónico',s.email||'','email','maxlength="180"')+'<h4 class="school-form-section">Familia y contacto de emergencia</h4>'+input('fatherName','Nombre del padre',s.fatherName||'','text','maxlength="160"')+input('motherName','Nombre de la madre',s.motherName||'','text','maxlength="160"')+input('emergencyName','Contacto de emergencia · nombre',s.emergencyName||'','text','maxlength="160"')+input('emergencyPhone','Contacto de emergencia · celular',s.emergencyPhone||'','tel','maxlength="40"')+'<h4 class="school-form-section">Registro académico</h4>'+dateField('createdDate','Ingreso al sistema',s.createdDate,true)+'<label>Etapa<select name="stage">'+options(STAGES,s.stage)+'</select></label><label>Financiamiento<select name="funding">'+options(FUNDING,s.funding)+'</select></label>'+dateField('enrolledDate','Fecha de matrícula',s.enrolledDate)+'<div class="school-full school-stage-panel" data-retirement hidden><label>Observación · motivo del retiro<textarea name="withdrawalReason" maxlength="4000">'+esc(s.withdrawalReason||'')+'</textarea></label></div><div class="school-full school-stage-panel" data-completion hidden>'+dateField('completedDate','Culminación',s.completedDate)+'<fieldset><legend>Cursos culminados</legend><div class="school-checks">'+(completionChecks||'<p>Agrega primero los cursos al expediente para seleccionar cuáles culminó.</p>')+'</div></fieldset></div>'+'<fieldset class="school-full"><legend>Cursos de interés</legend><div class="school-checks">'+interests+'</div></fieldset><label class="school-full">Observaciones<textarea name="notes" maxlength="4000">'+esc(s.notes||'')+'</textarea></label>'+input('referredBy','Quién lo recomienda',s.referredBy||'','text','maxlength="200"'),async(f,form)=>{
   if(!STAGES.includes(f.stage))throw Error('Selecciona una etapa válida.');
-  f.stage=automaticStage(s,f.stage,f.enrolledDate);
+  f.stage=automaticStage(s,f.stage,f.enrolledDate,true);
   errorDate(f,[['createdDate',true],['birthDate',false],['enrolledDate',false],['completedDate',f.stage==='Culminado']]);
   const withdrawalReason=String(f.withdrawalReason||'').trim();
   if(f.stage==='Retirado'&&!withdrawalReason)throw Error('Ingresa la razón del retiro.');
@@ -696,6 +696,7 @@ render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 

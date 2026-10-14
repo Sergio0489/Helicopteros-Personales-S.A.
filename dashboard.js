@@ -72,7 +72,7 @@ function updateUndoButtons(){
 }
 async function commitPreview(next){
  try{await window.cloudWrite(next);previewData=structuredClone(next);return true;}
- catch(e){window.showCloudError(e);return false;}
+ catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
 }
 async function saveData(reg,data){
   const key=aircraftKey(reg),next=structuredClone(previewData);
@@ -2152,7 +2152,7 @@ function buildResumen() {
     const regLabel=isPilotoGroup
       ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent2)">${escapeRecord(reg)}</span>`
       : `<span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent)">${escapeRecord(reg)}</span>`;
-    html+=`<div class="pending-uniform-card"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
+    html+=`<div class="pending-uniform-card" data-alert-kind="${isPilotoGroup?'pilots':'aircraft'}"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
     items.forEach(item=>{
       const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
       const bg=item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';
@@ -3475,7 +3475,7 @@ function updateFlightAircraftPicker(){
 }
 function openFlightAircraftPicker(){
  const select=document.getElementById('flight-ac');
- if(!select||select.disabled||window.ROLE_VIEW)return;
+ if(!select||select.disabled||(window.ROLE_VIEW&&!window.ROLE_VIEW.editable))return;
  closeDatePicker();
  const dialog=document.createElement('dialog');dialog.className='flight-aircraft-dialog';
  dialog.innerHTML='<div class="flight-aircraft-picker-heading"><strong>Seleccionar aeronave</strong><button type="button" class="record-btn" data-close aria-label="Cerrar">×</button></div><div class="flight-aircraft-options">'+Array.from(select.options).map((option,i)=>'<button type="button" data-option="'+i+'" aria-pressed="'+(option.value===select.value)+'" '+(option.disabled?'disabled':'')+'>'+escapeRecord(option.textContent)+'</button>').join('')+'</div>';
@@ -3513,3 +3513,4 @@ function renderFlightPeople(){
 }
 document.addEventListener('pointerdown',event=>{const box=document.getElementById('flight-person-options'),input=document.getElementById('flight-student');if(box&&event.target!==input&&!box.contains(event.target))box.hidden=true;});
 document.getElementById('flight-student')?.addEventListener('keydown',event=>{const box=document.getElementById('flight-person-options');if(event.key==='Escape')box.hidden=true;if(event.key==='ArrowDown'){event.preventDefault();if(box.hidden)renderFlightPeople();box.querySelector('button')?.focus();}});
+

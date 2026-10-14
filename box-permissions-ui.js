@@ -1,0 +1,29 @@
+'use strict';
+(()=>{
+const names={horario:'Horario del día',pendientes:'Pendientes',aeronaves:'Aeronaves',pilotos:'Pilotos',bitacora:'Registro de bitácora',pagos:'Registro de pago',itinerario:'Itinerario',estudiantes:'Estudiantes / Clientes',escuela:'Escuela',charter:'HP CHARTER',estadisticas:'Estadísticas',saldos:'Alerta de saldos',usuarios:'Usuarios'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const modes=(value,edit=true)=>'<option value="none"'+(value==='none'?' selected':'')+'>Sin acceso</option><option value="view"'+(value==='view'?' selected':'')+'>Solo ver</option>'+(edit?'<option value="edit"'+(value==='edit'?' selected':'')+'>Ver y editar</option>':'');
+function open(){
+ profileUser();document.getElementById('profile-menu').open=false;
+ const dialog=document.createElement('dialog');dialog.className='role-permissions-dialog box-permissions-dialog';let role='Gerente',draft,dirty=false,saving=false,ready=false;
+ dialog.innerHTML='<div class="profile-heading"><h2>Páginas y cuadros por cargo</h2><button data-close aria-label="Cerrar">×</button></div><p>Editar incluye ver. El permiso de la página limita el de sus cuadros. Los Directores conservan acceso total.</p><label>Cargo<select data-role>'+STAFF_ROLES.map(r=>'<option'+(r===role?' selected':'')+'>'+r+'</option>').join('')+'</select></label><p class="box-permission-help">Los cuadros de consulta, como estadísticas y alertas, se actualizan desde sus registros de origen. Los guardados que afectan varios cuadros requieren permiso en todos los cuadros modificados.</p><div data-box-matrix></div><div class="role-footer"><p data-status role="status"></p><button data-save>Guardar permisos</button></div>';
+ const matrix=dialog.querySelector('[data-box-matrix]'),select=dialog.querySelector('[data-role]'),status=dialog.querySelector('[data-status]');
+ const load=()=>{draft=HPBoxes.normalize(previewData.school?.accessConfiguration?.roles?.[role]||suggestedRolePolicy(role));dirty=false;draw();};
+ const draw=()=>{
+  const openPages=[...matrix.querySelectorAll('details[open]')].map(e=>e.querySelector('[data-page]')?.dataset.page);const firstRender=!matrix.children.length;
+  const director=role==='Director';dialog.querySelector('[data-save]').disabled=director||saving||!ready;
+  matrix.innerHTML=Object.entries(HPBoxes.catalog).map(([page,boxes])=>{const p=draft[page],value=director?'edit':!p.actions.view?'none':p.actions.edit?'edit':'view';const readonly=page==='usuarios'&&!director;return '<details class="permission-page" '+((firstRender?page==='aeronaves':openPages.includes(page))?'open':'')+'><summary>'+esc(names[page])+' <small>'+boxes.length+' cuadros</small></summary><div class="permission-page-mode"><label>Acceso a la página<select data-page="'+page+'" '+(director||readonly?'disabled':'')+'>'+modes(readonly?'none':value,boxes.some(b=>b.editable))+'</select></label></div><table class="permission-box-table"><thead><tr><th>Nombre del cuadro</th><th>Permiso</th></tr></thead><tbody>'+boxes.map(b=>{const r=p.boxes[b.id],m=director?(b.editable?'edit':'view'):r.edit?'edit':r.view?'view':'none';return '<tr><td>'+esc(b.name)+(b.editable?'':' <small>Consulta</small>')+'</td><td><select data-page-box="'+page+'" data-box="'+b.id+'" '+(director||readonly||!p.actions.view?'disabled':'')+'>'+modes(readonly?'none':m,b.editable&&p.actions.edit)+'</select></td></tr>';}).join('')+'</tbody></table></details>';}).join('');
+  matrix.querySelectorAll('[data-page]').forEach(e=>e.onchange=()=>{const p=draft[e.dataset.page],v=e.value;p.actions.view=v!=='none';p.actions.edit=v==='edit';if(v!=='edit')for(const b of Object.values(p.boxes))b.edit=false;if(v==='none')for(const b of Object.values(p.boxes))b.view=false;dirty=true;draw();});
+  matrix.querySelectorAll('[data-box]').forEach(e=>e.onchange=()=>{draft[e.dataset.pageBox].boxes[e.dataset.box]={view:e.value!=='none',edit:e.value==='edit'};dirty=true;});
+ };
+ select.onchange=()=>{if(dirty&&!confirm('¿Descartar los cambios sin guardar?')){select.value=role;return;}role=select.value;status.textContent='';load();};
+ dialog.querySelector('[data-save]').onclick=async()=>{if(saving||!ready)return;saving=true;select.disabled=true;matrix.inert=true;dialog.querySelector('[data-save]').disabled=true;try{
+  const next=structuredClone(previewData);next.school ||= {};next.school.accessConfiguration ||= {};next.school.accessConfiguration.roles ||= {};
+  next.school.accessConfiguration.roles[role]=HPBoxes.normalize(draft);Object.assign(next.school.accessConfiguration,{version:2,status:'box-permissions',updatedAt:new Date().toISOString(),updatedBy:profileUser().uid});
+  await window.cloudWrite(next);previewData=next;dirty=false;status.textContent='Permisos guardados. Se aplican cuando el usuario actualice su página.';
+ }catch(e){status.textContent=e.message;}finally{saving=false;select.disabled=false;matrix.inert=false;draw();}};
+ const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());document.body.appendChild(dialog);load();dialog.showModal();status.textContent='Comprobando la conexión de permisos…';AccountRegistration.api('permission-capabilities').then(r=>{ready=r.version>=2&&r.boxEditing===true;status.textContent=ready?'Selecciona las páginas y cuadros autorizados.':'Falta actualizar la función de Firebase para activar estos permisos.';draw();}).catch(()=>{status.textContent='Falta publicar la actualización de permisos en Firebase. No se cambiará la configuración actual.';});
+}
+window.openBoxPermissions=open;
+document.getElementById('profile-roles').onclick=open;
+})();
