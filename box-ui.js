@@ -17,7 +17,7 @@
    }
    if(page==='estadisticas')panel.querySelectorAll('canvas').forEach(canvas=>{const b=boxes.find(b=>b.selector==='#'+canvas.id);if(b)tag(canvas.closest('.card'),page,b);});
   }
-  document.querySelectorAll('#pilotos-list input,#pilotos-list button,#pilotos-list [onclick]').forEach(el=>{const code=(el.getAttribute('onchange')||'')+(el.getAttribute('onclick')||'');const id=/licencia|habilitaciones/.test(code)?'licenses':/medico|escuela|verificaciones|Verificacion/.test(code)?'documents':'pilots';tag(el,'pilotos',HPBoxes.catalog.pilotos.find(b=>b.id===id));});
+  document.querySelectorAll('#pilotos-list input,#pilotos-list button,#pilotos-list [onclick]').forEach(el=>{const code=(el.getAttribute('onchange')||'')+(el.getAttribute('onclick')||'');const id=/licencia|habilitaciones|instructorExpiry|rpaInstructorExpiry/.test(code)?'licenses':/medico|escuela|verificaciones|Verificacion/.test(code)?'documents':'pilots';tag(el,'pilotos',HPBoxes.catalog.pilotos.find(b=>b.id===id));});
   document.querySelectorAll('.aircraft-status-control').forEach(el=>tag(el,'aeronaves',HPBoxes.catalog.aeronaves.find(b=>b.id==='status')));
   const student=document.getElementById('panel-estudiantes');if(student){
    const box=id=>HPBoxes.catalog.estudiantes.find(b=>b.id===id);

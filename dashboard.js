@@ -533,7 +533,7 @@ function buildPanel(ac, data, idx) {
         <div style="display:grid;grid-template-columns:1fr 150px 60px auto auto;gap:8px;border-bottom:1px solid var(--dim);padding-bottom:6px;margin-bottom:4px">
           <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">TAREA</span>
           <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">FECHA INICIO</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">INSTRUCTOR RPA</span>
           <span></span>
           <span></span>
         </div>
@@ -1619,12 +1619,11 @@ pilotosPanel.innerHTML = `
   <div class="card">
     <div class="card-title">👨‍✈️ Registro de Vigencias</div>
     <div style="overflow-x:auto">
-    <div class="pilotos-table-header" style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1.4fr) minmax(0,1.4fr) 18px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:0;width:100%">
+    <div class="pilotos-table-header" style="display:grid;grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,1.2fr)) repeat(2,minmax(0,1.45fr)) 18px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:0;width:100%">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">NOMBRE DEL PILOTO</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VEN. LICENCIA</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">INSTRUCTOR DE VUELO</span>
+      <span style="font-size:9px;color:var(--muted)">INSTRUCTOR RPA</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">CERT. MÉDICO</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE ESCUELA</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE CHARTERS</span>
       <span></span>
@@ -1650,79 +1649,38 @@ const pilotTableStyle=document.createElement('style');pilotTableStyle.textConten
 #pilotos-list .pilot-vigency-row b{font-size:10px}
 #pilotos-list .pilot-vigency-row>span>span{font-size:9px!important;padding:2px!important;display:inline-block;max-width:100%;box-sizing:border-box}
 
+#pilotos-list .pilot-date-pair{display:flex;gap:3px;align-items:center;min-width:0;max-width:100%}
+#pilotos-list .pilot-date-pair .maint-input{flex:1 1 80px;width:80px;min-width:0;font-size:9px!important;padding:3px 2px;min-height:24px}
+#pilotos-list .pilot-date-pair .app-date-input{background-image:none;padding-right:2px!important}
+#pilotos-list .pilot-days-pill{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:999px;padding:3px 5px;font-size:9px;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:0 0 4px #0002}
+#pilotos-list .pilot-check-list{display:grid;gap:5px}
+#pilotos-list .pilot-check-item{padding:4px 0;border-bottom:1px solid var(--border)}
+#pilotos-list .pilot-vigency-card{padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+#pilotos-list .pilot-vigency-card section{margin-top:10px}
+#pilotos-list .pilot-vigency-card .pilot-date-pair{max-width:230px}
 @media(max-width:1100px){#panel-pilotos .pilotos-table-header{display:none!important}}
 `;document.head.appendChild(pilotTableStyle);
 contentEl.appendChild(pilotosPanel);
 
 const pilotosData = [];
-function pilotExpiryBadge(date){const a=PilotValidity.alerts({licencia:date})[0];if(!a)return '';return '<span style="padding:3px 6px;color:#111;background:'+({danger:'#ef3333',orange:'#ff9900',warn:'#ffc600',ok:'#65bd85'})[a.level]+'">'+(a.expired?'VENCIDO':a.days+'d')+'</span>';}
-function renderPilotos() {
-  const container = document.getElementById('pilotos-list');
-  container.innerHTML = '';
-  const isMobile = window.innerWidth <= 1100;
-
-  pilotosData.forEach((p, i) => {
-    if (!Array.isArray(p.verificaciones)) p.verificaciones = [];
-
-    const verificationColumn=service=>{
-      const rows=p.verificaciones.map((v,vi)=>({v,vi})).filter(({v})=>v.service===service||v.service==='both');
-      return '<div style="display:grid;gap:6px">'+rows.map(({v,vi})=>'<div style="border:1px solid var(--border);border-radius:6px;padding:6px"><b>'+escapeRecord(v.nombre||'Sin aeronave')+'</b><div>'+escapeRecord(v.modelo||'')+'</div><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(v.fecha==='na'?'':v.fecha||'')+'" onchange="pilotosData['+i+'].verificaciones['+vi+'].fecha=this.value;renderPilotos();savePilotos()">'+pilotExpiryBadge(v.fecha)+'</div>').join('')+'</div>';
-    };
-    const legacy=(key,label)=>p[key]?'<div style="margin-top:6px"><small>'+label+' · registro anterior</small><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(p[key]==='na'?'':p[key])+'" onchange="pilotosData['+i+'].'+key+'=this.value;renderPilotos();savePilotos()">'+pilotExpiryBadge(p[key])+'</div>':'';
-    const unclassified=p.verificaciones.filter(v=>!['instruction','charter','both'].includes(v.service));
-    const verifHtml=verificationColumn('charter')+legacy('charter','Chárter')+(unclassified.length?'<div><small>Registros anteriores · pendientes de clasificar en el expediente</small>'+unclassified.map(v=>'<p>'+escapeRecord(v.nombre||'')+' · '+escapeRecord(fechaVista(v.fecha||''))+'</p>').join('')+'</div>':'');
-    const escuelaHtml=verificationColumn('instruction');
-
-    const row = document.createElement('div');
-
-    if (isMobile) {
-      // ===== LAYOUT MÓVIL: tarjeta vertical por piloto =====
-      row.style = 'background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px';
-      row.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()" style="font-size:13px;font-weight:700;flex:1;margin-right:8px">
-          <button onclick="eliminarPiloto(${i})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">✕</button>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Ven. Licencia</div>
-            <input type="date" data-preserve-empty class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()" style="width:100%">
-            <div style="margin-top:3px">${pilotExpiryBadge(p.licencia)}${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</div>
-          </div>
-          <div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Cert. Médico</div>
-            <input type="date" data-preserve-empty class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()" style="width:100%">
-            <div style="margin-top:3px">${daysBadge(daysUntil(p.medico))}</div>
-          </div>
-        </div>
-        <div style="margin-bottom:8px">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Verif. Escuela</div>
-          ${escuelaHtml}
-        </div>
-        ${p.verificaciones.length > 0 ? `
-        <div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Verificaciones de Charters</div>
-          ${verifHtml}
-        </div>` : `<div>${verifHtml}</div>`}
-      `;
-    } else {
-      // ===== LAYOUT DESKTOP: tabla horizontal =====
-      row.className='pilot-vigency-row';
-      row.style = 'display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1fr) minmax(0,.38fr) minmax(0,1.4fr) minmax(0,1.4fr) 18px;gap:6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:0;width:100%';
-      row.innerHTML = `
-        <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()">
-        <div><input type="date" data-preserve-empty class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()">${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</div>
-        <span>${pilotExpiryBadge(p.licencia)}</span>
-        <input type="date" data-preserve-empty class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()">
-        <span>${daysBadge(daysUntil(p.medico))}</span>
-        <div class="pilot-school-verifications">${escuelaHtml}</div>
-        <div class="pilot-charter-verifications">${verifHtml}</div>
-        <button onclick="eliminarPiloto(${i})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0">✕</button>
-      `;
-    }
-
-    container.appendChild(row);
-  });
+function pilotExpiryBadge(date){const a=PilotValidity.alerts({licencia:date})[0];if(!a)return '';return '<span class="pilot-days-pill" style="background:'+({danger:'#ef3333',orange:'#ff9900',warn:'#ffc600',ok:'#07883e'})[a.level]+';color:'+(a.level==='danger'||a.level==='ok'?'white':'#111')+'" title="'+(a.expired?'Vencido':a.days+' días restantes')+'">'+a.days+'d</span>';}
+function renderPilotos(){
+ const container=document.getElementById('pilotos-list');container.innerHTML='';const mobile=window.innerWidth<=1100;
+ pilotosData.forEach((p,i)=>{
+  const dateCell=(date,code)=>'<div class="pilot-date-pair"><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(date==='na'?'':date||'')+'" onchange="'+code+';renderPilotos();savePilotos()">'+pilotExpiryBadge(date)+'</div>';
+  const direct=(key)=>dateCell(p[key], 'pilotosData['+i+'].'+key+'='+(key==='medico'?'PilotValidity.monthEnd(this.value.slice(0,7))':'this.value'));
+  const verificationColumn=service=>'<div class="pilot-check-list">'+(p.verificaciones||[]).map((v,vi)=>({v,vi})).filter(({v})=>v.service===service||v.service==='both').map(({v,vi})=>'<div class="pilot-check-item"><b>'+escapeRecord(v.nombre||'Sin aeronave')+'</b><small>'+escapeRecord(v.modelo||'')+'</small>'+dateCell(v.fecha,'pilotosData['+i+'].verificaciones['+vi+'].fecha=this.value')+'</div>').join('')+'</div>';
+  const legacy=p.charter?'<div class="pilot-check-item"><small>Chárter · registro anterior</small>'+direct('charter')+'</div>':'';
+  const unclassified=(p.verificaciones||[]).filter(v=>!['instruction','charter','both'].includes(v.service));
+  const pending=unclassified.length?'<div class="pilot-check-item"><small>Pendientes de clasificar en el expediente</small>'+unclassified.map(v=>'<div><b>'+escapeRecord(v.nombre||'')+'</b><div class="pilot-date-pair"><span>'+escapeRecord(fechaVista(v.fecha||''))+'</span>'+pilotExpiryBadge(v.fecha)+'</div></div>').join('')+'</div>':'';
+  const name='<input type="text" class="maint-input" placeholder="Nombre del piloto" value="'+escapeRecord(p.nombre||'')+'" onchange="pilotosData['+i+'].nombre=this.value;savePilotos()">';
+  const remove='<button onclick="eliminarPiloto('+i+')" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:0">✕</button>';
+  const row=document.createElement('div');
+  const sections=[['Instructor de vuelo',direct('instructorExpiry')],['Instructor RPA',direct('rpaInstructorExpiry')],['Certificado médico',direct('medico')],['Verificaciones de escuela',verificationColumn('instruction')],['Verificaciones de Charters',verificationColumn('charter')+legacy+pending]];
+  if(mobile){row.className='pilot-vigency-card';row.innerHTML='<div class="school-row">'+name+remove+'</div>'+sections.map(([label,html])=>'<section><small>'+label+'</small>'+html+'</section>').join('');}
+  else{row.className='pilot-vigency-row';row.style='display:grid;grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,1.2fr)) repeat(2,minmax(0,1.45fr)) 18px;gap:4px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:0;width:100%';row.innerHTML=name+sections.map(([label,html],j)=>'<div class="'+(j===3?'pilot-school-verifications':j===4?'pilot-charter-verifications':'')+'">'+html+'</div>').join('')+remove;}
+  container.appendChild(row);
+ });
 }
 function addPilotoRow() {
   pilotosData.push({ nombre: '', licencia: '', medico: '', charter: '', escuela: '', verificaciones: [] });
