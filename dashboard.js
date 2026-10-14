@@ -1619,14 +1619,13 @@ pilotosPanel.innerHTML = `
   <div class="card">
     <div class="card-title">👨‍✈️ Registro de Vigencias</div>
     <div style="overflow-x:auto">
-    <div class="pilotos-table-header" style="display:grid;grid-template-columns:160px 130px 60px 130px 60px 130px 60px 1fr 30px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:900px">
+    <div class="pilotos-table-header" style="display:grid;grid-template-columns:minmax(150px,1fr) 140px 64px 140px 64px minmax(180px,1fr) minmax(200px,1fr) 24px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:1104px">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">NOMBRE DEL PILOTO</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VEN. LICENCIA</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">CERT. MÉDICO</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE ESCUELA</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE CHARTERS</span>
       <span></span>
     </div>
@@ -1635,6 +1634,15 @@ pilotosPanel.innerHTML = `
     <button class="add-row-btn" onclick="addPilotoRow()">+ Agregar piloto</button>
   </div>
 `;
+const pilotTableStyle=document.createElement('style');pilotTableStyle.textContent=`
+#pilotos-list .pilot-vigency-row>*{min-width:0;max-width:100%;box-sizing:border-box;font-size:11px;line-height:1.5;overflow-wrap:break-word}
+#pilotos-list .maint-input{min-width:0;width:100%;box-sizing:border-box;font-size:11px!important}
+#pilotos-list small{font-size:10px;font-weight:500;display:block;margin-bottom:4px}
+#pilotos-list p{margin:5px 0;font-size:11px;line-height:1.5}
+#pilotos-list .pilot-vigency-row>span{font-size:10px;white-space:normal}
+#pilotos-list .pilot-vigency-row>button{justify-self:center}
+@media(max-width:768px){#panel-pilotos .pilotos-table-header{display:none!important}}
+`;document.head.appendChild(pilotTableStyle);
 contentEl.appendChild(pilotosPanel);
 
 const pilotosData = [];
@@ -1669,12 +1677,12 @@ function renderPilotos() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Ven. Licencia</div>
-            <input type="date" class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()" style="width:100%">
+            <input type="date" data-preserve-empty class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()" style="width:100%">
             <div style="margin-top:3px">${pilotExpiryBadge(p.licencia)}${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</div>
           </div>
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Cert. Médico</div>
-            <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()" style="width:100%">
+            <input type="date" data-preserve-empty class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()" style="width:100%">
             <div style="margin-top:3px">${daysBadge(daysUntil(p.medico))}</div>
           </div>
         </div>
@@ -1690,15 +1698,16 @@ function renderPilotos() {
       `;
     } else {
       // ===== LAYOUT DESKTOP: tabla horizontal =====
-      row.style = 'display:grid;grid-template-columns:160px 130px 60px 130px 60px 130px 60px 1fr 30px;gap:6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:900px';
+      row.className='pilot-vigency-row';
+      row.style = 'display:grid;grid-template-columns:minmax(150px,1fr) 140px 64px 140px 64px minmax(180px,1fr) minmax(200px,1fr) 24px;gap:6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:1104px';
       row.innerHTML = `
         <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()">
-        <input type="date" class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()">
-        <span>${pilotExpiryBadge(p.licencia)}${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</span>
-        <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()">
+        <div><input type="date" data-preserve-empty class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()">${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</div>
+        <span>${pilotExpiryBadge(p.licencia)}</span>
+        <input type="date" data-preserve-empty class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()">
         <span>${daysBadge(daysUntil(p.medico))}</span>
-        <div>${escuelaHtml}</div><span></span>
-        ${verifHtml}
+        <div class="pilot-school-verifications">${escuelaHtml}</div>
+        <div class="pilot-charter-verifications">${verifHtml}</div>
         <button onclick="eliminarPiloto(${i})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0">✕</button>
       `;
     }
