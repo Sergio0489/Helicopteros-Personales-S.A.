@@ -14,21 +14,14 @@ const fields=['name','identity','birthDate','nationality','address','previousSch
 const roles=['Director','Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
 function cleanProfile(input){const profile={};for(const key of fields){if(key==='interests'){profile[key]=(Array.isArray(input[key])?input[key]:[]).filter(v=>['privado','comercial','ifr','multimotor','rpa','instructor'].includes(v));continue;}profile[key]=String(input[key]||'').trim().slice(0,key==='notes'?4000:500);}if(input.photo){if(typeof input.photo!=='string'||input.photo.length>300000||!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(input.photo))throw Error('Foto no válida.');profile.photo=input.photo;}if(!profile.name)throw Error('Ingresa el nombre completo.');if(profile.birthDate&&!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate))throw Error('Revisa la fecha de nacimiento.');return profile;}
 function matchStudent(payload,email,uid){const matches=(payload.school?.students||[]).filter(s=>String(s.email||'').trim().toLowerCase()===email.toLowerCase());if(matches.length!==1||matches[0].authUid&&matches[0].authUid!==uid)return null;return matches[0];}
-function matchRecord(payload,email,uid){
- const normalized=String(email||'').trim().toLowerCase();if(!normalized)return {status:'missing-email'};
- const records=[...(payload.school?.students||[]).map(record=>({record,kind:'student'})),...(payload.school?.registry?.clients||[]).map(record=>({record,kind:'client'}))];
- const matches=records.filter(({record})=>String(record.email||'').trim().toLowerCase()===normalized);
- if(matches.length!==1)return {status:matches.length?'duplicate-email':'no-match'};
- if(matches[0].record.authUid&&matches[0].record.authUid!==uid)return {status:'linked-to-another-user'};
- return {...matches[0],status:'matched'};
-}
+const {matchRecord}=require('./record-link');
 async function syncAccount(db,u,account,marker,readRoot){
  if(!u.emailVerified||!u.email)return account||{};
- if(account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===2)return account;
+ if(account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===3)return account;
  const root=await readRoot(),payload=root?.payload?JSON.parse(root.payload):{},match=matchRecord(payload,u.email,u.uid);
  const profile={...account?.profile};if(match.record)for(const field of fields){const value=match.record[field];if(value!=null&&value!==''&&(!Array.isArray(value)||value.length))profile[field]=value;}
  if(!profile.name)profile.name=u.uid===DIRECTOR?'Sergio Herrera C.':u.displayName||'';
- const patch={profile,email:u.email,verified:true,verifiedAt:account?.verifiedAt||new Date().toISOString(),syncedOperation:root?.operation||null,syncVersion:2,syncStatus:match.status,studentId:match.kind==='student'?match.record.id:null,recordId:match.record?.id||null,recordKind:match.kind||null,recordName:match.record?.name||null};
+ const patch={profile,email:u.email,verified:true,verifiedAt:account?.verifiedAt||new Date().toISOString(),syncedOperation:root?.operation||null,syncVersion:3,syncStatus:match.status,studentId:match.kind==='student'?match.record.id:null,pilotId:match.kind==='pilot'?match.record.id:null,recordId:match.record?.id||null,recordKind:match.kind||null,recordName:match.record?.name||null};
  const ref=db.ref('accountRequests/'+u.uid);await ref.update(patch);return {...account,...patch};
 }
 exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2},async(req,res)=>{
@@ -40,7 +33,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const actorAccount=(await ref.get()).val();
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
- if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:4,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:5,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
  if(action==='access'){
   if(!user.emailVerified||user.disabled){res.status(403).json({error:'Verifica tu correo para consultar el acceso.'});return;}
   let account=(await ref.get()).val();
@@ -89,6 +82,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 

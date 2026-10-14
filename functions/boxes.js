@@ -9,6 +9,7 @@
  for(const [id,name,area]of [
  ['inspection','Inspección de 50 / 100 horas','Horas e inspecciones'],['flight','Bitácora de horas de vuelo','Horas e inspecciones'],['venc','Vencimientos en horas','Horas e inspecciones'],['status','Estatus','Información y estatus'],['tac','Bitácora de tacómetros','Horas e inspecciones'],['inspections','Bitácora de inspecciones','Horas e inspecciones'],['pending','Pendientes de taller','Mantenimiento y taller'],['maintenance','Bitácora de mantenimiento','Mantenimiento y taller'],['tracking','Seguimiento de pedidos','Pedidos'],['orders','Bitácora de pedidos recibidos','Pedidos'],['hours-history','Bitácora de vencimientos en horas','Horas e inspecciones'],['documents','Documentos y certificados','Documentos y emergencia']])a(id,name,area,'[data-section="'+id+'"]');
  a('emergency','Equipos de emergencia','Documentos y emergencia','.emerg-section');a('rate','Tarifa de la aeronave','Tarifas','.school-aircraft-rate');
+ add('pilotos','dossier','Expediente de pilotos','Expedientes','#pilot-dossiers');
  add('pilotos','pilots','Datos de pilotos','Datos personales','#pilotos-list');add('pilotos','licenses','Licencias y habilitaciones','Licencias y habilitaciones','#pilotos-list');add('pilotos','documents','Vencimientos y documentos','Vencimientos y documentos','#pilotos-list');
  add('itinerario','planner','Calendario por aeronave','Calendario','.planner-board',false);add('itinerario','calendar','Calendario mensual','Calendario','#cal-cells',false);add('itinerario','flights','Vuelos del día','Programación de vuelos','#cal-day-flights');add('itinerario','create','Programar vuelo','Programación de vuelos','.add-flight-form');
  for(const [id,name,area,selector,edit]of [
@@ -27,3 +28,4 @@
  function aircraftAllowed(policy,reg){const scope=policy?.horario?.aircraft;if(scope==null||scope.mode==='all')return true;if(scope.mode!=='selected'||!Array.isArray(scope.registrations))return false;const key=v=>String(v||'').replace(/[^a-z0-9]/gi,'').toUpperCase();return scope.registrations.some(r=>key(r)===key(reg));}
  const api={catalog,permissions,normalize,aircraftAllowed};if(typeof module!=='undefined')module.exports=api;else root.HPBoxes=api;
 })(typeof window==='undefined'?globalThis:window);
+

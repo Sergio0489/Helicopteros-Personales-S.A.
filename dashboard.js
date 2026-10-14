@@ -117,8 +117,8 @@ async function loadAllFromFirebase() {
   });
 }
 
-function savePilotos() {
-  if (db) db.ref('pilotos').set(pilotosData);
+async function savePilotos() {
+  if (db) {const ok=await db.ref('pilotos').set(pilotosData);if(ok)window.PilotDossiers?.refresh();return ok;}
 }
 
 const fleet = [
@@ -1639,7 +1639,7 @@ function renderPilotos() {
         ${p.verificaciones.map((v, vi) => `
           <div style="display:flex;flex-direction:column;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:4px 6px;min-width:120px">
             <div style="display:flex;align-items:center;gap:4px">
-              <input type="text" class="maint-input" placeholder="Aeronave / tipo" value="${v.nombre||''}" onchange="pilotosData[${i}].verificaciones[${vi}].nombre=this.value;savePilotos()" style="font-size:9px;padding:3px 6px">
+              <input type="text" class="maint-input" placeholder="Aeronave / tipo" value="${escapeRecord(v.nombre||'')}" onchange="pilotosData[${i}].verificaciones[${vi}].nombre=this.value;savePilotos()" style="font-size:9px;padding:3px 6px">
               <button onclick="eliminarVerificacionPiloto(${i},${vi})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0">✕</button>
             </div>
             ${v.fecha==='na' ?
@@ -2109,6 +2109,7 @@ function buildResumen() {
         addAlert('👨‍✈️ Vigencia Pilotos', p.nombre, 'Cert. Médico', days < 0 ? 'VENCIDO' : `Vence en ${days} días`, dateAlertLevel(days),days);
       }
     }
+    if(p.charter && p.charter!=='na'){const days=daysUntil(p.charter);if(days!==null&&days<=DAYS_WARN)addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,'Verif. Chárter',days<0?'VENCIDA':`Vence en ${days} días`,dateAlertLevel(days),days);}
     if (p.escuela && p.escuela !== 'na') {
       const days = daysUntil(p.escuela);
       if (days !== null && days <= DAYS_WARN) {
@@ -2724,6 +2725,7 @@ function getPilotoStatus(p) {
   const checks = [];
   if (p.licencia) checks.push(daysUntil(p.licencia));
   if (p.medico) checks.push(daysUntil(p.medico));
+  if (p.charter && p.charter !== 'na') checks.push(daysUntil(p.charter));
   if (p.escuela && p.escuela !== 'na') checks.push(daysUntil(p.escuela));
   (p.verificaciones || []).forEach(v => {
     if (v.fecha && v.fecha !== 'na') checks.push(daysUntil(v.fecha));
@@ -2748,6 +2750,7 @@ function getPilotoVencimientos(p, flightDate=panamaISO()) {
   };
   check('Licencia', p.licencia);
   check('Cert. Médico', p.medico);
+  check('Verif. Chárter', p.charter);
   check('Verif. Escuela', p.escuela);
   (p.verificaciones || []).forEach(v => check(v.nombre || 'Verificación adicional', v.fecha));
   return items;
@@ -3083,7 +3086,7 @@ function prepareDateInput(el){
  if(el.dataset.dateReady)return;el.dataset.dateReady='1';const native=el.type==='date',old=el.value;
  el.type='text';el.placeholder='DD/MM/AAAA';el.inputMode='numeric';el.autocomplete='off';el.dataset.fecha='1';el.classList.add('app-date-input');el.setAttribute('aria-haspopup','dialog');el.setAttribute('aria-expanded','false');
  if(native)Object.defineProperty(el,'value',{get(){return isoFecha(valueDescriptor.get.call(this));},set(v){valueDescriptor.set.call(this,fechaVista(v));},configurable:true});
- el.value=fechaVista(old||(!window.ROLE_VIEW&&!el.closest('.school-stage-panel[hidden]')?panamaISO():''));
+ el.value=fechaVista(old||(!window.ROLE_VIEW&&!el.hasAttribute('data-preserve-empty')&&!el.closest('.school-stage-panel[hidden]')?panamaISO():''));
  const validate=()=>{const raw=valueDescriptor.get.call(el);el.setCustomValidity(raw&&!Number.isFinite(dayNumber(raw))?'Usa una fecha válida DD/MM/AAAA.':'');};
  el.addEventListener('input',()=>{const raw=valueDescriptor.get.call(el);if(/^\d{8}$/.test(raw))valueDescriptor.set.call(el,raw.slice(0,2)+'/'+raw.slice(2,4)+'/'+raw.slice(4));validate();});
  el.addEventListener('change',e=>{validate();if(!el.checkValidity()){el.reportValidity();e.stopImmediatePropagation();return;}el.value=fechaVista(el.value);},true);
@@ -3514,4 +3517,5 @@ function renderFlightPeople(){
 }
 document.addEventListener('pointerdown',event=>{const box=document.getElementById('flight-person-options'),input=document.getElementById('flight-student');if(box&&event.target!==input&&!box.contains(event.target))box.hidden=true;});
 document.getElementById('flight-student')?.addEventListener('keydown',event=>{const box=document.getElementById('flight-person-options');if(event.key==='Escape')box.hidden=true;if(event.key==='ArrowDown'){event.preventDefault();if(box.hidden)renderFlightPeople();box.querySelector('button')?.focus();}});
+
 

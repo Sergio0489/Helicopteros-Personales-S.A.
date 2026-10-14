@@ -28,7 +28,7 @@ function nativeView(data,account,policy,page){
   for(const [id,ac]of Object.entries(data.fleet||{})){out.fleet[id]={component_schema_v2:true};for(const [area,keys]of Object.entries(groups))if(has(area))Object.assign(out.fleet[id],pick(ac,keys));}
   if(has('Tarifas'))out.school.rates=copy(s.rates||{});
  }
- if(page==='pilotos'&&account.role!=='Estudiante')out.pilotos=list(data.pilotos).map(p=>({...pick(p,'id nombre'),...(has('Datos personales')?pick(p,'email telefono celular'):{}),...(has('Licencias y habilitaciones')?pick(p,'licencia tipo habilitaciones'):{}),...(has('Vencimientos y documentos')?pick(p,'medico escuela verificaciones'): {})}));
+ if(page==='pilotos'&&account.role!=='Estudiante')out.pilotos=list(data.pilotos).map(p=>({...pick(p,'id nombre'),...(has('Datos personales')||has('Expedientes')?pick(p,'email telefono celular'):{}),...(has('Expedientes')?pick(p,'identity birthDate nationality address emergencyName emergencyPhone notes'):{}),...(has('Licencias y habilitaciones')?pick(p,'licencia numeroLicencia tipo habilitaciones'):{}),...(has('Vencimientos y documentos')?pick(p,'medico medicoClase charter escuela verificaciones'): {})}));
  if(['horario','itinerario'].includes(page)&&account.role!=='Estudiante'){
   const route=page==='itinerario'?(has('Calendario')||has('Programación de vuelos')):has('Vuelos y rutas');
   const crew=page==='itinerario'?route:has('Tripulación y pasajeros');
@@ -76,10 +76,11 @@ function nativeView(data,account,policy,page){
    }
   }
   if(has('Alertas de pilotos')&&account.role!=='Estudiante')
-   out.pilotos=list(data.pilotos).map(p=>({...pick(p,'nombre licencia medico escuela'),verificaciones:list(p.verificaciones).map(v=>pick(v,'nombre fecha'))}));
+   out.pilotos=list(data.pilotos).map(p=>({...pick(p,'nombre licencia medico charter escuela'),verificaciones:list(p.verificaciones).map(v=>pick(v,'nombre fecha'))}));
  }
 
  return {data:out,areas,notice:page==='pendientes'&&!has('Alertas de aeronaves')&&(!has('Alertas de pilotos')||account.role==='Estudiante')?'No hay una fuente de alertas disponible para las categorías autorizadas en este cargo.':null};
 }
 module.exports={nativeView};
+
 

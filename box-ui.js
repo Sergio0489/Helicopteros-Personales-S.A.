@@ -7,7 +7,7 @@
   for(const [page,boxes]of Object.entries(HPBoxes.catalog))for(const panel of document.querySelectorAll(panels[page])){
    if(page==='aeronaves'&&!/^panel-\d+$/.test(panel.id))continue;
    for(const box of boxes){
-    if(page==='pilotos')continue;
+    if(page==='pilotos'&&box.id!=='dossier')continue;
     if(page==='aeronaves'&&box.id==='documents'){for(const c of panel.querySelectorAll('[data-section="documents"]>:not(.emerg-section)'))tag(c,page,box);continue;}
     if(page==='estudiantes'&&box.id==='courses'){for(const c of panel.querySelectorAll('.school-course-grid>section>.school-row,.school-course-grid>section>p,.school-course-grid>section>.school-course-dates'))tag(c,page,box);continue;}
     if(page==='estudiantes'&&['clients','rates','course-rates'].includes(box.id)){const view=panel.querySelector('[data-view][aria-pressed="true"]')?.dataset.view;if(view!==box.id)continue;}
@@ -32,6 +32,8 @@
  }
  const actionBox={ 'new-student':'personal','edit-student':'personal','delete-student':'personal','print-student':'personal','blank-registration':'personal','new-client':'clients','client-statement':'account','client-payment':'account','add-course':'courses','edit-course':'courses','delete-course':'courses','add-tutoring':'account','delete-archived-course':'archived',payment:'account','extra-payment':'account','void-extra':'account',expense:'expenses',statement:'account',flight:'hours',simulator:'hours',rate:'rates','course-rate':'course-rates','add-service':'rates','edit-service':'rates',intake:'intakes',brochure:'mail',email:'mail'};
  function owner(el){
+  if(el.dataset.pilotBox)return ['pilotos',el.dataset.pilotBox];
+  if(/^addPilotoRow/.test(el.getAttribute('onclick')||''))return ['pilotos','dossier'];
   if(el.dataset.action==='void')return ['estudiantes',el.dataset.kind==='flights'?'hours':'account'];
   if(el.matches('[onclick^="addPiloto"],[onclick^="agregarPiloto"]'))return ['pilotos','pilots'];
   if(el.dataset.action&&actionBox[el.dataset.action])return ['estudiantes',actionBox[el.dataset.action]];
@@ -49,3 +51,4 @@
  let queued=false;const observe=()=>{if(queued)return;queued=true;queueMicrotask(()=>{queued=false;annotate();});};
  new MutationObserver(observe).observe(document.body,{childList:true,subtree:true});annotate();
 })();
+

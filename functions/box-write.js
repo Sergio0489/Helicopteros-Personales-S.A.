@@ -12,7 +12,8 @@ function boxFor(path,root){
   if(field?.startsWith('emerg_'))return ['aeronaves','emergency'];
   for(const [box,fields]of Object.entries(aircraft))if(fields.has(field))return ['aeronaves',box];
  }
- if(top==='pilotos')return ['pilotos',['licencia','tipo','habilitaciones'].includes(field)?'licenses':['medico','escuela','verificaciones'].includes(field)?'documents':'pilots'];
+ if(top==='pilotos'&&['identity','birthDate','nationality','address','emergencyName','emergencyPhone','notes'].includes(field))return ['pilotos','dossier'];
+ if(top==='pilotos')return ['pilotos',['licencia','numeroLicencia','tipo','habilitaciones'].includes(field)?'licenses':['medico','medicoClase','charter','escuela','verificaciones'].includes(field)?'documents':'pilots'];
  if(top==='itinerarios')return ['itinerario','flights'];
  if(top==='school'){
   if(key==='rates'||key==='services')return ['estudiantes','rates'];
@@ -37,6 +38,7 @@ function rights(policy,pair,action){if(!pair)return false;const [p,b]=pair;retur
 function allowed(policy,path,root,action,context={}){
  if(path.some(k=>['__proto__','prototype','constructor','authUid','accessConfiguration','userProfiles'].includes(String(k))))return false;
  const pair=boxFor(path,root);
+ if(path[0]==='pilotos'&&['id','nombre','email','telefono','celular'].includes(path[2])&&rights(policy,['pilotos','dossier'],action))return true;
  if(action==='view'){
   if(path[0]==='fleet'&&path[2]==='mantenimiento'&&['nombre','resuelto'].includes(path[4])&&rights(policy,['aeronaves','tracking'],'view'))return true;
   if(path[0]==='school'&&path[1]==='students'&&path[3]==='courses'&&['id','type'].includes(path[5])&&['courses','account','hours'].some(b=>rights(policy,['estudiantes',b],'view')))return true;
@@ -91,3 +93,4 @@ function applyChanges(current,before,after,policy,account){
  const result=merge(root,before,after,[]);return {data:result,writes};
 }
 module.exports={boxFor,allowed,applyChanges};
+
