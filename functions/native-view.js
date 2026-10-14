@@ -12,7 +12,7 @@ function nativeView(data,account,policy,page){
  const clients=list(s.registry?.clients).filter(p=>account.role!=='Estudiante'||(account.syncStatus==='matched'&&account.recordKind==='client'&&p.id===account.recordId));
  const ids=new Set([...students.map(p=>'student:'+p.id),...clients.map(p=>'client:'+p.id)]);
  const entries=list(s.registry?.entries).filter(e=>account.role!=='Estudiante'||ids.has(e.personKind+':'+e.personId));
- const personKeys='medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
+ const personKeys='peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
  const moneyKeys='expenses extraPayments registryFlights deletedCourses';
  const courseKeys='id type status state startDate endDate licenseDate licenseNumber createdAt';
  const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 voidedAt deletedAt createdAt';
@@ -28,7 +28,7 @@ function nativeView(data,account,policy,page){
   for(const [id,ac]of Object.entries(data.fleet||{})){out.fleet[id]={component_schema_v2:true};for(const [area,keys]of Object.entries(groups))if(has(area))Object.assign(out.fleet[id],pick(ac,keys));}
   if(has('Tarifas'))out.school.rates=copy(s.rates||{});
  }
- if(page==='pilotos'&&account.role!=='Estudiante')out.pilotos=list(data.pilotos).map(p=>({...pick(p,'id nombre'),...(has('Datos personales')||has('Expedientes')?pick(p,'email telefono celular'):{}),...(has('Expedientes')?pick(p,'identity birthDate nationality address emergencyName emergencyPhone notes peso fechaInicioHP'):{}),...(has('Licencias y habilitaciones')?pick(p,'licencia numeroLicencia tipo habilitaciones licenseTypes instructorRatings instructorExpiry rpaInstructor rpaInstructorExpiry'):{}),...(has('Vencimientos y documentos')?pick(p,'medico medicoClase charter escuela verificaciones'): {})}));
+ if(page==='pilotos'&&account.role!=='Estudiante')out.pilotos=list(data.pilotos).map(p=>({...pick(p,'id nombre'),...(has('Datos personales')||has('Expedientes')?pick(p,'email telefono celular'):{}),...(has('Expedientes')?pick(p,'identity birthDate nationality address emergencyName emergencyPhone notes peso estatura fechaInicioHP'):{}),...(has('Licencias y habilitaciones')?pick(p,'licencia numeroLicencia tipo habilitaciones licenseTypes instructorRatings instructorExpiry rpaInstructor rpaInstructorExpiry'):{}),...(has('Vencimientos y documentos')?pick(p,'medico medicoClase charter escuela verificaciones'): {})}));
  if(['horario','itinerario'].includes(page)&&account.role!=='Estudiante'){
   const route=page==='itinerario'?(has('Calendario')||has('Programación de vuelos')):has('Vuelos y rutas');
   const crew=page==='itinerario'?route:has('Tripulación y pasajeros');

@@ -1625,9 +1625,9 @@ pilotosPanel.innerHTML = `
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">CERT. MÉDICO</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIF. ESCUELA</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE ESCUELA</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES ADICIONALES (POR AERONAVE)</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE CHARTERS</span>
       <span></span>
     </div>
     <div id="pilotos-list"></div>
@@ -1647,36 +1647,14 @@ function renderPilotos() {
   pilotosData.forEach((p, i) => {
     if (!Array.isArray(p.verificaciones)) p.verificaciones = [];
 
-    // Verificaciones adicionales — mismo HTML para ambos layouts
-    const verifHtml = `
-      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start">
-        ${p.verificaciones.map((v, vi) => `
-          <div style="display:flex;flex-direction:column;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:4px 6px;min-width:120px">
-            <div style="display:flex;align-items:center;gap:4px">
-              <input type="text" class="maint-input" placeholder="Aeronave / tipo" value="${escapeRecord(v.nombre||'')}" onchange="pilotosData[${i}].verificaciones[${vi}].nombre=this.value;savePilotos()" style="font-size:9px;padding:3px 6px">
-              <button onclick="eliminarVerificacionPiloto(${i},${vi})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0">✕</button>
-            </div>
-            ${v.fecha==='na' ?
-              `<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);cursor:pointer;text-decoration:underline;text-align:center" onclick="pilotosData[${i}].verificaciones[${vi}].fecha='';renderPilotos();savePilotos()">N/A</span>` :
-              `<div style="display:flex;align-items:center;gap:4px">
-                <input type="date" class="maint-input" value="${v.fecha||''}" onchange="pilotosData[${i}].verificaciones[${vi}].fecha=this.value;renderPilotos();savePilotos()" style="font-size:9px;padding:3px 4px;flex:1">
-                ${daysBadge(daysUntil(v.fecha))}
-              </div>
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);cursor:pointer;text-decoration:underline;text-align:right" onclick="pilotosData[${i}].verificaciones[${vi}].fecha='na';renderPilotos();savePilotos()">N/A</span>`
-            }
-          </div>
-        `).join('')}
-        <button onclick="pilotosData[${i}].verificaciones.push({nombre:'',fecha:''});renderPilotos();savePilotos()" style="background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--accent);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:9px;padding:4px 10px;align-self:flex-start">+ Verificación</button>
-      </div>
-    `;
-
-    const escuelaHtml = p.escuela==='na'
-      ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="pilotosData[${i}].escuela='';renderPilotos();savePilotos()">N/A</span>`
-      : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <input type="date" class="maint-input" value="${p.escuela||''}" onchange="pilotosData[${i}].escuela=this.value;renderPilotos();savePilotos()" style="font-size:10px;flex:1;min-width:120px">
-          ${daysBadge(daysUntil(p.escuela))}
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="pilotosData[${i}].escuela='na';renderPilotos();savePilotos()">N/A</span>
-        </div>`;
+    const verificationColumn=service=>{
+      const rows=p.verificaciones.map((v,vi)=>({v,vi})).filter(({v})=>v.service===service||v.service==='both');
+      return '<div style="display:grid;gap:6px">'+rows.map(({v,vi})=>'<div style="border:1px solid var(--border);border-radius:6px;padding:6px"><b>'+escapeRecord(v.nombre||'Sin aeronave')+'</b><div>'+escapeRecord(v.modelo||'')+'</div><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(v.fecha==='na'?'':v.fecha||'')+'" onchange="pilotosData['+i+'].verificaciones['+vi+'].fecha=this.value;renderPilotos();savePilotos()">'+pilotExpiryBadge(v.fecha)+'</div>').join('')+'</div>';
+    };
+    const legacy=(key,label)=>p[key]?'<div style="margin-top:6px"><small>'+label+' · registro anterior</small><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(p[key]==='na'?'':p[key])+'" onchange="pilotosData['+i+'].'+key+'=this.value;renderPilotos();savePilotos()">'+pilotExpiryBadge(p[key])+'</div>':'';
+    const unclassified=p.verificaciones.filter(v=>!['instruction','charter','both'].includes(v.service));
+    const verifHtml=verificationColumn('charter')+legacy('charter','Chárter')+(unclassified.length?'<div><small>Registros anteriores · pendientes de clasificar en el expediente</small>'+unclassified.map(v=>'<p>'+escapeRecord(v.nombre||'')+' · '+escapeRecord(fechaVista(v.fecha||''))+'</p>').join('')+'</div>':'');
+    const escuelaHtml=verificationColumn('instruction')+legacy('escuela','Instrucción');
 
     const row = document.createElement('div');
 
@@ -1692,7 +1670,7 @@ function renderPilotos() {
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Ven. Licencia</div>
             <input type="date" class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()" style="width:100%">
-            <div style="margin-top:3px">${daysBadge(daysUntil(p.licencia))}</div>
+            <div style="margin-top:3px">${pilotExpiryBadge(p.licencia)}${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</div>
           </div>
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Cert. Médico</div>
@@ -1706,7 +1684,7 @@ function renderPilotos() {
         </div>
         ${p.verificaciones.length > 0 ? `
         <div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Verificaciones Adicionales</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Verificaciones de Charters</div>
           ${verifHtml}
         </div>` : `<div>${verifHtml}</div>`}
       `;
@@ -1716,13 +1694,10 @@ function renderPilotos() {
       row.innerHTML = `
         <input type="text" class="maint-input" placeholder="Nombre del piloto" value="${p.nombre}" onchange="pilotosData[${i}].nombre=this.value;savePilotos()">
         <input type="date" class="maint-input" value="${p.licencia}" onchange="pilotosData[${i}].licencia=this.value;renderPilotos();savePilotos()">
-        <span>${daysBadge(daysUntil(p.licencia))}</span>
+        <span>${pilotExpiryBadge(p.licencia)}${p.instructorExpiry?'<div><small>Instructor de Vuelo</small>'+fechaVista(p.instructorExpiry)+pilotExpiryBadge(p.instructorExpiry)+'</div>':''}${p.rpaInstructorExpiry?'<div><small>Instructor de RPA</small>'+fechaVista(p.rpaInstructorExpiry)+pilotExpiryBadge(p.rpaInstructorExpiry)+'</div>':''}</span>
         <input type="date" class="maint-input" value="${p.medico}" onchange="pilotosData[${i}].medico=PilotValidity.monthEnd(this.value.slice(0,7));renderPilotos();savePilotos()">
         <span>${daysBadge(daysUntil(p.medico))}</span>
-        ${p.escuela==='na' ? 
-          `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="pilotosData[${i}].escuela='';renderPilotos();savePilotos()">N/A</span><span></span>` : 
-          `<div style="display:flex;flex-direction:column;gap:2px"><input type="date" class="maint-input" value="${p.escuela||''}" onchange="pilotosData[${i}].escuela=this.value;renderPilotos();savePilotos()" style="font-size:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);cursor:pointer;text-align:right" onclick="pilotosData[${i}].escuela='na';renderPilotos();savePilotos()">N/A</span></div><span>${daysBadge(daysUntil(p.escuela))}</span>`
-        }
+        <div>${escuelaHtml}</div><span></span>
         ${verifHtml}
         <button onclick="eliminarPiloto(${i})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0">✕</button>
       `;
@@ -3472,3 +3447,5 @@ document.getElementById('flight-student')?.addEventListener('keydown',event=>{co
 
 
 setInterval(()=>{if(!document.hidden){buildResumen();updatePilotDropdown();window.PilotDossiers?.refresh();}},30000);
+
+function personAge(birthDate,at=panamaISO()){const born=isoFecha(birthDate);if(!Number.isFinite(dayNumber(born))||born>at)return '';const years=Number(at.slice(0,4))-Number(born.slice(0,4))-(at.slice(5)<born.slice(5)?1:0);return years;}
