@@ -2,7 +2,7 @@
 (()=>{
  const panels={horario:'#panel-horario-dia',pendientes:'#panel-resumen',aeronaves:'.aircraft-panel[id^="panel-"]',pilotos:'#panel-pilotos',bitacora:'#panel-registro',pagos:'#panel-registro-pago',itinerario:'#panel-itinerarios',estudiantes:'#panel-estudiantes',escuela:'#panel-escuela',charter:'#panel-empresa',estadisticas:'#panel-estadisticas',saldos:'#panel-alerta-saldos',usuarios:'#panel-usuarios'};
  function tag(el,page,b){if(!el)return;el.dataset.permissionPage=page;el.dataset.permissionBox=b.id;el.dataset.boxName=b.name;el.setAttribute('aria-label',b.name);el.title=b.name;}
- const style=document.createElement('style');style.textContent='[data-box-caption]::before{content:attr(data-box-caption);display:block;font-size:10px;font-weight:700;line-height:1.35;text-align:left;grid-column:1/-1;flex-basis:100%;color:#173556;margin:0 0 6px;white-space:normal;pointer-events:none} @media print{[data-box-caption]::before{display:none}}';document.head.appendChild(style);
+ const style=document.createElement('style');style.textContent='[data-box-caption]::before{content:attr(data-box-caption);display:block;font-size:10px;font-weight:700;line-height:1.35;text-align:left;grid-column:1/-1;flex:0 0 auto;color:#173556;margin:0 0 6px;white-space:normal;pointer-events:none} @media print{[data-box-caption]::before{display:none}}';document.head.appendChild(style);
  function annotate(){
   for(const [page,boxes]of Object.entries(HPBoxes.catalog))for(const panel of document.querySelectorAll(panels[page])){
    if(page==='aeronaves'&&!/^panel-\d+$/.test(panel.id))continue;
