@@ -1664,9 +1664,10 @@ contentEl.appendChild(pilotosPanel);
 
 const pilotosData = [];
 function pilotExpiryBadge(date){const a=PilotValidity.alerts({instructorExpiry:date})[0];if(!a)return '';return '<span class="pilot-days-pill" style="background:'+({danger:'#ef3333',orange:'#ff9900',warn:'#ffc600',ok:'#07883e'})[a.level]+';color:'+(a.level==='danger'||a.level==='ok'?'white':'#111')+'" title="'+(a.expired?'Vencido':a.days+' días restantes')+'">'+a.days+'d</span>';}
+function sortedPilotEntries(rows=pilotosData){return rows.map((p,i)=>({p,i})).sort((a,b)=>{const x=String(a.p.nombre||'').trim(),y=String(b.p.nombre||'').trim();return (!x)-(!y)||x.localeCompare(y,'es',{sensitivity:'base',numeric:true})||a.i-b.i;});}
 function renderPilotos(){
  const container=document.getElementById('pilotos-list');container.innerHTML='';const mobile=window.innerWidth<=1100;
- pilotosData.forEach((p,i)=>{
+ sortedPilotEntries().forEach(({p,i})=>{
   const dateCell=(date,code)=>'<div class="pilot-date-pair"><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(date==='na'?'':date||'')+'" onchange="'+code+';renderPilotos();savePilotos()">'+pilotExpiryBadge(date)+'</div>';
   const direct=(key)=>dateCell(p[key], 'pilotosData['+i+'].'+key+'='+(key==='medico'?'PilotValidity.monthEnd(this.value.slice(0,7))':'this.value'));
   const verificationColumn=service=>'<div class="pilot-check-list">'+(p.verificaciones||[]).map((v,vi)=>({v,vi})).filter(({v})=>v.service===service||v.service==='both').map(({v,vi})=>'<div class="pilot-check-item"><b>'+escapeRecord(v.nombre||'Sin aeronave')+'</b><small>'+escapeRecord(v.modelo||'')+'</small>'+dateCell(v.fecha,'pilotosData['+i+'].verificaciones['+vi+'].fecha=this.value')+'</div>').join('')+'</div>';

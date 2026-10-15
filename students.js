@@ -425,7 +425,7 @@ function clientPaymentRecord(f,id){errorDate(f,[['date',true]]);const amount=cen
 function recordClientPayment(school,cid,payment){const client=clientById(school,cid);client.payments ||= [];if(!client.payments.some(p=>p.id===payment.id))client.payments.push(payment);}
 function addClientPayment(cid){openPayment('client:'+cid);}
 
-function paymentPeople(){const school=data();return [...school.students.map(s=>({id:'student:'+s.id,name:s.name,kind:'Estudiante',record:s})),...list(school.registry?.clients).map(c=>({id:'client:'+c.id,name:c.name,kind:'Cliente',record:c}))].sort((a,b)=>a.name.localeCompare(b.name,'es'));}
+function paymentPeople(){const school=data();return [...school.students.map(s=>({id:'student:'+s.id,name:s.name,kind:'Estudiante',record:s})),...list(school.registry?.clients).map(c=>({id:'client:'+c.id,name:c.name,kind:'Cliente',record:c}))].sort(comparePersonNames);}
 function paymentMovements(person){if(!person)return [];const p=person.record;return person.id.startsWith('client:')?list(p.payments).map(e=>({...e,concept:'Cuenta de cliente'})):[...list(p.courses).flatMap(c=>list(c.payments).map(e=>({...e,concept:(COURSES[c.type]?.name||'')+' · '+(FEES[e.fee]||'')}))),...list(p.extraPayments).map(e=>({...e,concept:'Cuenta general'}))];}
 function newClientRecord(school,f,id){
  const name=String(f.name||'').trim(),email=String(f.email||'').trim(),identity=String(f.identity||'').trim();
@@ -440,7 +440,8 @@ function addClient(){
   await change(school=>{const record=newClientRecord(school,f,id);school.registry ||= {entries:[],clients:[],destinations:[]};school.registry.clients ||= [];school.registry.clients.push(record);});
  });
 }
-function clientsHtml(){const clients=list(data().registry?.clients);return '<div class="school-actions">'+button('+ Agregar cliente','new-client')+'</div><div class="school-rate-grid">'+clients.map(c=>{const st=statementData(clientStatement(c));return '<section class="card"><h3>'+esc(c.name)+'</h3><p>Saldo: '+statementBalance(st.servicesBalance)+'</p>'+equipmentHoursHtml(clientStatement(c),1)+'<div class="school-actions">'+button('Estado de cuenta','client-statement','data-client="'+esc(c.id)+'"')+button('Registrar pago','client-payment','data-client="'+esc(c.id)+'"')+'</div></section>';}).join('')+'</div>'+(!clients.length?'<div class="card">Todavía no hay clientes. Usa Agregar cliente o guarda un registro Charter con un nombre nuevo.</div>':'');}
+function comparePersonNames(a,b){const x=String(a.name||'').trim(),y=String(b.name||'').trim();return (!x)-(!y)||x.localeCompare(y,'es',{sensitivity:'base',numeric:true});}
+function clientsHtml(){const clients=[...list(data().registry?.clients)].sort(comparePersonNames);return '<div class="school-actions">'+button('+ Agregar cliente','new-client')+'</div><div class="school-rate-grid">'+clients.map(c=>{const st=statementData(clientStatement(c));return '<section class="card"><h3>'+esc(c.name)+'</h3><p>Saldo: '+statementBalance(st.servicesBalance)+'</p>'+equipmentHoursHtml(clientStatement(c),1)+'<div class="school-actions">'+button('Estado de cuenta','client-statement','data-client="'+esc(c.id)+'"')+button('Registrar pago','client-payment','data-client="'+esc(c.id)+'"')+'</div></section>';}).join('')+'</div>'+(!clients.length?'<div class="card">Todavía no hay clientes. Usa Agregar cliente o guarda un registro Charter con un nombre nuevo.</div>':'');}
 const panel=document.createElement('div');panel.id='panel-estudiantes';panel.className='aircraft-panel';contentEl.appendChild(panel);
 const tab=document.createElement('div');tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px">🎓 ESTUDIANTES / CLIENTES</div>';itinerariosTab.insertAdjacentElement('afterend',tab);
 tab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');render();});
@@ -459,7 +460,7 @@ function render(){
 }
 function renderDirectory(){
  const element=panel.querySelector('#school-student-list');if(!element)return;
- const students=data().students.filter(s=>(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+ const students=data().students.filter(s=>(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
  element.innerHTML='<p class="school-muted">'+students.length+' estudiantes / clientes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('');
 }
 function renderIntakes(body,school){
