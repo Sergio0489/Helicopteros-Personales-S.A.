@@ -89,6 +89,7 @@
 .school-org-tree ol>li::after{content:'';position:absolute;top:-14px;left:-18px;right:-18px;border-top:2px solid #91b4d0}
 .school-org-tree ol>li:first-child::after{left:50%}
 .school-org-tree ol>li:last-child::after{right:50%}
+.school-org-tree ol>li:only-child{max-width:none}
 .school-org-tree ol>li:only-child::after{display:none}
 .school-org-person{box-sizing:border-box;width:100%;max-width:400px;padding:16px 20px;border:1px solid #c5d7e7;border-top:3px solid #367eae;border-radius:10px;background:#f7fafc;text-align:center}
 .school-org-tree>li>.school-org-person{background:#123d68;border-color:#123d68;color:white}

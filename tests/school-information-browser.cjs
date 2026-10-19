@@ -33,9 +33,14 @@ test('school information, isolated certificate saves, failures and synchronized 
  assert.equal(await panel.locator('[data-school-person] p').count(),5);
  assert.deepEqual(findings(await panel.locator('.school-organization').innerHTML()),[]);
  assert.equal(await panel.locator('[data-school-person] span').count(),0,'No personal contact fields are rendered');
- for(const [id,parent]of [['director','manager'],['deputy','director'],['instructor','deputy'],['administration','manager']]){
+ for(const [id,parent]of [['director','manager'],['deputy','director'],['instructor','director'],['administration','director']]){
   assert.equal(await panel.locator('[data-school-person='+id+']').evaluate(el=>el.parentElement.parentElement.parentElement.querySelector(':scope > [data-school-person]').dataset.schoolPerson),parent);
  }
+ const positions=await panel.locator('[data-school-person]').evaluateAll(nodes=>Object.fromEntries(nodes.map(el=>{const r=el.getBoundingClientRect();return [el.dataset.schoolPerson,{x:r.x,y:r.y,width:r.width}];})));
+ assert(positions.manager.y<positions.director.y&&positions.director.y<positions.deputy.y);
+ assert.equal(positions.deputy.y,positions.instructor.y);assert.equal(positions.instructor.y,positions.administration.y);
+ assert(positions.deputy.x<positions.instructor.x&&positions.instructor.x<positions.administration.x);
+ assert(Math.abs(positions.deputy.width-positions.administration.width)<1);
  assert.equal(await panel.locator('.school-specifications time[datetime="2017-05-03"]').count(),6);
  assert.equal(await panel.locator('.school-specifications time[datetime="2021-07-15"]').count(),1);
  for(const [id,level]of [['exploitation','warn'],['operation','orange'],['simulator','danger']])assert.equal(await panel.locator('[data-school-certificate='+id+']').getAttribute('data-level'),level);

@@ -40,7 +40,7 @@ test('public organization metadata is limited to names and roles', () => {
 });
 
 test('director and role loaders invalidate the previously published school bundle', () => {
-  const version = '20261019-school-privacy-2';
+  const version = '20261019-school-org-3';
   const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   for (const file of ['cloud.js', 'role-main-view.js']) assert(index.includes(file + '?v=' + version));
   assert(fs.readFileSync(path.join(root, 'cloud.js'), 'utf8').includes('school-info.js?v=' + version));
