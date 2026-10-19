@@ -12,6 +12,8 @@ Un guardado que afecta varios cuadros requiere permiso para todos los datos modi
 
 ## Activación
 
+El código implementa estos permisos; su disponibilidad en producción debe comprobarse por separado. Una publicación de GitHub Pages no despliega Firebase. La guía de [registro de usuarios](REGISTRO-USUARIOS.md) detalla la asignación de cargos, las restricciones de seguridad y las pruebas pendientes con cuentas de ensayo.
+
 Primero publicar los archivos web en GitHub Pages y actualizar la función existente:
 
 ```sh
