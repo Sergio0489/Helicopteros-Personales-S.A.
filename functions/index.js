@@ -33,7 +33,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const actorAccount=(await ref.get()).val();
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
- if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:5,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:6,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
  if(action==='access'){
   if(!user.emailVerified||user.disabled){res.status(403).json({error:'Verifica tu correo para consultar el acceso.'});return;}
   let account=(await ref.get()).val();

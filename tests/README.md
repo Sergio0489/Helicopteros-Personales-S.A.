@@ -35,3 +35,7 @@ Cubre:
 La suite también ejecuta las pruebas existentes de referencias y permisos de
 pilotos, sincronización de cuentas y vigencias. Las otras pruebas de navegador
 existentes permanecen disponibles para ejecución individual.
+
+## Escuela y certificados
+
+Las pruebas de Escuela usan datos sintéticos y comprueban los límites de 90 y 60 días, el día de vencimiento y el cambio de fecha en Panamá. Verifican las siete especificaciones, el organigrama, el diseño móvil, la persistencia de cada certificado sin alterar otros registros, la recuperación ante un error de guardado, la sincronización con Pendientes y los permisos de consulta y edición.

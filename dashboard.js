@@ -82,7 +82,7 @@ function updateUndoButtons(){
   fleet.forEach((ac,idx)=>{const b=document.getElementById('undo-btn-'+idx);if(b)b.disabled=!aircraftDirty.has(idx)&&!(previewData.undoFleet[aircraftKey(ac.reg)]||[]).length;});
 }
 async function commitPreview(next){
- try{PilotValidity.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
+ try{PilotValidity.validateChanges(previewData,arguments[0]);window.HPSchoolCertificates?.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
 
  try{await window.cloudWrite(next);previewData=structuredClone(next);return true;}
  catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
@@ -2072,6 +2072,8 @@ function buildResumen() {
 
   pilotosData.forEach(p=>PilotValidity.alerts(p).filter(a=>a.level!=='ok').forEach(a=>addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,a.label,a.expired?'VENCIDO':`Vence en ${a.days} días`,a.level,a.days)));
 
+  for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.certificates)||[])addAlert('🎓 Certificados de escuela','HP FLIGHT SCHOOL',certificate.name,certificate.label,certificate.level,certificate.days);
+
   // Render - grouped by aircraft registration
   if (Object.keys(sections).length === 0) {
     container.innerHTML = `<div style="text-align:center;padding:40px 0;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ok)">Sin tareas registradas. Los datos faltantes requieren revisión.</div>`;
@@ -2095,11 +2097,11 @@ function buildResumen() {
   const urgent=allItems.filter(item=>item.type==='danger').length;
   let html=`<div class="pending-overview"><div><strong>${allItems.length}</strong><span>Alertas totales</span></div><div class="pending-urgent"><strong>${urgent}</strong><span>Prioridad alta</span></div><div class="pending-upcoming"><strong>${allItems.length-urgent}</strong><span>Avisos próximos</span></div></div><div class="pendientes-grid">`;
   sortedRegs.forEach(reg=>{
-    const items=byReg[reg],total=items.length,isPilotoGroup=reg.includes('VIGENCIA');
+    const items=byReg[reg],total=items.length,isPilotoGroup=reg.includes('VIGENCIA'),isSchoolGroup=reg==='HP FLIGHT SCHOOL';
     const regLabel=isPilotoGroup
       ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent2)">${escapeRecord(reg)}</span>`
       : `<span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent)">${escapeRecord(reg)}</span>`;
-    html+=`<div class="pending-uniform-card" data-alert-kind="${isPilotoGroup?'pilots':'aircraft'}"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
+    html+=`<div class="pending-uniform-card" data-alert-kind="${isPilotoGroup?'pilots':isSchoolGroup?'school':'aircraft'}"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
     items.forEach(item=>{
       const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
       const bg=item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';

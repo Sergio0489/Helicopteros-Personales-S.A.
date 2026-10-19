@@ -66,7 +66,7 @@ function projectPage(data,account,policy,page){
   add('Documentos',people.flatMap(p=>arr(p.documents).map(d=>({name:p.name,...fields(d,'name date expiry number')}))));
  }
  if(page==='escuela'){
-  add('Información y documentos',[]);add('Cursos y fechas',arr(school.intakes).map(i=>fields(i,'type startDate name notes')));
+  add('Información y documentos',require('./school-certificates').certificates.map(c=>({certificado:c.name,vencimiento:school.certificates?.[c.id]?.expiresOn||''})));add('Cursos y fechas',arr(school.intakes).map(i=>fields(i,'type startDate name notes')));
   add('Tarifas de servicios',Object.entries(school.courseRates||{}).flatMap(([course,r])=>Object.entries(r||{}).filter(([,v])=>typeof v==='number').map(([service,cents])=>({course,service,cents}))));
  }
  if(page==='charter'){add('Información de la empresa',[]);add('Documentos y vencimientos',[]);add('Servicios',[]);}
