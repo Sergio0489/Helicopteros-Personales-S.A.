@@ -2,7 +2,8 @@
   "name": "helicopteros-personales-regression-tests",
   "private": true,
   "scripts": {
-    "test:records": "node --test tests/alphabetical-records-browser.cjs tests/pilot-records.cjs tests/pilot-sync.cjs tests/pilot-validity.cjs tests/permissions-browser-writes.cjs tests/student-statement-browser.cjs tests/school-certificates.cjs tests/school-information-browser.cjs"
+    "test:records": "node --test tests/alphabetical-records-browser.cjs tests/pilot-records.cjs tests/pilot-sync.cjs tests/pilot-validity.cjs tests/permissions-browser-writes.cjs tests/student-statement-browser.cjs tests/school-certificates.cjs tests/school-information-browser.cjs tests/public-privacy.cjs tests/users-privacy.cjs",
+    "test:privacy": "node --test tests/public-privacy.cjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
