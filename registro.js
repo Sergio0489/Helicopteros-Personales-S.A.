@@ -356,7 +356,7 @@ function renderPersonalReport(){
 }
 function personalWorkbook(entries,from,to,aircraft,service){return aacWorkbook([],from,to,service,{entries,aircraft});}
 
-window.Registro={renderReport,edit,deleteEntry,hasDraft:()=>dirty||pending,refresh:()=>{if(!dirty)render();},math:{reportPersonKey,reportPeopleOptions,personalReport,personalWorkbook,aacReport,aacWorkbook,airportCode,transportReport,prepareRegistration,prepareCorrection,number100,resolvePerson,suggestedHours,assignedCourse,nextBook,prepareDeletion,reverseAircraftRecord,deletionNeedsKey}};
+window.Registro={renderReport,edit,deleteEntry,hasDraft:()=>dirty||pending,refresh:()=>{if(!dirty)render();else refreshLists();},math:{reportPersonKey,reportPeopleOptions,personalReport,personalWorkbook,aacReport,aacWorkbook,airportCode,transportReport,prepareRegistration,prepareCorrection,number100,resolvePerson,suggestedHours,assignedCourse,nextBook,prepareDeletion,reverseAircraftRecord,deletionNeedsKey}};
 const previousDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!previousDraft?.()||dirty||pending;
 render();renderReport();window.REGISTRO_READY=true;
 })();

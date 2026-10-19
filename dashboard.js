@@ -131,7 +131,17 @@ async function loadAllFromFirebase() {
 }
 
 async function savePilotos() {
-  if (db) {const ok=await db.ref('pilotos').set(pilotosData);if(ok)window.PilotDossiers?.refresh();return ok;}
+  if (db) {
+    const ok=await db.ref('pilotos').set(pilotosData);
+    if(ok){
+      renderPilotos();
+      updatePilotDropdown();
+      buildResumen();
+      window.PilotDossiers?.refresh();
+      window.Registro?.refresh();
+    }
+    return ok;
+  }
 }
 
 const fleet = [
