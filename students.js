@@ -90,7 +90,8 @@ function studentById(school,id){const s=list(school.students).find(s=>s.id===id)
 function courseById(student,id){const c=list(student.courses).find(c=>c.id===id);if(!c)throw Error('No se encontró el curso.');return c;}
 async function change(mutator){
  if(busy)throw Error('Espera a que termine el guardado.');busy=true;
- try{const next=structuredClone(previewData),school=structuredClone(data());mutator(school);next.school=school;
+ // data() derives stages for display. Never persist those derived values on unrelated students.
+ try{const next=structuredClone(previewData),school=structuredClone({...data(),students:list(previewData.school?.students)});mutator(school);next.school=school;
   if(!await commitPreview(next))throw Error('No se pudo guardar. Se conserva la información anterior.');
   render();decorateRates();renderPayments();window.Registro?.refresh();
  }finally{busy=false;}
@@ -119,7 +120,7 @@ function bindNationality(dialog){
  input.addEventListener('blur',()=>{const matches=matchingCountries(input.value);if(matches.length===1&&countrySearch(matches[0].name)===countrySearch(input.value))input.value=matches[0].name;close();});
 }
 
-function dateField(name,label,value='',required=false){return '<label>'+label+'<input name="'+name+'" placeholder="DD/MM/AAAA" value="'+esc(fechaVista(value))+'"'+(required?' required':'')+'></label>';}
+function dateField(name,label,value='',required=false){return '<label>'+label+'<input name="'+name+'" placeholder="DD/MM/AAAA" value="'+esc(fechaVista(value))+'"'+(required?' required':' data-preserve-empty')+'></label>';}
 function input(name,label,value='',type='text',extra=''){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+extra+'></label>';}
 function amountField(name,label,value=0){return input(name,label,numeric(value),'number','min="0" max="999999999.99" step="0.01" required');}
 function errorDate(form,names){for(const [key,required]of names)if(!validDate(form[key],required))throw Error('Revisa la fecha: usa DD/MM/AAAA.');}
