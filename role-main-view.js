@@ -48,7 +48,7 @@
   function readonlyControl(e){
    if(e.closest('#sidebar,#readonly-refresh,#readonly-logout,#hamburgerBtn,#drawerCloseBtn,#drawerOverlay'))return true;
    if(e.closest('[data-aac-filters],[data-hp-filters]'))return true;
-   if(e.matches('[data-pilot-select],[data-pilot-search],[data-pilot-action="print"]'))return true;
+   if(e.matches('[data-pilot-select],[data-pilot-search],[data-pilot-action="print"],[data-pilot-action="blank-print"]'))return true;
    if(e.matches('[data-payment-person],[data-person-id],[role=option],[data-balance-person]'))return true;
    if(e.matches('#school-stage'))return true;
    if(e.matches('[data-action="view"]'))return true;
