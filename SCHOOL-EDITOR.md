@@ -8,14 +8,10 @@ El guardado conserva el control de concurrencia ETag de cloud.js y muestra un er
 
 La función del servidor devuelve la información según los permisos de lectura de Escuela. Los nombres de certificados también llegan a Pendientes cuando existe permiso para alertas de Escuela. La escritura del contenido institucional por `box-save` se deniega incluso si un cargo recibe permisos de edición del cuadro; la edición usa exclusivamente el flujo existente de Director protegido por las reglas del dashboard. Los permisos existentes para cambiar fechas de certificados se conservan.
 
-## Publicación autorizada: pendiente de acceso a Firebase
+## Publicación
 
-Este cambio requiere actualizar únicamente la función existente `accountRegistration` del codebase `accounts`, para que los demás cargos reciban los datos nuevos. No cambia reglas de base de datos, asignaciones de cargos, CORS, secretos ni configuración de servicios. No se debe publicar la interfaz sin publicar también la proyección de lectura del servidor: una función antigua no devolvería el contenido actualizado.
+El propietario autorizó y ejecutó el 19 de octubre de 2026 el despliegue de `accounts:accountRegistration` en `helicopteros-personales` desde Cloud Shell. La salida confirmó `Successful update operation` y `Deploy complete`. El PR #9 se fusionó después del despliegue.
 
-El propietario autorizó el 19 de octubre de 2026 actualizar únicamente accountRegistration y publicar después Pages. Las 29 pruebas pasaron tanto localmente como en GitHub Actions. No se ha desplegado: la integración oficial de Firebase aún no está conectada y este entorno no tiene una sesión de despliegue de Firebase o Google Cloud.
+El endpoint respondió `ready:true` y rechazó las consultas sin sesión tras la actualización. Las 29 pruebas automatizadas pasaron en GitHub Actions (39338100179), incluyendo Escuela, Pendientes, Usuarios y privacidad. La validación por cargo y de guardado utiliza datos y autenticación simulados; no se hicieron escrituras de prueba en datos reales de producción.
 
-1. Conectar Firebase con una cuenta autorizada para el proyecto helicopteros-personales y desplegar únicamente accountRegistration del codebase accounts.
-2. Verificar con sesiones de prueba autorizadas que Escuela respeta los permisos de lectura y que las escrituras de contenido institucional de otros cargos se rechazan. No crear ni modificar registros reales para la prueba.
-3. Fusionar el PR de interfaz y publicar Pages; comprobar la nueva versión de los recursos.
-
-Las pruebas automatizadas simulan datos, autenticación y guardados; no modifican Firebase en producción. La corrección previa de la jerarquía ya está publicada por separado.
+Para instalar dependencias de funciones se utilizó `npm --prefix functions install`: este directorio no incluía un package-lock.json. El despliegue se limitó con `--only functions:accounts:accountRegistration`. No se desplegaron reglas de base de datos ni se solicitaron cambios de roles.
