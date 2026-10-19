@@ -166,8 +166,9 @@
 
 
 @media print {
- .pilot-blank-print .school-registration-heading{padding-top:0!important;margin-bottom:4mm}
- .pilot-blank-print .school-registration-logo{height:20mm;margin-bottom:2mm}
+ body.school-printing #school-print-sheet.pilot-blank-print{break-inside:avoid;page-break-inside:avoid}
+ .pilot-blank-print .school-registration-heading{padding:0!important;margin-bottom:3mm}
+ .pilot-blank-print .school-registration-logo{height:18mm;margin-bottom:2mm}
  .pilot-blank-print .school-print-heading h2{font-size:16pt;margin-bottom:0}
  .pilot-blank-print h3{font:700 11pt Arial,sans-serif;color:#082f60;margin:4mm 0 1.5mm;padding-bottom:1mm;border-bottom:1px solid #aab7c5;break-after:avoid}
  .pilot-blank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:6mm}
@@ -179,8 +180,5 @@
  .pilot-blank-options strong{color:#173556}
  .pilot-blank-options>span{display:inline-flex;align-items:center;gap:1.5mm;white-space:nowrap}
  .pilot-blank-options i{display:inline-block;width:3mm;height:3mm;border:1px solid #777}
- .pilot-blank-verifications{width:100%;table-layout:fixed;border-collapse:collapse;font:9pt Arial,sans-serif;break-inside:avoid}
- .pilot-blank-verifications th,.pilot-blank-verifications td{border:1px solid #999;padding:1.5mm;text-align:left;height:7mm}
- .pilot-blank-verifications th{color:#173556;background:#f1f4f8}
  .pilot-blank-signature{margin-top:5mm}
 }
