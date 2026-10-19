@@ -39,3 +39,9 @@ existentes permanecen disponibles para ejecución individual.
 ## Escuela y certificados
 
 Las pruebas de Escuela usan datos sintéticos y comprueban los límites de 90 y 60 días, el día de vencimiento y el cambio de fecha en Panamá. Verifican las siete especificaciones, el organigrama, el diseño móvil, la persistencia de cada certificado sin alterar otros registros, la recuperación ante un error de guardado, la sincronización con Pendientes y los permisos de consulta y edición.
+
+## Privacidad y Usuarios
+
+`npm run test:privacy` escanea todos los archivos de texto versionados y comprueba que el organigrama solo publique nombre y cargo. Ejecutar después de agregar los archivos nuevos con `git add`; CI revisa el árbol completo del commit. Usa candidatos sintéticos para probar detección de identificadores, teléfonos, campos personales y escapes, sin conservar datos retirados ni sus hashes.
+
+`users-privacy.cjs` verifica con Firebase simulado que Usuarios rechace sesiones ausentes/revocadas y cuentas sin autorización vigente de Director, y que las respuestas no se almacenen en caché. También comprueba la carga paginada, filtros y asignación de cargo en el navegador con solicitudes interceptadas. Las pruebas de Escuela incluyen la jerarquía de los cinco cargos y solicitudes anónimas a la ruta pública con las versiones de caché anteriores y nuevas. Alcance y límites del escaneo e historial pendiente en `PRIVACY.md`.

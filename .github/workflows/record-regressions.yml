@@ -18,6 +18,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - run: npm run test:privacy
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:records

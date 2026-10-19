@@ -3,6 +3,7 @@ const {test,before,after}=require('node:test'),assert=require('node:assert/stric
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {chromium}=require('playwright');
 const {boxView}=require('../functions/box-view'),{applyChanges}=require('../functions/box-write');
+const {findings}=require('../scripts/public-privacy.cjs');
 const root=path.resolve(__dirname,'..'),at='2026-10-19';
 const date=days=>new Date(Date.parse(at+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);
 const fixture=()=>({fleet:{},pilotos:[],itinerarios:[],school:{version:1,students:[],rates:{},intakes:[],registry:{entries:[],clients:[]},certificates:{exploitation:{expiresOn:date(90)},operation:{expiresOn:date(60)},simulator:{expiresOn:date(-1)}}}});
@@ -28,6 +29,13 @@ test('school information, isolated certificate saves, failures and synchronized 
  const page=await director(t),panel=page.locator('#panel-escuela');
  assert.equal(await panel.locator('h1').innerText(),'HP FLIGHT SCHOOL');assert((await panel.innerText()).includes('AAC/DSA/EEAP/007'));
  assert.equal(await panel.locator('[data-school-person]').count(),5);assert.equal(await panel.locator('.school-specifications li').count(),7);
+ assert.deepEqual(await panel.locator('[data-school-person] h3').allTextContents(),['Cap. Mario Barcenas Chiari','Cap. Sergio Herrera Castro','Cap. Sadot Ríos','Cap. Alcibíades Bustamante','Cap. Fernando Alvarado']);
+ assert.equal(await panel.locator('[data-school-person] p').count(),5);
+ assert.deepEqual(findings(await panel.locator('.school-organization').innerHTML()),[]);
+ assert.equal(await panel.locator('[data-school-person] span').count(),0,'No personal contact fields are rendered');
+ for(const [id,parent]of [['director','manager'],['deputy','director'],['instructor','deputy'],['administration','manager']]){
+  assert.equal(await panel.locator('[data-school-person='+id+']').evaluate(el=>el.parentElement.parentElement.parentElement.querySelector(':scope > [data-school-person]').dataset.schoolPerson),parent);
+ }
  assert.equal(await panel.locator('.school-specifications time[datetime="2017-05-03"]').count(),6);
  assert.equal(await panel.locator('.school-specifications time[datetime="2021-07-15"]').count(),1);
  for(const [id,level]of [['exploitation','warn'],['operation','orange'],['simulator','danger']])assert.equal(await panel.locator('[data-school-certificate='+id+']').getAttribute('data-level'),level);
@@ -72,4 +80,11 @@ test('role view permits authorized certificate edits and blocks read-only users'
  policy.escuela.actions.edit=false;policy.escuela.boxes.certificates.edit=false;frame=await mount();assert.equal(await frame.locator('[data-school-cert-edit]').count(),0);assert.equal(await frame.locator('[data-school-certificate=simulator] time').getAttribute('datetime'),'2028-12-31');
  policy.escuela.boxes.certificates.view=false;frame=await mount();assert.equal(await frame.locator('[data-school-certificates]').count(),0);assert.equal(await frame.locator('[data-school-person]').count(),5);
  policy.escuela.boxes.certificates.view=true;frame=await mount(true);assert.equal(await frame.locator('[data-school-certificates]').count(),0,'Legacy server must not show missing dates as empty certificates');
+ policy.escuela.boxes.information.view=false;frame=await mount();assert.equal(await frame.locator('[data-school-person]').count(),0);assert.equal(await frame.locator('[data-school-information]').count(),0);
+});
+test('anonymous school asset requests are safe with old, new and absent cache keys',async()=>{
+ for(const query of ['', '?v=20261019-school-1', '?v=20261019-school-privacy-2', '?native=20261019-school-1']){
+  const response=await fetch(origin+'/school-info.js'+query);assert.equal(response.status,200);
+  assert.deepEqual(findings(await response.text()),[]);
+ }
 });

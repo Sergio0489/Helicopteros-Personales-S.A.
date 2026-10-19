@@ -364,7 +364,7 @@ test('Editing optional student/course dates never invents today as their value',
   await page.click('[data-action=edit-student]');
   assert.equal(await page.inputValue('dialog [name=birthDate]'), '');
   assert.equal(await page.inputValue('dialog [name=enrolledDate]'), '');
-  await page.fill('dialog [name=phone]', '61234567');
+  await page.fill('dialog [name=phone]', 'TEST-PHONE');
   await submit(page);
   onlyStudent(before, await snapshot(page), 1);
   await page.click('[data-action=edit-course][data-course="course1"]');
