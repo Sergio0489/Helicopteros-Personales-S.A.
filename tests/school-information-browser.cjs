@@ -20,8 +20,8 @@ async function director(t,data=fixture()){
  await page.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():r.fulfill({body:''}));
  await page.clock.install({time:new Date('2026-10-19T18:00:00Z')});
  const html=fs.readFileSync(root+'/index.html','utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace('<head>','<head><base href="'+origin+'/">');await page.setContent(html);
- await page.evaluate(data=>{crypto.randomUUID ||= ()=>String(Math.random());window.CLOUD_INITIAL=data;window.writes=[];window.cloudWrite=async next=>{if(window.failSave)throw Error('Fallo de prueba');writes.push(structuredClone(next));};window.showCloudError=e=>{window.lastSaveError=e.message;};},data);
- for(const file of ['functions/boxes.js','functions/school-certificates.js','dashboard.js','students.js','registro.js','pilots-ui.js','school-info.js','box-ui.js'])await page.addScriptTag({path:path.join(root,file)});
+ await page.evaluate(data=>{crypto.randomUUID ||= ()=>'test-'+Math.random().toString(36).slice(2);window.CLOUD_INITIAL=data;window.writes=[];window.cloudWrite=async next=>{if(window.failSave)throw Error('Fallo de prueba');writes.push(structuredClone(next));};window.showCloudError=e=>{window.lastSaveError=e.message;};},data);
+ for(const file of ['functions/boxes.js','functions/school-information.js','functions/school-certificates.js','dashboard.js','students.js','registro.js','pilots-ui.js','school-info.js','box-ui.js'])await page.addScriptTag({path:path.join(root,file)});
  await page.evaluate(()=>{document.getElementById('access-screen').hidden=true;document.getElementById('dashboard-app').hidden=false;escuelaTab.click();closeDrawer();});
  t.after(async()=>{await page.close();assert.deepEqual(errors,[]);});return page;
 }
@@ -76,12 +76,12 @@ test('school mobile layout and expiration updates at midnight in Panama',async t
  if(process.env.SCHOOL_SCREENSHOTS){await page.evaluate(()=>closeDrawer());await page.clock.runFor(500);await page.screenshot({path:'/tmp/school-mobile.png',fullPage:true});await page.setViewportSize({width:1440,height:1050});await page.clock.runFor(500);await page.evaluate(()=>{document.body.style.overflow='visible';document.querySelector('.content').style.overflow='visible';});await page.screenshot({path:'/tmp/school-desktop.png',fullPage:true});}
 });
 test('role view permits authorized certificate edits and blocks read-only users',async t=>{
- let data=fixture();const account={role:'Gerente',uid:'manager',assignedAt:'test'};
+ let data=fixture();data.school.information=require('../functions/school-information').value(data.school);data.school.information.people[1].name='Director actualizado';const account={role:'Gerente',uid:'manager',assignedAt:'test'};
  const policy={escuela:{actions:{view:true,edit:true},boxes:{information:{view:true},certificates:{view:true,edit:true}}}};
  const page=await browser.newPage(),errors=[];t.after(async()=>{await page.close();assert.deepEqual(errors,[]);});page.on('pageerror',e=>errors.push(e.message));await page.route('https://**',r=>r.fulfill({body:''}));
  await page.exposeFunction('testSave',body=>{data=applyChanges(data,body.before,body.after,policy,account).data;return {operation:'saved'};});await page.goto(origin+'/test');await page.evaluate(()=>{window.AccountRegistration={api:(_,body)=>window.testSave(body)};});
  const mount=async(legacy=false)=>{const native={...boxView(data,account,policy,'escuela'),operation:'test',uid:'manager'};if(legacy)delete native.schoolCertificates;await page.evaluate(async native=>{window.dispose?.();window.dispose=await RoleMainView.mount(document.getElementById('shell'),{native,pages:[{id:'escuela',name:'Escuela'}],name:'Gerente de prueba',role:'Gerente'},'escuela',()=>{});},native);const frame=await(await page.locator('iframe').elementHandle()).contentFrame();await frame.locator('#panel-escuela.active').waitFor({state:'visible'});return frame;};
- let frame=await mount();await frame.locator('[data-school-cert-edit=simulator]').click();await frame.locator('dialog [name=expiresOn]').fill('31/12/2028');await frame.locator('dialog [type=submit]').click();await frame.locator('dialog.school-dialog').waitFor({state:'detached'});assert.equal(data.school.certificates.simulator.expiresOn,'2028-12-31');
+ let frame=await mount();assert.equal(await frame.locator('[data-school-content]').count(),0);assert.equal(await frame.locator('[data-school-person=director] h3').innerText(),'Director actualizado');await frame.locator('[data-school-cert-edit=simulator]').click();await frame.locator('dialog [name=expiresOn]').fill('31/12/2028');await frame.locator('dialog [type=submit]').click();await frame.locator('dialog.school-dialog').waitFor({state:'detached'});assert.equal(data.school.certificates.simulator.expiresOn,'2028-12-31');
  policy.escuela.actions.edit=false;policy.escuela.boxes.certificates.edit=false;frame=await mount();assert.equal(await frame.locator('[data-school-cert-edit]').count(),0);assert.equal(await frame.locator('[data-school-certificate=simulator] time').getAttribute('datetime'),'2028-12-31');
  policy.escuela.boxes.certificates.view=false;frame=await mount();assert.equal(await frame.locator('[data-school-certificates]').count(),0);assert.equal(await frame.locator('[data-school-person]').count(),5);
  policy.escuela.boxes.certificates.view=true;frame=await mount(true);assert.equal(await frame.locator('[data-school-certificates]').count(),0,'Legacy server must not show missing dates as empty certificates');
@@ -92,4 +92,32 @@ test('anonymous school asset requests are safe with old, new and absent cache ke
   const response=await fetch(origin+'/school-info.js'+query);assert.equal(response.status,200);
   assert.deepEqual(findings(await response.text()),[]);
  }
+});
+
+test('Director edits and adds school content with persistent saves, failures and concurrent changes',async t=>{
+ const page=await director(t),panel=page.locator('#panel-escuela');
+ const original=await page.evaluate(()=>structuredClone(previewData));
+ const open=async(kind,id='')=>{if(kind==='institution'||kind==='note')await panel.locator('.school-institution-details').evaluate(el=>el.open=true);await panel.locator('[data-school-content="'+kind+'"][data-content-id="'+id+'"]').click();};
+ const save=async()=>{await page.locator('dialog [type=submit]').click();await page.locator('dialog.school-dialog').waitFor({state:'detached'});};
+ await open('people','director');await page.locator('dialog [name=name]').fill('Director de prueba');await save();
+ assert.equal(await panel.locator('[data-school-person=director] h3').innerText(),'Director de prueba');
+ await open('people');await page.locator('dialog [name=name]').fill('Integrante de prueba');await page.locator('dialog [name=role]').fill('Coordinación de operaciones');await save();
+ assert.equal(await panel.locator('[data-school-person]').count(),6);
+ const added=await page.evaluate(()=>previewData.school.information.people.at(-1));assert.equal(added.parent,'director');
+ await open('courses','course-1');await page.locator('dialog [name=name]').fill('Curso actualizado');await page.locator('dialog [name=approvedOn]').fill('15/10/2026');await save();
+ await open('courses');await page.locator('dialog [name=name]').fill('Curso nuevo');await page.locator('dialog [name=approvedOn]').fill('31/02/2026');await page.locator('dialog [type=submit]').click();assert.match(await page.locator('dialog .record-error').innerText(),/fecha/);
+ await page.locator('dialog [name=approvedOn]').fill('16/10/2026');await save();
+ await open('institution','institution-1');await page.locator('dialog [name=value]').fill('Institución actualizada');await save();
+ await open('institution');await page.locator('dialog [name=label]').fill('Horario');await page.locator('dialog [name=value]').fill('Lunes a viernes');await save();
+ await open('note','note');await page.locator('dialog [name=value]').fill('<img src=x onerror=alert(1)>');await save();assert.equal(await panel.locator('.school-institution-details img').count(),0);
+ await open('certificates');await page.locator('dialog [name=name]').fill('Certificado adicional');await save();
+ const certId=await page.evaluate(()=>previewData.school.information.certificates.at(-1).id);
+ await panel.locator('[data-school-cert-edit="'+certId+'"]').click();await page.locator('dialog [name=expiresOn]').fill('20/10/2026');await save();
+ assert((await page.locator('#panel-resumen').textContent()).includes('Certificado adicional'));
+ const stored=await page.evaluate(()=>structuredClone(previewData));assert.deepEqual(stored.school.students,original.school.students);assert.deepEqual(stored.school.registry,original.school.registry);
+ const reloaded=await director(t,stored);assert.equal(await reloaded.locator('[data-school-person=director] h3').innerText(),'Director de prueba');assert((await reloaded.locator('.school-specifications').innerText()).includes('Curso nuevo'));assert((await reloaded.locator('.school-institution-details').textContent()).includes('Lunes a viernes'));
+ await open('people','manager');await page.locator('dialog [name=name]').fill('No debe guardarse');await page.evaluate(()=>window.failSave=true);await page.locator('dialog [type=submit]').click();assert.match(await page.locator('dialog .record-error').innerText(),/No se pudo guardar/);assert.notEqual(await panel.locator('[data-school-person=manager] h3').innerText(),'No debe guardarse');
+ await page.evaluate(()=>{window.failSave=false;previewData.school.information.note='Cambio concurrente';});await page.locator('dialog [type=submit]').click();assert.match(await page.locator('dialog .record-error').innerText(),/información cambió/);
+ await page.locator('dialog [data-close]').click();
+ await page.setViewportSize({width:390,height:844});assert(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
 });

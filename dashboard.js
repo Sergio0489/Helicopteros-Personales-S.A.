@@ -82,7 +82,7 @@ function updateUndoButtons(){
   fleet.forEach((ac,idx)=>{const b=document.getElementById('undo-btn-'+idx);if(b)b.disabled=!aircraftDirty.has(idx)&&!(previewData.undoFleet[aircraftKey(ac.reg)]||[]).length;});
 }
 async function commitPreview(next){
- try{PilotValidity.validateChanges(previewData,arguments[0]);window.HPSchoolCertificates?.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
+ try{window.HPSchoolInformation?.validateChanges(previewData,arguments[0]);PilotValidity.validateChanges(previewData,arguments[0]);window.HPSchoolCertificates?.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
 
  try{await window.cloudWrite(next);previewData=structuredClone(next);return true;}
  catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
@@ -2072,7 +2072,7 @@ function buildResumen() {
 
   pilotosData.forEach(p=>PilotValidity.alerts(p).filter(a=>a.level!=='ok').forEach(a=>addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,a.label,a.expired?'VENCIDO':`Vence en ${a.days} días`,a.level,a.days)));
 
-  for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.certificates)||[])addAlert('🎓 Certificados de escuela','HP FLIGHT SCHOOL',certificate.name,certificate.label,certificate.level,certificate.days);
+  for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.certificates,undefined,previewData.school?.information)||[])addAlert('🎓 Certificados de escuela','HP FLIGHT SCHOOL',certificate.name,certificate.label,certificate.level,certificate.days);
 
   // Render - grouped by aircraft registration
   if (Object.keys(sections).length === 0) {

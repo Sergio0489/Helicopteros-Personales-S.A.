@@ -4,37 +4,25 @@
  const panel=document.getElementById('panel-escuela'),model=window.HPSchoolCertificates;
  if(!panel||!model)return;
  const esc=escapeRecord;
- const people={
-  manager:{role:'Gerente General',name:'Cap. Mario Barcenas Chiari'},
-  director:{role:'Director / Jefe de Instrucción',name:'Cap. Sergio Herrera Castro'},
-  deputy:{role:'Asistente del Director / Jefe de Instrucción',name:'Cap. Sadot Ríos'},
-  instructor:{role:'Instructor de Tierra y Vuelo',name:'Cap. Alcibíades Bustamante'},
-  administration:{role:'Asistente Administrativo',name:'Cap. Fernando Alvarado'}
- };
- const specifications=[
-  ['Curso Piloto Privado – Avión','2017-05-03'],
-  ['Curso Piloto Comercial – Avión','2017-05-03'],
-  ['Curso Piloto de Transporte de Línea Aérea – Avión','2017-05-03'],
-  ['Habilitación Multimotor Terrestre – Avión','2017-05-03'],
-  ['Habilitación por Instrumentos – Avión','2017-05-03'],
-  ['Curso Instructor de Vuelo – Avión','2017-05-03'],
-  ['Curso Piloto de Aeronave Pilotada a Distancia','2021-07-15']
- ];
+ const information=window.HPSchoolInformation;if(!information)return;
+ const config=()=>information.value(previewData.school);
+ const canManage=()=>!window.ROLE_VIEW;
+ const editButton=(kind,id,label='Editar')=>canManage()?'<button type="button" class="record-btn" data-school-content="'+kind+'" data-content-id="'+esc(id||'')+'">'+label+'</button>':'';
  const rights=(box,action='view')=>!window.ROLE_VIEW||(box!=='certificates'||ROLE_VIEW.schoolCertificates===true)&&HPBoxes.permissions(ROLE_VIEW.policy,'escuela',box)[action];
- const node=id=>{const p=people[id];return '<article class="school-org-person" data-school-person="'+id+'"><p>'+esc(p.role)+'</p><h3>'+esc(p.name)+'</h3></article>';};
+ const node=p=>'<article class="school-org-person" data-school-person="'+esc(p.id)+'"><p>'+esc(p.role)+'</p><h3>'+esc(p.name)+'</h3>'+editButton('people',p.id)+'</article>';
  const longDate=value=>new Intl.DateTimeFormat('es-PA',{day:'2-digit',month:'long',year:'numeric',timeZone:'America/Panama'}).format(new Date(value+'T12:00:00-05:00'));
  let renderedDay='',saving=false;
  function render(){
   renderedDay=model.today();
-  const certs=previewData.school?.certificates||{};
+  const certs=previewData.school?.certificates||{},info=config(),manager=info.people.find(p=>p.id==='manager'),director=info.people.find(p=>p.id==='director');
   panel.innerHTML='<header class="school-institution-heading"><h1>HP FLIGHT SCHOOL</h1><p>AAC/DSA/EEAP/007</p></header>'+
-   (rights('information')?'<section class="card school-organization" data-school-information><h2>Organigrama</h2><ol class="school-org-tree"><li>'+node('manager')+'<ol><li>'+node('director')+'<ol><li>'+node('deputy')+'</li><li>'+node('instructor')+'</li><li>'+node('administration')+'</li></ol></li></ol></li></ol></section>':'')+
-   (rights('certificates')?'<section class="card school-certificates" data-school-certificates><h2>Certificados y vencimientos</h2><p class="school-cert-legend"><span class="school-status warn">61 a 90 días</span><span class="school-status orange">0 a 60 días</span><span class="school-status danger">Vencido</span></p><div class="school-cert-grid">'+model.certificates.map(c=>{const date=certs[c.id]?.expiresOn||'',state=model.status(date,renderedDay);return '<article class="school-certificate" data-school-certificate="'+c.id+'" data-level="'+state.level+'"><h3>'+esc(c.name)+'</h3><span class="school-cert-label">Fecha de vencimiento</span><div class="school-cert-date">'+(date?'<time datetime="'+esc(date)+'">'+esc(fechaVista(date))+'</time>':'<span>DD/MM/AAAA</span>')+'</div><p class="school-status '+state.level+'">'+esc(state.label)+'</p>'+(rights('certificates','edit')?'<button type="button" class="record-btn" data-school-cert-edit="'+c.id+'">'+(date?'Cambiar fecha':'Registrar fecha')+'</button>':'')+'</article>';}).join('')+'</div></section>':'')+
-   (rights('information')?'<section class="card school-specifications" data-school-information><h2>Especificaciones de Instrucción</h2><ol>'+specifications.map(([name,date])=>'<li><div><h3>'+esc(name)+'</h3><p>Aprobado el <time datetime="'+date+'">'+esc(longDate(date))+'</time></p></div></li>').join('')+'</ol></section><details class="card school-institution-details" data-school-information><summary>Información institucional</summary><dl><div><dt>Razón social y comercial</dt><dd>Helicópteros Personales, S.A.</dd></div><div><dt>Registro público</dt><dd>Ficha 563687 · Documento 1117805 · Sección de micropelículas mercantil</dd></div><div><dt>Base de operaciones</dt><dd>Aeropuerto Internacional Marcos A. Gelabert, Hangar 19ª, Vía Diógenes de la Rosa, Albrook, corregimiento de Ancón, Panamá, República de Panamá.</dd></div><div><dt>Oficinas administrativas</dt><dd>Urbanización Obarrio N.º 4, calle 54.</dd></div><div><dt>Mantenimiento</dt><dd>Contratado a Talleres Aeronáuticos de Mantenimiento (TAM) habilitados por la AAC.</dd></div><div><dt>Teléfono y fax</dt><dd>(507) 315-0612</dd></div></dl><p>El Gerente General debe notificar a la AAC cualquier cambio de ubicación de la base de operaciones.</p></details>':'');
+   (rights('information')?'<section class="card school-organization" data-school-information><h2>Organigrama</h2><ol class="school-org-tree"><li>'+node(manager)+'<ol><li>'+node(director)+'<ol class="school-org-team">'+info.people.filter(p=>p.parent==='director').map(p=>'<li>'+node(p)+'</li>').join('')+'</ol></li></ol></li></ol>'+editButton('people','','Agregar integrante')+'</section>':'')+
+   (rights('certificates')?'<section class="card school-certificates" data-school-certificates><h2>Certificados y vencimientos</h2><p class="school-cert-legend"><span class="school-status warn">61 a 90 días</span><span class="school-status orange">0 a 60 días</span><span class="school-status danger">Vencido</span></p><div class="school-cert-grid">'+info.certificates.map(c=>{const date=certs[c.id]?.expiresOn||'',state=model.status(date,renderedDay);return '<article class="school-certificate" data-school-certificate="'+c.id+'" data-level="'+state.level+'"><h3>'+esc(c.name)+'</h3>'+editButton('certificates',c.id)+'<span class="school-cert-label">Fecha de vencimiento</span><div class="school-cert-date">'+(date?'<time datetime="'+esc(date)+'">'+esc(fechaVista(date))+'</time>':'<span>DD/MM/AAAA</span>')+'</div><p class="school-status '+state.level+'">'+esc(state.label)+'</p>'+(rights('certificates','edit')?'<button type="button" class="record-btn" data-school-cert-edit="'+c.id+'">'+(date?'Cambiar fecha':'Registrar fecha')+'</button>':'')+'</article>';}).join('')+'</div>'+editButton('certificates','','Agregar certificado')+'</section>':'')+
+   (rights('information')?'<section class="card school-specifications" data-school-information><h2>Especificaciones de Instrucción</h2><ol>'+info.courses.map(c=>'<li><div><h3>'+esc(c.name)+'</h3><p>Aprobado el <time datetime="'+esc(c.approvedOn)+'">'+esc(longDate(c.approvedOn))+'</time></p>'+editButton('courses',c.id)+'</div></li>').join('')+'</ol>'+editButton('courses','','Agregar curso')+'</section><details class="card school-institution-details" data-school-information><summary>Información institucional</summary><dl>'+info.institution.map(row=>'<div><dt>'+esc(row.label)+'</dt><dd>'+esc(row.value)+'</dd>'+editButton('institution',row.id)+'</div>').join('')+'</dl><p>'+esc(info.note)+'</p>'+editButton('note','note','Editar nota')+editButton('institution','','Agregar dato institucional')+'</details>':'');
   window.HPBoxUI?.annotate();
  }
  function edit(id){
-  const certificate=model.certificates.find(c=>c.id===id);
+  const certificate=config().certificates.find(c=>c.id===id);
   if(!certificate||!rights('certificates','edit'))return;
   const before=previewData.school?.certificates?.[id]?.expiresOn||'';
   School.modal(certificate.name,'<label class="school-full">Fecha de vencimiento<input name="expiresOn" placeholder="DD/MM/AAAA" data-preserve-empty value="'+esc(fechaVista(before))+'"></label><p class="school-full school-muted">Deja la fecha vacía si aún no está registrada.</p>',async form=>{
@@ -50,6 +38,36 @@
    finally{saving=false;}
   });
  }
+ const field=(name,label,value='',max=200)=>'<label class="school-full">'+label+'<input name="'+name+'" value="'+esc(value)+'" maxlength="'+max+'" required></label>';
+ function editContent(kind,id){
+  if(!canManage()||!['people','courses','institution','certificates','note'].includes(kind))return;
+  const initial=config(),before=JSON.stringify(previewData.school?.information),row=kind==='note'?{value:initial.note}:initial[kind].find(r=>r.id===id);
+  if(id&&!row)return;
+  let body='';
+  if(kind==='people')body=field('name','Nombre',row?.name,150)+field('role','Cargo',row?.role,150);
+  if(kind==='courses')body=field('name','Curso',row?.name,200)+field('approvedOn','Fecha de aprobación (DD/MM/AAAA)',row?fechaVista(row.approvedOn):'',10);
+  if(kind==='certificates')body=field('name','Nombre del certificado',row?.name,200);
+  if(kind==='institution')body=field('label','Título del dato',row?.label,120)+'<label class="school-full">Contenido<textarea name="value" maxlength="2000" required>'+esc(row?.value||'')+'</textarea></label>';
+  if(kind==='note')body='<label class="school-full">Nota institucional<textarea name="value" maxlength="2000">'+esc(row.value)+'</textarea></label>';
+  School.modal((id?'Editar':'Agregar')+' · '+({people:'Organigrama',courses:'Curso',institution:'Información institucional',certificates:'Certificado',note:'Nota institucional'}[kind]),body,async form=>{
+   if(!canManage())throw Error('Solo el Director puede modificar esta información.');
+   if(saving)throw Error('Espera a que termine el guardado.');
+   if(JSON.stringify(previewData.school?.information)!==before)throw Error('La información cambió. Cierra el formulario y vuelve a abrirlo.');
+   const info=config();let nextRow;
+   if(kind==='note')info.note=String(form.value||'').trim();
+   else{
+    const key=id||'custom-'+crypto.randomUUID();
+    if(kind==='people')nextRow={id:key,name:String(form.name||'').trim(),role:String(form.role||'').trim(),parent:row?.parent??'director'};
+    if(kind==='courses')nextRow={id:key,name:String(form.name||'').trim(),approvedOn:isoFecha(String(form.approvedOn||'').trim())};
+    if(kind==='certificates')nextRow={id:key,name:String(form.name||'').trim()};
+    if(kind==='institution')nextRow={id:key,label:String(form.label||'').trim(),value:String(form.value||'').trim()};
+    if(id)info[kind][info[kind].findIndex(r=>r.id===id)]=nextRow;else info[kind].push(nextRow);
+   }
+   information.validate(info);const next=structuredClone(previewData);next.school ||= {};next.school.information=info;
+   saving=true;try{if(!await commitPreview(next))throw Error('No se pudo guardar. Se conserva la información anterior.');render();buildResumen();}finally{saving=false;}
+  });
+ }
+ panel.addEventListener('click',event=>{const button=event.target.closest('[data-school-content]');if(button&&!button.disabled)editContent(button.dataset.schoolContent,button.dataset.contentId);});
  panel.addEventListener('click',event=>{const button=event.target.closest('[data-school-cert-edit]');if(button&&!button.disabled)edit(button.dataset.schoolCertEdit);});
  const refreshDay=()=>{if(renderedDay!==model.today()){render();buildResumen();}};
  escuelaTab.addEventListener('click',render);

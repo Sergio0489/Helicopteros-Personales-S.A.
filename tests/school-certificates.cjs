@@ -45,3 +45,20 @@ test('server rejects invalid certificate dates and unknown certificate fields',(
  const after=structuredClone(current);after.school.certificates.operation.extra='unauthorized';
  assert.throws(()=>applyChanges(current,current,after,policy(true),account),/no válido/);
 });
+
+test('school content projection respects view permissions and cannot be edited via role writes',()=>{
+ const content=require('../functions/school-information'),current=fixture();current.school.information=content.value(current.school);
+ current.school.information.people[1].name='Director de prueba';current.school.information.certificates.push({id:'custom-extra',name:'Certificado adicional'});current.school.certificates['custom-extra']={expiresOn:at};
+ const p=policy(true);p.escuela.boxes.information.edit=true;
+ const visible=boxView(current,account,p,'escuela').data;assert.equal(visible.school.information.people[1].name,'Director de prueba');
+ const changed=structuredClone(visible);changed.school.information.people[1].name='Cambio no autorizado';assert.throws(()=>applyChanges(current,visible,changed,p,account),/Sin permiso/);
+ p.escuela.boxes.information.view=false;assert.equal(boxView(current,account,p,'escuela').data.school.information.people,undefined);assert.equal(boxView(current,account,p,'escuela').data.school.information.certificates.at(-1).name,'Certificado adicional');
+ const pending=boxView(current,account,{pendientes:{actions:{view:true},boxes:{school:{view:true}}}},'pendientes').data;
+ assert.equal(pending.school.information.people,undefined);assert.equal(pending.school.information.institution,undefined);
+ assert(model.alerts(pending.school.certificates,at,pending.school.information).some(c=>c.name==='Certificado adicional'));
+ assert.throws(()=>boxView(current,account,{pendientes:{actions:{view:true},boxes:{school:{view:false}}}},'pendientes'),/No tienes permiso/);
+ content.validate(current.school.information);
+ for(const mutate of [v=>v.people[0].parent='director',v=>v.people[0].phone='TEST-PHONE',v=>v.courses[0].approvedOn='2026-02-30',v=>v.certificates.push(v.certificates[0])]){
+  const bad=structuredClone(current.school.information);mutate(bad);assert.throws(()=>content.validate(bad));
+ }
+});
