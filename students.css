@@ -244,3 +244,13 @@
  .pilot-blank-options i{display:inline-block;width:3mm;height:3mm;border:1px solid #777}
  .pilot-blank-signature{margin-top:5mm}
 }
+
+.school-org-team{flex-wrap:wrap}
+.school-org-tree ol.school-org-team>li{flex:1 1 calc(33.333% - 36px);max-width:none;min-width:200px}
+.school-organization>button,.school-specifications>button,.school-certificates>button{margin-top:16px}
+.school-institution-details dd{white-space:pre-wrap;overflow-wrap:anywhere}
+.school-institution-details button{margin:8px 8px 8px 0}
+.school-org-person button{margin-top:8px;background:white;color:#123d68}
+@media(max-width:600px){.school-org-tree ol.school-org-team>li{flex:auto;min-width:0}}
+
+.school-org-person,.school-specifications h3,.school-certificate h3{overflow-wrap:anywhere}

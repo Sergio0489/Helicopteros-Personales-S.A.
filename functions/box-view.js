@@ -18,7 +18,7 @@ function boxView(data,account,rawPolicy,page){
  const policy=normalize(rawPolicy),base=nativeView(data,account,policy,page);
  if(page==='estadisticas'&&permissions(policy,page,'winners').view)base.monthlyWinners=monthlyReport(data);
  if(page==='estudiantes'&&account.role==='Estudiante'&&permissions(policy,page,'account').view){return {...base,policy,boxes:policy[page].boxes,editable:false,ownStatement:true};}
- const fine=filterTree(base.data,[],base.data,path=>{const pair=boxFor(path,base.data);if(!pair||pair[0]!==page)return true;return allowed(policy,path,base.data,'view');})||{};
+ const fine=filterTree(base.data,[],base.data,path=>{const pair=boxFor(path,base.data);if(page==='pendientes'&&path[0]==='school'&&path[1]==='information')return path[2]==='certificates';if(!pair||pair[0]!==page)return true;return allowed(policy,path,base.data,'view');})||{};
  if(page==='horario'){fine.itinerarios=(fine.itinerarios||[]).filter(f=>aircraftAllowed(policy,f.aeronave));return {...base,data:fine,policy,boxes:policy[page]?.boxes||{},editable:false};}
  // Include editable source records only when this role has explicit view access to them.
  const sources=clone(data);delete sources.undoFleet;if(sources.school)delete sources.school.paymentReceiverNames;

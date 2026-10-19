@@ -87,7 +87,7 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261019-school-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261019-school-editor-4';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261019-school-1';
@@ -97,7 +97,7 @@ async function openDashboard(data){
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
  const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261019-pilot-form-3';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
- const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261019-school-org-3';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
+ const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261019-school-editor-4';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.AccountRegistration?.installUsersPage();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }

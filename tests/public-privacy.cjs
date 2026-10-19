@@ -32,15 +32,13 @@ test('privacy detector rejects synthetic IDs, phone formats, fields and escaped 
 });
 
 test('public organization metadata is limited to names and roles', () => {
-  const source = fs.readFileSync(path.join(root, 'school-info.js'), 'utf8');
-  const declaration = source.slice(source.indexOf('const people='), source.indexOf('const specifications='));
-  const people = vm.runInNewContext(declaration + '; people;', {}, {timeout: 1000});
-  assert.equal(Object.keys(people).length, 5);
-  for (const person of Object.values(people)) assert.deepEqual(Object.keys(person).sort(), ['name', 'role']);
+  const people = require('../functions/school-information').defaults.people;
+  assert.equal(people.length, 5);
+  for (const person of people) assert.deepEqual(Object.keys(person).sort(), ['id', 'name', 'parent', 'role']);
 });
 
 test('director and role loaders invalidate the previously published school bundle', () => {
-  const version = '20261019-school-org-3';
+  const version = '20261019-school-editor-4';
   const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   for (const file of ['cloud.js', 'role-main-view.js']) assert(index.includes(file + '?v=' + version));
   assert(fs.readFileSync(path.join(root, 'cloud.js'), 'utf8').includes('school-info.js?v=' + version));

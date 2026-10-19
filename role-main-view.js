@@ -5,12 +5,12 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261019-school-org-3',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261019-school-editor-4',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
  async function assets(page){
-  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js'].map(asset)).catch(e=>{bundle=null;throw e;});
   if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
   return [...await bundle,page==='estadisticas'?await chartBundle:''];
  }
@@ -110,7 +110,7 @@
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,chart]=await assets(page);
+  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,chart]=await assets(page);
   const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
   const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
@@ -123,7 +123,7 @@
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
-  add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(schoolInformation);add(boxUIScript);add('window.finishRoleView();');
+  add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(schoolInformation);add(boxUIScript);add('window.finishRoleView();');
   let settled=false,timer,resolveReady,rejectReady;
   const ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
   const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
