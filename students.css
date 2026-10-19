@@ -71,6 +71,61 @@
 .school-course [data-action="delete-course"]{color:var(--danger)}
 
 #school-print-sheet{display:none}
+
+/* HP Flight School: institutional information, organization and certificates. */
+#panel-escuela{font-family:'IBM Plex Sans',Arial,sans-serif}
+.school-institution-heading{display:block;position:static;background:none;border:0;box-shadow:none;padding:8px 0 22px;height:auto;margin:0;text-align:left}
+.school-institution-heading h1{font:800 clamp(23px,3vw,34px)/1.2 'IBM Plex Sans',Arial,sans-serif;color:#123d68;letter-spacing:1px;margin:0 0 8px}
+.school-institution-heading p{font:600 13px/1.5 'IBM Plex Mono',monospace;letter-spacing:1px;color:#536a7e;margin:0}
+#panel-escuela>.card{margin:0 0 22px;padding:24px}
+#panel-escuela>.card::before{display:none}
+#panel-escuela h2{margin:0 0 20px;font-size:20px;color:#123d68;line-height:1.3}
+.school-org-tree,.school-org-tree ol{list-style:none;padding:0;margin:0}
+.school-org-tree>li{display:flex;flex-direction:column;align-items:center}
+.school-org-tree ol{position:relative;display:flex;justify-content:center;gap:36px;padding-top:28px;width:100%}
+.school-org-tree ol>li{position:relative;flex:1;min-width:0;max-width:430px;display:flex;flex-direction:column;align-items:center}
+.school-org-tree ol::before{content:'';position:absolute;top:0;left:50%;height:14px;border-left:2px solid #91b4d0}
+.school-org-tree ol>li::before{content:'';position:absolute;top:-14px;height:14px;left:50%;border-left:2px solid #91b4d0}
+.school-org-tree ol>li::after{content:'';position:absolute;top:-14px;left:-18px;right:-18px;border-top:2px solid #91b4d0}
+.school-org-tree ol>li:first-child::after{left:50%}
+.school-org-tree ol>li:last-child::after{right:50%}
+.school-org-tree ol>li:only-child::after{display:none}
+.school-org-person{box-sizing:border-box;width:100%;max-width:400px;padding:16px 20px;border:1px solid #c5d7e7;border-top:3px solid #367eae;border-radius:10px;background:#f7fafc;text-align:center}
+.school-org-tree>li>.school-org-person{background:#123d68;border-color:#123d68;color:white}
+.school-org-person p{font-size:12px;font-weight:700;line-height:1.45;margin:0 0 7px;color:#416781}
+.school-org-person h3{font-size:16px;font-weight:700;line-height:1.35;margin:0 0 10px;color:#123d68}
+.school-org-person>div{display:flex;flex-wrap:wrap;justify-content:center;gap:3px 14px;font-size:12px;line-height:1.5;color:#536a7e}
+.school-org-tree>li>.school-org-person :is(h3,p,div){color:white}
+.school-org-person[data-school-person=administration]{border-top-color:#7f92a2}
+.school-cert-legend{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 20px}
+.school-status{display:inline-block;border-radius:99px;padding:5px 10px;font:600 12px/1.4 'IBM Plex Sans',Arial,sans-serif;margin:0;color:#40566b;background:#e7edf3}
+.school-status.ok{color:#17633b;background:#e2f3e9}
+.school-status.warn{color:#473900;background:#ffd600}
+.school-status.orange{color:#592900;background:#ffad51}
+.school-status.danger{color:#fff;background:#c61e32}
+.school-status.invalid{color:#8b3300;background:#ffe5ce}
+.school-cert-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.school-certificate{border:1px solid #cbd9e5;border-top:4px solid #bdcbd7;border-radius:10px;padding:18px;display:flex;flex-direction:column;align-items:flex-start;gap:14px;min-width:0;background:#fafcfe}
+.school-certificate[data-level=ok]{border-top-color:#267347}.school-certificate[data-level=warn]{border-top-color:#ffd600}.school-certificate[data-level=orange]{border-top-color:#ff8c20}.school-certificate[data-level=danger]{border-top-color:#c61e32}
+.school-certificate h3{font-size:16px;line-height:1.4;margin:0;min-height:45px;color:#123d68}
+.school-cert-label{font-size:12px;color:#536a7e}
+.school-cert-date{align-self:stretch;border:1px solid #c4d2df;border-radius:6px;padding:11px 10px;font:500 15px 'IBM Plex Mono',monospace;color:#163956;background:white;margin-top:-7px}
+.school-cert-date>span{color:#667a8b}
+.school-certificate .record-btn{margin-top:auto;min-height:40px;white-space:normal}
+.school-specifications ol{padding:0;margin:0;list-style:none;counter-reset:school-specification}
+.school-specifications li{counter-increment:school-specification;display:flex;gap:16px;padding:15px 0;border-top:1px solid #dce5ed}
+.school-specifications li::before{content:counter(school-specification,decimal-leading-zero);flex:none;font:700 18px/1.5 'IBM Plex Mono',monospace;color:#367eae}
+.school-specifications li:first-child{border:0;padding-top:0}
+.school-specifications h3{font-size:15px;line-height:1.45;margin:0 0 5px;color:#173956}
+.school-specifications p{font-size:13px;line-height:1.5;color:#536a7e;margin:0}
+.school-institution-details summary{font-size:16px;font-weight:700;color:#123d68;cursor:pointer}
+.school-institution-details dl{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:22px 0}
+.school-institution-details dt{font-size:12px;font-weight:700;color:#536a7e;margin-bottom:5px}
+.school-institution-details dd{font-size:14px;line-height:1.6;margin:0;color:#173956}
+.school-institution-details>p{font-size:12px;line-height:1.6;color:#536a7e;margin-bottom:0}
+@media(max-width:900px){.school-cert-grid{grid-template-columns:1fr}.school-certificate h3{min-height:0}.school-org-tree ol{gap:20px}.school-org-tree ol>li::after{left:-10px;right:-10px}.school-org-person{padding:14px 12px}}
+@media(max-width:600px){#panel-escuela>.card{padding:18px 14px}.school-org-tree ol{flex-direction:column;gap:22px;padding:22px 0 0 16px;box-sizing:border-box}.school-org-tree ol>li{width:100%;max-width:none}.school-org-tree ol::before{left:0;top:0;bottom:0;height:auto}.school-org-tree ol>li::before{top:25px;left:-16px;width:16px;height:0;border-left:0;border-top:2px solid #91b4d0}.school-org-tree ol>li::after{display:none}.school-org-tree ol>li:last-child::after{display:block;top:27px;left:-17px;right:auto;bottom:0;border:0;border-left:3px solid var(--panel);width:0}.school-org-person{max-width:none}.school-org-person h3{font-size:14px}.school-org-person p,.school-org-person>div{font-size:11px}.school-institution-details dl{grid-template-columns:1fr}.school-specifications li{gap:10px}}
+
 @media print{
  @page{size:A4;margin:15mm}
  body.school-printing{background:#fff!important;background-image:none!important;color:#000!important;min-height:0}
@@ -162,6 +217,12 @@
 @media print {
  .school-registration-heading { padding-top: 8mm !important; }
  .school-registration-logo { display:block; width:62mm; height:23mm; object-fit:contain; margin:0 auto 4mm; }
+ body.school-printing #school-print-sheet.school-personal-print{break-inside:avoid;page-break-inside:avoid}
+ .school-personal-print .school-registration-heading{padding:0!important;margin-bottom:4mm}
+ .school-personal-print .school-registration-logo{height:18mm;margin-bottom:2mm}
+ .school-personal-print .school-print-heading h2{font-size:16pt;overflow-wrap:anywhere}
+ .school-personal-print .school-print-heading p{font-size:9pt;margin:2mm 0}
+ .school-personal-print .school-print-fields .school-info-item{font-size:10.5pt;line-height:1.35;padding:3px 0;overflow-wrap:anywhere}
 }
 
 

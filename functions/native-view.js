@@ -58,9 +58,10 @@ function nativeView(data,account,policy,page){
   out.school.paymentReceipts=receipts.map(r=>({...pick(r,'id personKey date number'),...(has('Abonos y recibos')?pick(r,'personName identity totalCents method bank reference receivedBy source voidedAt'):{}),...(has('Movimientos de pago')?pick(r,'lines'):{}),...(has('Comprobantes de transferencia')?pick(r,'attachment'): {})}));
   out.school.students=students.map(p=>({...pick(p,'id name'),courses:has('Movimientos de pago')?list(p.courses).map(c=>({...pick(c,'id type'),payments:copy(list(c.payments)),flights:[]})):[],...(has('Movimientos de pago')?pick(p,'extraPayments'): {})}));out.school.registry.clients=clients.map(p=>pick(p,has('Movimientos de pago')?'id name extraPayments':'id name'));
  }
- if(page==='escuela'){if(has('Cursos y fechas'))out.school.intakes=copy(list(s.intakes));if(has('Tarifas de servicios'))out.school.courseRates=copy(s.courseRates||{});}
+ if(page==='escuela'){if(has('Información y documentos'))out.school.certificates=copy(s.certificates||{});if(has('Cursos y fechas'))out.school.intakes=copy(list(s.intakes));if(has('Tarifas de servicios'))out.school.courseRates=copy(s.courseRates||{});}
 
  if(page==='pendientes'){
+  if(has('Alertas de escuela'))out.school.certificates=copy(s.certificates||{});
   if(has('Alertas de aeronaves')){
    const records=v=>Array.isArray(v)?v:v&&typeof v==='object'?Object.keys(v).sort().map(k=>v[k]):[];
    const hourFields='ciclos_totales ciclos_limite limite_motor limite_helice helice1_ciclos helice2_ciclos helice1_limite helice2_limite proxima_inspeccion horas_acum_50 horas_acum_100 horas_totales horas_limite';
@@ -79,7 +80,7 @@ function nativeView(data,account,policy,page){
    out.pilotos=list(data.pilotos).map(p=>({...pick(p,'nombre licencia instructorExpiry rpaInstructorExpiry medico charter escuela'),verificaciones:list(p.verificaciones).map(v=>pick(v,'nombre fecha'))}));
  }
 
- return {data:out,areas,notice:page==='pendientes'&&!has('Alertas de aeronaves')&&(!has('Alertas de pilotos')||account.role==='Estudiante')?'No hay una fuente de alertas disponible para las categorías autorizadas en este cargo.':null};
+ return {data:out,areas,schoolCertificates:true,notice:page==='pendientes'&&!has('Alertas de aeronaves')&&(!has('Alertas de pilotos')||account.role==='Estudiante')&&!has('Alertas de escuela')?'No hay una fuente de alertas disponible para las categorías autorizadas en este cargo.':null};
 }
 module.exports={nativeView};
 

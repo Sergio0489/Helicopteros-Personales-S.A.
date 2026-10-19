@@ -16,6 +16,7 @@ function boxFor(path,root){
  if(top==='pilotos')return ['pilotos',['licencia','numeroLicencia','tipo','habilitaciones','licenseTypes','instructorRatings','instructorExpiry','rpaInstructor','rpaInstructorExpiry'].includes(field)?'licenses':['medico','medicoClase','charter','escuela','verificaciones'].includes(field)?'documents':'pilots'];
  if(top==='itinerarios')return ['itinerario','flights'];
  if(top==='school'){
+  if(key==='certificates')return ['escuela','certificates'];
   if(key==='rates'||key==='services')return ['estudiantes','rates'];
   if(key==='courseRates'||key==='additionalServices')return ['estudiantes','course-rates'];
   if(key==='intakes')return ['estudiantes','intakes'];if(key==='brochureUrl')return ['estudiantes','mail'];
@@ -90,7 +91,7 @@ function applyChanges(current,before,after,policy,account){
   if(actual!==undefined&&actual!==null&&typeof actual==='object')checkTree(actual,path,context);
   checkTree(next===undefined?actual:next,path,context);return clone(next);
  }
- const result=merge(root,before,after,[]);require('./pilot-validity').validateChanges(current,result);return {data:result,writes};
+ const result=merge(root,before,after,[]);require('./pilot-validity').validateChanges(current,result);require('./school-certificates').validateChanges(current,result);return {data:result,writes};
 }
 module.exports={boxFor,allowed,applyChanges};
 
