@@ -17,7 +17,7 @@ El detector no acredita ausencia universal de datos personales: imágenes, PDFs,
 ## Historial y cachés: revisión del 19 de octubre de 2026
 
 - Introducción localizada: commit `2d9aaec58fc93e61fd5b97e2bb1533f3f4b3aa24`, archivo `school-info.js`, incorporado a `main` por el PR #7 y el merge `226da3cff89d09e68b0d24d7f5cf9941aa5a939d`.
-- La rama `feat/school-information-certificates`, los commits anteriores y las referencias/diffs del PR #7 conservan el contenido anterior. Un commit correctivo no lo borra del historial.
+- Antes de la reescritura descrita abajo, la rama `feat/school-information-certificates` también conservaba el contenido anterior. Los commits y referencias/diffs antiguos de los PR requieren purga adicional de GitHub; un commit correctivo por sí solo no los borra.
 - La API informó cero forks al revisar. Esto no permite saber si existen clones, descargas, capturas o copias externas.
 - El despliegue de Pages `39317283766` generó el artefacto `github-pages`, ID `12218587154`, asociado al commit anterior. La API lo indicó disponible, con vencimiento el 20/10/2026 a las 20:11:57 UTC. Debe considerarse una posible copia hasta su eliminación o expiración; no se descarga ni republica su contenido en esta corrección.
 - La respuesta pública observada para el script anterior usa `Cache-Control: max-age=600`. Las nuevas URLs de carga de Director y de las vistas por cargo cambian de versión. El archivo en su ruta original también se reemplaza para que las URLs antiguas reciban el contenido corregido al revalidar.
@@ -35,7 +35,7 @@ El propietario autorizó la limpieza histórica. Se validó una reescritura limi
 
 La actualización de este documento agrega posteriormente un commit de seguimiento en main. Se inspeccionaron 1.219 objetos alcanzables desde las ramas remotas, sin coincidencias con los diez datos retirados; la prueba aislada que incluyó las referencias de los PR inspeccionó 1.220 objetos.
 
-**Pendiente en GitHub:** las referencias internas refs/pull/7/head y refs/pull/8/head todavía apuntan a los commits anteriores. El artefacto github-pages ID 12218587154 sigue disponible. La solicitud de purga está preparada, pero no se ha enviado: el acceso al navegador requiere completar la verificación de GitHub Mobile. No se declara completada la eliminación de esas copias ni de las cachés internas.
+**Pendiente en GitHub:** las referencias internas refs/pull/7/head y refs/pull/8/head todavía apuntan a los commits anteriores. El artefacto github-pages ID 12218587154 sigue disponible. La verificación de GitHub Mobile se completó y la solicitud de purga se envió a GitHub Support. El portal confirmó el envío correcto; todavía no mostró un número de ticket en la lista de solicitudes. Se pidió retirar referencias y vistas de los PR #7 y #8, recolectar los objetos sensibles y revisar las cachés y el artefacto antiguo, sin reproducir los datos personales. La eliminación directa del artefacto está pendiente de la confirmación específica exigida por el navegador para borrados irreversibles. No se declara completada la eliminación de esas copias ni de las cachés internas.
 
 Los colaboradores deben volver a clonar el repositorio o trasladar únicamente sus cambios revisados a una copia limpia. No deben fusionar ni volver a publicar ramas basadas en el historial anterior.
 
