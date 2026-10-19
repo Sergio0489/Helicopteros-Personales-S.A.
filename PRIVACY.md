@@ -23,9 +23,23 @@ El detector no acredita ausencia universal de datos personales: imágenes, PDFs,
 - La respuesta pública observada para el script anterior usa `Cache-Control: max-age=600`. Las nuevas URLs de carga de Director y de las vistas por cargo cambian de versión. El archivo en su ruta original también se reemplaza para que las URLs antiguas reciban el contenido corregido al revalidar.
 - No se encontró registro de service worker ni escritura en Cache Storage en el código versionado. Existe un mensaje `SKIP_WAITING` en el botón de actualizar, que por sí solo no registra un worker. No se inspeccionaron los navegadores de los usuarios. Las pestañas ya abiertas o copias guardadas pueden conservar el contenido anterior; cambiar la URL no las elimina remotamente.
 
-## Limpieza histórica pendiente de autorización
+## Limpieza histórica autorizada: estado al 19 de octubre de 2026
 
-La publicación de esta corrección no reescribe commits ni borra ramas o artefactos históricos. Para una limpieza posterior:
+El propietario autorizó la limpieza histórica. Se validó una reescritura limitada con git-filter-repo 2.47.0 y se publicaron cuatro commits saneados conservando la topología y los mensajes. Se actualizaron las tres ramas con comprobación del SHA previo; no se cambiaron las demás ramas ni las protecciones. La interfaz y los archivos ejecutables de la versión vigente permanecen idénticos a los que aprobaron las 27 pruebas. GitHub Pages y CI volvieron a terminar correctamente tras la reescritura.
+
+| Rama | Nueva referencia tras la reescritura |
+| --- | --- |
+| feat/school-information-certificates | 7ed621289a28bbd187cad431c6104b6ca86d611f |
+| fix/school-public-privacy | 358665dbc7aa86972abc3e1fa88bc6dfab53f695 |
+| main | d5a90486aa9cca41e16696843d5472bb2250131d |
+
+La actualización de este documento agrega posteriormente un commit de seguimiento en main. Se inspeccionaron 1.219 objetos alcanzables desde las ramas remotas, sin coincidencias con los diez datos retirados; la prueba aislada que incluyó las referencias de los PR inspeccionó 1.220 objetos.
+
+**Pendiente en GitHub:** las referencias internas refs/pull/7/head y refs/pull/8/head todavía apuntan a los commits anteriores. El artefacto github-pages ID 12218587154 sigue disponible. La solicitud de purga está preparada, pero no se ha enviado: el acceso al navegador requiere completar la verificación de GitHub Mobile. No se declara completada la eliminación de esas copias ni de las cachés internas.
+
+Los colaboradores deben volver a clonar el repositorio o trasladar únicamente sus cambios revisados a una copia limpia. No deben fusionar ni volver a publicar ramas basadas en el historial anterior.
+
+Procedimiento aplicado y pasos de purga pendientes:
 
 1. Coordinar una pausa de escrituras y revisar todas las ramas, tags y referencias de PR, incluido el PR de esta corrección, cuyo diff de eliminación también referencia la versión anterior.
 2. Preparar una copia de trabajo aislada y un reemplazo del contenido afectado con `git-filter-repo --sensitive-data-removal`, conservando el organigrama corregido en la versión vigente. Validar alcance, referencias cambiadas y regresiones antes de publicar. No guardar listas de valores sensibles en el repositorio.
