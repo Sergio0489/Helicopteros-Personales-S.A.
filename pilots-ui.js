@@ -65,6 +65,6 @@
  root.onclick=e=>{const pick=e.target.closest('[data-pilot-select]');if(pick){selected=Number(pick.dataset.pilotSelect);render();requestAnimationFrame(()=>root.querySelector('[data-pilot-profile]')?.scrollIntoView({block:'start',behavior:'instant'}));return;}const b=e.target.closest('[data-pilot-action]');if(!b||b.disabled)return;const a=b.dataset.pilotAction;if(a==='print'||a==='blank-print'){printPilot(a==='blank-print');return;}if(a==='new')edit('dossier',null);else if(a==='personal')edit('dossier');else if(a.startsWith('verification'))verification(a.includes(':')?Number(a.split(':')[1]):null);else edit(a);};
  pilotosTab.addEventListener('click',render);window.addPilotoRow=()=>edit('dossier',null);
  const observer=new MutationObserver(()=>{const next=JSON.stringify(pilotosData);if(signature!==next){signature=next;selected=Math.min(selected,Math.max(0,pilotosData.length-1));render();}});observer.observe(document.getElementById('pilotos-list'),{childList:true,subtree:true});render();
- window.PilotDossiers={refresh:render};
+ window.PilotDossiers={refresh:render,select:index=>{if(!pilotosData[index])return;selected=index;query='';render();root.querySelector('[data-pilot-profile]')?.scrollIntoView({block:'start'});}};
 })();
 

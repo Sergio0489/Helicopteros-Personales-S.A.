@@ -710,7 +710,12 @@ function renderPayments(){
 }
 
 renderPayments();
-window.School={modal,money,verifyDeletionKey:correctDeletionKey,courseName:type=>COURSES[type]?.name||type,refresh:()=>{render();decorateRates();renderPayments();},decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
+function openSearchTarget(target){
+ if(target.kind==='student'){if(!data().students.some(s=>s.id===target.id))return;view='students';query='';stageFilter='';selected=target.id;render();document.getElementById('school-student-profile')?.scrollIntoView({block:'start'});}
+ if(target.kind==='client'){if(!list(data().registry?.clients).some(c=>c.id===target.id))return;view='clients';render();const b=[...panel.querySelectorAll('[data-client]')].find(e=>e.dataset.client===target.id);b?.closest('.card')?.scrollIntoView({block:'center'});}
+ if(target.kind==='receipt'){const receipt=list(data().paymentReceipts).find(r=>r.id===target.id);if(!receipt)return;paymentSelection=receipt.personKey;renderPayments();const details=paymentPanel.querySelector('.payment-history');if(details)details.open=true;[...paymentPanel.querySelectorAll('[data-receipt]')].find(e=>e.dataset.receipt===target.id)?.click();}
+}
+window.School={openSearchTarget,modal,money,verifyDeletionKey:correctDeletionKey,courseName:type=>COURSES[type]?.name||type,refresh:()=>{render();decorateRates();renderPayments();},decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
 const oldDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!oldDraft?.()||window.School.hasDraft();
 window.addEventListener('beforeunload',event=>{if(busy||window.School.hasDraft()){event.preventDefault();event.returnValue='';}});
 render();decorateRates();window.STUDENTS_READY=true;

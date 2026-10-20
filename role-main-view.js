@@ -5,12 +5,12 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261020-drafts-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261020-home-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
  async function assets(page){
-  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js'].map(asset)).catch(e=>{bundle=null;throw e;});
   if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
   return [...await bundle,page==='estadisticas'?await chartBundle:''];
  }
@@ -54,7 +54,7 @@
   }
   window.CLOUD_INITIAL=cfg.data;
   document.getElementById('access-screen').remove();document.getElementById('dashboard-app').hidden=false;
-  document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-profile">Mi perfil</button><button id="readonly-reason">Motivo del cambio</button><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
+  document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.home?'Inicio personalizado':cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-profile">Mi perfil</button><button id="readonly-reason">Motivo del cambio</button><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
   document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;
   document.getElementById('profile-menu')?.remove();document.getElementById('readonly-profile').onclick=()=>send('profile');document.getElementById('readonly-reason').onclick=()=>send('audit-reason');
   window.addEventListener('message',e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='profile-updated'){cfg.name=e.data.name;document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;document.getElementById('readonly-refresh').textContent='Actualizar datos';}});
@@ -65,7 +65,7 @@
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
    if(e.matches('[data-receipt-close]'))return true;
-   if(e.closest('[data-draft-notice]'))return true;
+   if(e.closest('[data-draft-notice],[data-home-control]'))return true;
    if(e.closest('#sidebar,#readonly-profile,#readonly-refresh,#readonly-logout,#hamburgerBtn,#drawerCloseBtn,#drawerOverlay'))return true;
    if(e.closest('[data-aac-filters],[data-hp-filters]'))return true;
    if(e.matches('[data-pilot-select],[data-pilot-search],[data-pilot-action="print"],[data-pilot-action="blank-print"]'))return true;
@@ -138,32 +138,56 @@
    DraftRecovery.init({revision:()=>cfg.operation,read:key=>cfg.draftEntries[key],write:(key,value)=>new Promise((resolve,reject)=>{cfg.draftEntries[key]=value;const id=crypto.randomUUID(),timer=setTimeout(()=>{draftWrites.delete(id);reject(Error('Borrador sin confirmar.'));},3000);draftWrites.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'draft-store',id,key,value},'*');})});
    window.installAircraftDrafts?.();window.Registro?.installDraft?.();
    const writer=window.cloudWrite;window.cloudWrite=async value=>{await DraftRecovery.beforeSave();try{const result=await writer(value);DraftRecovery.saved();return result;}catch(e){DraftRecovery.error(e.message);throw e;}};
+   const searches=new Map();
+   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='home-search-result')return;const item=searches.get(e.data.id);if(!item)return;clearTimeout(item.timer);searches.delete(e.data.id);e.data.error?item.reject(Error(e.data.error)):item.resolve(e.data.rows);});
+   HomeUI.install({pages:cfg.pages,policy:cfg.policy,role:cfg.role,name:cfg.name,go:row=>{if(row.page===cfg.page&&!cfg.home){HomeUI.focusTarget(row);return;}parent.postMessage({channel:cfg.channel,action:'home-go',row},'*');},getIndex:()=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{searches.delete(id);reject(Error('La consulta tardó demasiado. Reintenta.'));},22000);searches.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'home-search',id},'*');})});
+   if(cfg.home)HomeUI.showHome();else if(cfg.searchTarget)HomeUI.focusTarget(cfg.searchTarget);
    send('ready');
   };
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,chart]=await assets(page);
+  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,chart]=await assets(page);
   const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
   const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
   const csp=document.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: "+location.origin+"; connect-src 'none'; form-action 'none';";doc.head.prepend(csp);
-  const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+page;frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-downloads');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
+  const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+(result.home?'inicio':page);frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-downloads');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
   const style=document.createElement('style');style.textContent='[hidden]{display:none!important}button:disabled{cursor:default}input:disabled,select:disabled,textarea:disabled{opacity:1;color:inherit;-webkit-text-fill-color:currentColor}';doc.head.appendChild(style);
   const draftScope='role:'+result.role+':'+page+':';
   const draftEntries=Object.fromEntries(Object.entries(window.DraftRecovery?.list()||{}).filter(([k,v])=>k.startsWith(draftScope)&&result.native.editable&&v.revision===String(result.native.operation??'')&&v.policy===JSON.stringify(result.native.policy)).map(([k,v])=>[k.slice(draftScope.length),v]));
-  const cfg={...result.native,draftEntries,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
+  const cfg={...result.native,home:!!result.home,searchTarget:result.searchTarget,draftEntries,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
   const add=code=>{const s=doc.createElement('script');s.textContent=code;doc.body.appendChild(s);};
-  add(boxesScript);add(draftScript);
+  add(boxesScript);add(draftScript);add(homeModel);add(homeUI);
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
   add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(schoolInformation);add(boxUIScript);add('window.finishRoleView();');
-  let settled=false,timer,resolveReady,rejectReady;
+  let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0;
+  async function searchIndex(){
+   if(searchCache&&Date.now()-searchAt<60000)return searchCache;searchAt=Date.now();
+   searchCache=(async()=>{
+    const candidate=result.pages.find(p=>p.id!=='horario')||result.pages[0];if(!candidate)return [];
+    const fresh=await AccountRegistration.api('access',{page:candidate.id,layout:'main'});
+    if(!fresh.native)throw Error('Actualiza la aplicación para consultar la búsqueda.');
+    const pages=fresh.pages.filter(p=>result.pages.some(old=>old.id===p.id));
+    let rows=HomeSearchModel.build(fresh.native.data,{pages,policy:fresh.native.policy});
+    const itinerary=['planner','calendar','flights'].some(id=>HPBoxes.permissions(fresh.native.policy,'itinerario',id).view);
+    if(candidate.id!=='horario'&&pages.some(p=>p.id==='horario')&&!itinerary){
+     const schedule=await AccountRegistration.api('access',{page:'horario',layout:'main'});
+     const allowed=new Set(schedule.pages.map(p=>p.id));rows=rows.filter(r=>allowed.has(r.page));
+     const extra=HomeSearchModel.build(schedule.native.data,{pages:schedule.pages.filter(p=>p.id==='horario'&&pages.some(old=>old.id===p.id)),policy:schedule.native.policy});
+     rows=[...new Map([...rows,...extra].map(r=>[r.key,r])).values()];
+    }
+    return rows;
+   })().catch(e=>{searchCache=null;throw e;});return searchCache;
+  }
   const ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
   const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
   const listener=e=>{
    if(e.source!==frame.contentWindow||e.data?.channel!==channel)return;
+   if(e.data.action==='home-go'){if(settled&&(e.data.row?.page==='inicio'||result.pages.some(p=>p.id===e.data.row?.page)))onAction({action:'home-go',row:e.data.row});return;}
+   if(e.data.action==='home-search'){if(settled)searchIndex().then(rows=>frame.contentWindow?.postMessage({channel,action:'home-search-result',id:e.data.id,rows},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'home-search-result',id:e.data.id,error:error.message},'*'));return;}
    if(e.data.action==='draft-store'){
     if(!settled)return;let error=null;try{if(typeof e.data.key!=='string'||e.data.key.length>500)throw Error('Borrador inválido.');DraftRecovery.store(draftScope+e.data.key,e.data.value===null?null:{...e.data.value,policy:JSON.stringify(result.native.policy)});}catch{error='No se pudo conservar el borrador.';}
     frame.contentWindow?.postMessage({channel,action:'draft-stored',id:e.data.id,error},'*');return;
@@ -171,7 +195,7 @@
    if(e.data.action==='audit-reason'){if(settled)window.ChangeHistory?.setReason();return;}
    if(e.data.action==='profile'){if(settled)window.AccountProfile?.open({onSaved:result=>frame.contentWindow?.postMessage({channel,action:'profile-updated',name:result.profile.name},'*')});return;}
    if(e.data.action==='box-save'){
-    if(!settled)return;
+    if(!settled)return;searchCache=null;
     AccountRegistration.api('box-save',{page,operation:e.data.operation,before:e.data.before,after:e.data.after}).then(result=>frame.contentWindow?.postMessage({channel,action:'box-save-result',requestId:e.data.requestId,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'box-save-result',requestId:e.data.requestId,error:error.message},'*'));return;
    }
    if(e.data.action==='load-error'){

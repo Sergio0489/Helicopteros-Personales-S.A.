@@ -23,24 +23,30 @@
   const logout=document.createElement('button');logout.textContent='Cerrar sesión';logout.onclick=async()=>{window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();};
   const row=document.createElement('div');row.style.cssText='display:flex;gap:12px;flex-wrap:wrap;padding:16px';row.append(retry,fallback,logout);target.appendChild(row);
  }
- async function load(page=''){
+ async function load(page='',searchTarget=null){
   if(busy)return;busy=true;selected=page;
   if(!shell){shell=document.createElement('section');shell.id='role-portal';document.body.appendChild(shell);}
   shell.hidden=false;dispose?.();dispose=null;shell.replaceChildren();
   const msg=document.createElement('p');msg.style.padding='24px';msg.setAttribute('role','status');msg.textContent='Cargando página y permisos…';shell.appendChild(msg);
   try{
-   let result=await request(page?{page,layout:'main'}:{});
-   if(!page&&result.pages.length){const saved=window.PageMemory?.read();page=(saved?.mode==='role'&&result.pages.some(p=>p.id===saved.page)?saved.page:result.pages[0].id);selected=page;result=await request({page,layout:'main'});}
-   if(!page){msg.textContent='Tu Director debe asignarte un cargo y guardar sus permisos de consulta.';actions(shell);return;}
+   let result=await request(page&&page!=='inicio'?{page,layout:'main'}:{});
+   if(!page&&result.pages.length){const saved=window.PageMemory?.read();page=(saved?.mode==='role'&&(saved.page==='inicio'||result.pages.some(p=>p.id===saved.page))?saved.page:'inicio');}
+   if(!result.pages.length){msg.textContent='Tu Director debe asignarte un cargo y guardar sus permisos de consulta.';actions(shell);return;}
+   selected=page;
+   const home=page==='inicio';
+   if(home){const preferred=HomeSearchModel.ordered(result.pages,result.role);page=(preferred.find(p=>p.id!=='horario')||preferred[0]).id;result=await request({page,layout:'main'});result.home=true;}
+   else if(!result.native)result=await request({page,layout:'main'});
+   result.searchTarget=searchTarget;
    if(!result.native){await legacy();return;}
    dispose=await RoleMainView.mount(shell,result,page,async event=>{
+    if(event.action==='home-go')await load(event.row.page,event.row);
     if(event.action==='aircraft')window.PageMemory?.rememberRole(selected,event.page);
     if(event.action==='page')await load(event.page);
     if(event.action==='refresh')await load(selected);
     if(event.action==='logout'){window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();}
     if(event.action==='load-error'&&!shell.querySelector('[data-view-error]')){const note=document.createElement('div');note.dataset.viewError='true';note.setAttribute('role','alert');note.textContent=event.message;actions(note);shell.prepend(note);}
    });
-   window.PageMemory?.rememberRole(page);
+   window.PageMemory?.rememberRole(home?'inicio':page);
   }catch(e){msg.textContent='No se pudo abrir el diseño principal: '+e.message;shell.replaceChildren(msg);actions(shell);}
   finally{busy=false;}
  }
