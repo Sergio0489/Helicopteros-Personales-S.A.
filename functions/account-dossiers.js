@@ -42,6 +42,7 @@ function ensure(data,user,account={},now=new Date().toISOString()){
   // Keep source academic/financial and aviation records intact. Directory classification only.
   for(const {record,kind:k}of candidates){record.authUid=user.uid;if(k!=='client')record.directoryKind=kind;}
   target.directoryKind=kind;
+  for(const link of Object.values(next.school.identityLinks||{}))if((link.records||[]).some(r=>candidates.some(c=>c.kind===r.kind&&c.record.id===r.id))&&!link.records.some(r=>r.kind===kind&&r.id===target.id))link.records.push({kind,id:target.id});
   next.school.userProfiles ||= {};next.school.userProfiles[user.uid]={...next.school.userProfiles[user.uid],dossier:{kind,id:target.id}};
  }
  const changed=JSON.stringify(data)!==JSON.stringify(next);

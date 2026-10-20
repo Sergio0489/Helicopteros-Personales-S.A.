@@ -73,9 +73,9 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   let failure='',applied;const operation=randomUUID(),now=new Date().toISOString();
   const result=await db.ref().transaction(root=>{failure='';try{if(root?.dashboard?.operation!==req.body.operation)throw Error('Los datos cambiaron. Revisa nuevamente la coincidencia.');
    if(user.uid!==DIRECTOR&&!(root.accountRequests?.[user.uid]?.role==='Director'&&root.accountRequests[user.uid].assignedAt&&!root.accountRequests[user.uid].mergedInto))throw Error('El permiso de Director cambió.');
-   applied=identities.merge(root,req.body.members,user.uid,DIRECTOR,now);const next=applied.root;
+   applied=identities.merge(root,req.body.members,user.uid,DIRECTOR,now,req.body.primaryKey||'');const next=applied.root;
    next.dashboard=audit.attach(root.dashboard,{...next.dashboard,operation,revision:(root.dashboard.revision||0)+1,updatedAt:now,updatedBy:user.uid},actor,'dashboard','Unificación de identidad por correo o cédula');
-   for(const uid of [applied.uid,...applied.mergedUids])next.accountRequests[uid]=audit.attach(root.accountRequests[uid],next.accountRequests[uid],actor,'account','Unificación de identidad',uid);
+   for(const uid of [applied.uid,...applied.mergedUids].filter(Boolean))next.accountRequests[uid]=audit.attach(root.accountRequests[uid],next.accountRequests[uid],actor,'account','Unificación de identidad',uid);
    return next;
   }catch(e){failure=e.message;return;}},undefined,false);
   if(!result.committed||failure){res.status(409).json({error:failure||'No se pudo unificar.'});return;}
@@ -89,7 +89,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}
   if(typeof req.body.payload!=='string'||Buffer.byteLength(req.body.payload)>10000000)throw Error('Datos no válidos.');
   const data=JSON.parse(req.body.payload);if(!data||typeof data!=='object'||!data.fleet)throw Error('Respaldo no válido.');
-  let failure='';const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{identities.assertUnique(root?.payload?JSON.parse(root.payload):{},data);}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:req.body.payload,operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
+  let failure='';const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{};identities.syncLinked(before,data);identities.assertUnique(before,data);}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
   if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision});return;
  }
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}

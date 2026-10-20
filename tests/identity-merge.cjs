@@ -22,3 +22,23 @@ test('Signup cannot claim another account or an unrelated dossier by typing its 
 });
 
 test('Automatic sync never creates another dossier on a conflicting cédula',()=>{const data={school:{personnel:[{id:'staff',identity:'TEST-ALPHA',email:'old@example.test',name:'Existing'}]}};const r=require('../functions/account-dossiers').ensure(data,{uid:'new',email:'new@example.test',emailVerified:true},{role:'Piloto',profile:{name:'New',identity:'test alpha'}});assert.equal(r.status,'duplicate-identity');assert.equal(r.changed,false);assert.deepEqual(r.data,data);});
+
+test('Dossiers without accounts unify across all directories, retain ledgers and do not create users or roles',()=>{
+ const root=fixture();delete root.accountRequests;const data=JSON.parse(root.dashboard.payload);for(const row of [...data.pilotos,...data.school.students,...data.school.personnel])delete row.authUid;
+ data.school.students.forEach(r=>r.identity='TEST-ALPHA');data.school.registry.clients=[{id:'client',name:'Cliente Prueba',identity:'TEST-ALPHA',email:'client@example.test',payments:[{id:'client-pay',cents:3000}]}];root.dashboard.payload=JSON.stringify(data);
+ const group=I.groups(root)[0];assert.equal(group.uids.length,0);assert.equal(group.role,null);const result=I.merge(root,group.members.map(m=>m.key),'director','root','2026-10-21T12:00:00Z','pilot:p1');
+ assert.equal(result.uid,null);assert.equal(result.role,null);assert.equal(result.email,'pilot@example.test');assert(!result.root.accountRequests);const saved=JSON.parse(result.root.dashboard.payload);assert.equal(saved.school.students.length,1);assert.equal(saved.school.students[0].courses.length,2);assert.equal(saved.school.registry.clients[0].payments[0].cents,3000);
+ for(const r of [...saved.pilotos,...saved.school.students,...saved.school.personnel,...saved.school.registry.clients]){assert.equal(r.email,'pilot@example.test');assert.equal(r.identity,'TEST-ALPHA');assert(!r.authUid);}
+ assert.equal(I.groups(result.root).length,0,'A unified person is not suggested again');assert.equal(Object.values(saved.school.identityLinks)[0].records.length,4);I.assertUnique(data,saved);
+ const later=require('../functions/account-dossiers').ensure(saved,{uid:'future-user',email:'pilot@example.test',emailVerified:true},{role:'Estudiante',profile:{name:'Registration'}});assert.equal(later.status,'matched');assert.equal(later.data.school.students.length,1);assert.equal(later.data.pilotos[0].authUid,'future-user');
+});
+test('Legacy dossiers receive stable identifiers and changes to email/cédula stay synchronized without affecting others',()=>{
+ const root={dashboard:{payload:JSON.stringify({pilotos:[{nombre:'Legacy Pilot',email:'legacy@example.test',identity:'TEST-LEGACY'}],school:{personnel:[{id:'staff',name:'Legacy Staff',email:'legacy@example.test'}],students:[{id:'unrelated',name:'Other',email:'other@example.test'}]}})}};
+ const group=I.groups(root)[0],result=I.merge(root,group.members.map(m=>m.key),'d','root','2026-10-21T12:00:00Z','personnel:staff');const before=JSON.parse(result.root.dashboard.payload);assert(before.pilotos[0].id);assert.equal(before.pilotos[0].nombre,'Legacy Staff');assert.equal(I.groups(result.root).length,0);
+ const after=structuredClone(before);after.school.personnel[0].email='updated@example.test';after.pilotos[0].identity='TEST-UPDATED';I.syncLinked(before,after);assert.equal(after.pilotos[0].email,'updated@example.test');assert.equal(after.school.personnel[0].identity,'TEST-UPDATED');assert.equal(after.school.students[0].email,'other@example.test');I.assertUnique(before,after);
+ const conflict=structuredClone(before);conflict.pilotos[0].email='first@example.test';conflict.school.personnel[0].email='second@example.test';assert.throws(()=>I.syncLinked(before,conflict),/contradictorios/);
+});
+test('Director endpoint merges records with no account and makes no Authentication mutations',async()=>{
+ const h=harness();delete h.root.accountRequests.pilot;delete h.root.accountRequests.manager;const data=JSON.parse(h.root.dashboard.payload);for(const r of [...data.pilotos,...data.school.personnel,...data.school.students]){delete r.authUid;r.identity='TEST-ALPHA';}h.root.dashboard.payload=JSON.stringify(data);
+ const preview=await h.call('identity-preview');const group=preview.body.groups[0];assert.equal(group.uids.length,0);const result=await h.call('identity-merge',{operation:'v1',members:group.members.map(m=>m.key),primaryKey:'pilot:p1',confirm:true});assert.equal(result.status,200,JSON.stringify(result));assert.equal(result.body.uid,null);assert.equal(result.body.role,null);assert.deepEqual(h.disabled,[]);assert.deepEqual(h.revoked,[]);assert.deepEqual(Object.keys(h.root.accountRequests),['director']);
+});

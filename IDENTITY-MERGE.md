@@ -21,3 +21,11 @@ firebase deploy --only functions:accounts --project helicopteros-personales
 ```
 
 Después de publicar, actualizar la aplicación, abrir USUARIOS, pulsar Actualizar y luego Unificar coincidencias. Se revisa y confirma un grupo por consulta; volver a consultar después de cada cambio. No se han fusionado registros de producción desde el entorno de desarrollo.
+
+## Expedientes sin usuario
+
+También se pueden unificar coincidencias sin cuenta de Firebase, entre Pilotos, Personal, Estudiantes y Clientes. El Director selecciona el expediente principal para el nombre, correo y cédula; los campos vacíos se completan con los otros expedientes. Los originales siguen archivados. No se crea un UID ficticio, una cuenta ni un cargo.
+
+Los duplicados del mismo tipo se consolidan; las secciones operativas de tipos distintos quedan asociadas a una sola identidad mediante `school.identityLinks`, sin volver a presentarse como coincidencias pendientes. Los cambios posteriores de correo y cédula se sincronizan en el servidor entre esas secciones. Los registros antiguos sin ID reciben uno estable. Si luego la persona registra y verifica su cuenta con el correo principal, se reutilizan y vinculan sus expedientes.
+
+Esta ampliación requiere volver a desplegar `functions:accounts` con el mismo comando indicado arriba.
