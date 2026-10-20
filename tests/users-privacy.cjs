@@ -58,6 +58,9 @@ test('Users UI still loads authorized dynamic data, filters and saves roles',asy
  assert.deepEqual(await page.locator('#panel-usuarios tbody b').allTextContents(),['Ana de prueba','Zulu de prueba']);
  assert((await page.locator('#panel-usuarios').innerText()).includes('TEST-CONTACT'));
  await page.fill('[data-search]','zulu');assert.equal(await page.locator('tbody [data-save]').count(),1);
+ await page.click('[data-save]');await page.locator('[data-status]').filter({hasText:'Cargo guardado'}).waitFor();
+ assert.deepEqual(requests.at(-1),{action:'assign',uid:'member-z',role:'Estudiante'});
+ const count=requests.length;await page.click('[data-save]');assert.equal(requests.length,count,'Already confirmed roles do not generate redundant writes');
  await page.selectOption('[data-edit]','Piloto');await page.click('[data-save]');await page.locator('[data-status]').filter({hasText:'Cargo guardado'}).waitFor();
  assert.deepEqual(requests.at(-1),{action:'assign',uid:'member-z',role:'Piloto'});
  await page.fill('[data-search]','');await page.selectOption('[data-role-filter]','Estudiante');assert((await page.locator('tbody').innerText()).includes('Sin usuarios'));
@@ -70,4 +73,17 @@ test('Users directory is not installed for a non-Director session',async t=>{
  await page.setContent('<button id="create-account"></button><button id="profile-requests"></button>');
  await page.evaluate(()=>{window.isDirectorUser=()=>false;});await page.addScriptTag({path:path.join(root,'registration.js')});
  await page.evaluate(()=>AccountRegistration.installUsersPage());assert.equal(await page.locator('#panel-usuarios').count(),0);
+});
+
+
+test('Returning to an active portal or signup form does not discard drafts',async t=>{
+ const browser=await chromium.launch({...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{}),headless:true,args:['--no-sandbox']});t.after(()=>browser.close());
+ const page=await browser.newPage();await page.route('**/*',route=>route.abort());
+ await page.setContent('<button id="create-account"></button><button id="profile-requests"></button><div id="access-screen"></div><div id="dashboard-app"></div><section id="account-waiting" hidden></section><input id="draft" value="Sin guardar">');
+ await page.evaluate(()=>{window.isDirectorUser=()=>false;window.reloads=0;window.firebase={auth:()=>({currentUser:{reload:async()=>{window.reloads++;throw Error('Synthetic reload');}}})};});
+ await page.addScriptTag({path:path.join(root,'registration.js')});
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(await page.evaluate(()=>reloads),0);
+ await page.evaluate(()=>{document.getElementById('account-waiting').hidden=false;const dialog=document.createElement('dialog');dialog.className='signup-dialog';document.body.appendChild(dialog);dialog.showModal();window.dispatchEvent(new Event('focus'));});assert.equal(await page.evaluate(()=>reloads),0);
+ await page.evaluate(()=>{document.querySelector('dialog').close();window.dispatchEvent(new Event('focus'));});assert.equal(await page.evaluate(()=>reloads),1,'Waiting users can still recheck email verification');
+ assert.equal(await page.inputValue('#draft'),'Sin guardar');
 });
