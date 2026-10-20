@@ -45,7 +45,7 @@
   try{
    const result=await AccountRegistration.api('identity-preview');
    const dialog=document.createElement('dialog');dialog.style.cssText='width:min(850px,92vw);max-height:85vh;overflow:auto;border:1px solid #aac3da;border-radius:14px;padding:24px;font:inherit';
-   dialog.innerHTML='<h2>Unificar identidades</h2><p>Director → Gerente → Administrativo → Contabilidad → Mecánico → Piloto → Estudiante</p><p>Conserva la cuenta con el cargo confirmado más alto. Las cuentas secundarias quedarán bloqueadas. Los expedientes operativos y su historial se conservan.</p><div data-groups></div><p data-merge-status role="status"></p><button data-close>Cerrar</button>';
+   dialog.innerHTML='<h2>Unificar identidades</h2><p>Director → Gerente → Administrativo → Contabilidad → Mecánico → Piloto → Estudiante</p><p>Conserva la cuenta con el cargo confirmado más alto. Las cuentas secundarias quedarán bloqueadas. Los expedientes operativos y su historial se conservan.</p><div data-groups></div><p data-merge-status role="status"></p><button data-reload>Volver a consultar</button><button data-close>Cerrar</button>';
    const wrap=dialog.querySelector('[data-groups]');
    if(!result.groups.length)wrap.textContent='No hay coincidencias pendientes de unificar.';
    for(const group of result.groups){
@@ -54,11 +54,12 @@
     const button=card.querySelector('button');button.onclick=async()=>{
      if(!confirm('¿Confirmas que todos estos registros corresponden a la misma persona? '+(group.uids.length?'Se conservará el cargo '+group.role+' y se bloquearán las cuentas secundarias.':'Se conservarán los datos principales seleccionados y el historial de todas las secciones. No se creará una cuenta de acceso.')))return;
      dialog.querySelectorAll('button').forEach(b=>b.disabled=true);const status=dialog.querySelector('[data-merge-status]');status.textContent='Unificando…';
-     try{const saved=await AccountRegistration.api('identity-merge',{members:group.members.map(m=>m.key),operation:result.operation,confirm:true,...(card.querySelector('[data-primary]')?{primaryKey:card.querySelector('[data-primary]').value}:{})});status.textContent='Unificación guardada. '+(saved.uid||group.uids.length?'Cuenta principal: '+saved.email+' · '+saved.role+'. ':'Expedientes vinculados a una sola identidad, sin cuenta de acceso. ')+(saved.warnings||[]).join(' ')+' Cierra y actualiza la aplicación para ver todos los expedientes.';card.remove();loaded=false;}
+     try{const saved=await AccountRegistration.api('identity-merge',{members:group.members.map(m=>m.key),operation:result.operation,confirm:true,...(group.revision?{revision:group.revision}:{}),...(card.querySelector('[data-primary]')?{primaryKey:card.querySelector('[data-primary]').value}:{})});status.textContent='Unificación guardada. '+(saved.uid||group.uids.length?'Cuenta principal: '+saved.email+' · '+saved.role+'. ':'Expedientes vinculados a una sola identidad, sin cuenta de acceso. ')+(saved.warnings||[]).join(' ')+' Cierra y actualiza la aplicación para ver todos los expedientes.';card.remove();loaded=false;}
      catch(e){status.textContent=e.message;}
-     finally{dialog.querySelector('[data-close]').disabled=false;}
+     finally{dialog.querySelector('[data-close]').disabled=false;dialog.querySelector('[data-reload]').disabled=false;}
     };wrap.appendChild(card);
    }
+   dialog.querySelector('[data-reload]').onclick=()=>{dialog.close();reviewIdentities();};
    dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());document.body.appendChild(dialog);dialog.showModal();message('Coincidencias consultadas.');
   }catch(e){message(e.message==='Operación no válida.'?'Publica la actualización de Firebase para habilitar la unificación.':e.message);}finally{busy=false;}
  }

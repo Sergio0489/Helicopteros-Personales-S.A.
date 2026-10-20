@@ -31,3 +31,5 @@ Los duplicados del mismo tipo se consolidan; las secciones operativas de tipos d
 Esta ampliación requiere volver a desplegar `functions:accounts` con el mismo comando indicado arriba.
 
 Los expedientes que ya comparten UID o identidad unificada también aparecen para revisión si sus nombres, correos o cédulas difieren. El selector de expediente principal se ofrece igualmente para cuentas existentes: define el nombre y datos personales a conservar, sin cambiar el correo verificado ni la prioridad del cargo de la cuenta principal.
+
+La revisión usa una huella de las cuentas y expedientes seleccionados. Guardados ajenos (por ejemplo una aeronave) no invalidan la confirmación; cambios en participantes, datos financieros o cargos sí requieren volver a consultar. Las transacciones toleran la primera invocación con caché local vacía de Firebase. El diálogo ofrece Volver a consultar tras cualquier error, sin reintentar automáticamente una fusión no revisada.

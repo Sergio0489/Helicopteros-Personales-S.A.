@@ -66,19 +66,27 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!isDirector){res.status(403).json({error:'Solo Directores pueden unificar identidades.'});return;}
   const [dash,requests]=await Promise.all([db.ref('dashboard').get(),db.ref('accountRequests').get()]);
   const current={dashboard:dash.val(),accountRequests:requests.val()||{}};
-  if(action==='identity-preview'){res.json({operation:current.dashboard?.operation,groups:identities.groups(current).map(g=>({...g,role:g.uids.includes(DIRECTOR)?'Director':g.role})),roles:identities.ROLES});return;}
+  if(action==='identity-preview'){res.json({operation:current.dashboard?.operation,groups:identities.groups(current).map(g=>({...g,revision:identities.revision(current,g),role:g.uids.includes(DIRECTOR)?'Director':g.role})),roles:identities.ROLES});return;}
   if(req.body.confirm!==true||!Array.isArray(req.body.members)||!req.body.members.length)throw Error('Confirma la coincidencia antes de unificar.');
   const candidate=identities.groups(current).find(g=>g.members.map(x=>x.key).sort().join('|')===[...req.body.members].sort().join('|'));if(!candidate)throw Error('La coincidencia cambió. Actualiza.');
   for(const uid of candidate.uids){const u=await getAuth().getUser(uid);if(u.disabled||!u.emailVerified||identities.email(u.email)!==identities.email(current.accountRequests[uid]?.email))throw Error('Verifica y actualiza todas las cuentas antes de unificarlas.');}
   let failure='',applied;const operation=randomUUID(),now=new Date().toISOString();
-  const result=await db.ref().transaction(root=>{failure='';try{if(root?.dashboard?.operation!==req.body.operation)throw Error('Los datos cambiaron. Revisa nuevamente la coincidencia.');
+  const result=await db.ref().transaction(root=>{failure='';applied=null;
+   // Firebase may first invoke a root transaction with an empty local cache. Return
+   // it unchanged so the server can supply the authoritative snapshot and retry.
+   if(!root?.dashboard?.payload)return root;
+   try{
+   const live=identities.groups(root).find(g=>g.members.map(x=>x.key).sort().join('|')===[...req.body.members].sort().join('|'));
+   if(!live)throw Error('La coincidencia cambió. Pulsa Volver a consultar y revisa los expedientes.');
+   if(req.body.revision){if(typeof req.body.revision!=='string'||identities.revision(root,live)!==req.body.revision)throw Error('Cambió la información de estos expedientes. Pulsa Volver a consultar y confirma los datos actualizados.');}
+   else if(root.dashboard.operation!==req.body.operation)throw Error('Los datos cambiaron. Pulsa Volver a consultar y revisa nuevamente la coincidencia.');
    if(user.uid!==DIRECTOR&&!(root.accountRequests?.[user.uid]?.role==='Director'&&root.accountRequests[user.uid].assignedAt&&!root.accountRequests[user.uid].mergedInto))throw Error('El permiso de Director cambió.');
    applied=identities.merge(root,req.body.members,user.uid,DIRECTOR,now,req.body.primaryKey||'');const next=applied.root;
    next.dashboard=audit.attach(root.dashboard,{...next.dashboard,operation,revision:(root.dashboard.revision||0)+1,updatedAt:now,updatedBy:user.uid},actor,'dashboard','Unificación de identidad por correo o cédula');
    for(const uid of [applied.uid,...applied.mergedUids].filter(Boolean))next.accountRequests[uid]=audit.attach(root.accountRequests[uid],next.accountRequests[uid],actor,'account','Unificación de identidad',uid);
    return next;
-  }catch(e){failure=e.message;return;}},undefined,false);
-  if(!result.committed||failure){res.status(409).json({error:failure||'No se pudo unificar.'});return;}
+  }catch(e){failure=e.message;return root;}},undefined,false);
+  if(!result.committed||failure||!applied){res.status(409).json({error:failure||'No se pudo unificar. Pulsa Volver a consultar.'});return;}
   // The mergedInto gate and removed grants take effect atomically; disabling Auth is additional protection.
   const warnings=[];for(const uid of applied.mergedUids)try{await getAuth().updateUser(uid,{disabled:true});await getAuth().revokeRefreshTokens(uid);}catch{warnings.push('La cuenta secundaria quedó bloqueada en la app; falta deshabilitar su acceso en Firebase Authentication.');}
   res.json({ok:true,uid:applied.uid,email:applied.email,role:applied.role,operation,warnings});return;

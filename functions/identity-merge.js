@@ -1,6 +1,6 @@
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const {randomUUID}=require('node:crypto');
+const {randomUUID,createHash}=require('node:crypto');
 const ROLES=['Director','Gerente','Administrativo','Contabilidad','Mecánico','Piloto','Estudiante'];
 const email=v=>String(v||'').trim().toLowerCase();
 const identity=v=>String(v||'').normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu,'');
@@ -25,6 +25,16 @@ function groups(root){
   const different=g.some(x=>x.kind)&&['name','email','identity'].some(key=>new Set(g.map(x=>key==='identity'?identity(x[key]):email(x[key]).replace(/\s+/g,' ')).filter(Boolean)).size>1);
   return different||uids.size>1||records.some(x=>!x.uid)&&uids.size>0||records.length>1&&!oneOwner&&!onePerson||['student','pilot','personnel','client'].some(k=>records.filter(x=>x.kind===k).length>1);
  }).map(g=>({members:g,uids:[...new Set(g.filter(x=>x.key.startsWith('user:')).map(x=>x.uid))],role:g.some(x=>x.key.startsWith('user:'))?highest(g.filter(x=>x.key.startsWith('user:')&&x.assigned).map(x=>x.role)):null}));
+}
+function revision(root,group){
+ const data=JSON.parse(root.dashboard?.payload||'{}'),records=rows(data);
+ const values=group.members.map(m=>{
+  if(!m.kind){const a=root.accountRequests?.[m.uid]||{};return {key:m.key,email:a.email,role:a.role,assignedAt:a.assignedAt,verified:a.verified,mergedInto:a.mergedInto,profile:a.profile};}
+  const r=m.id?records.find(x=>x.kind===m.kind&&x.record.id===m.id):records[m.index];
+  return {key:m.key,personKey:m.personKey,record:r?.record};
+ }).sort((a,b)=>a.key.localeCompare(b.key));
+ const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,stable(v[k])])):v;
+ return createHash('sha256').update(JSON.stringify(stable(values))).digest('hex');
 }
 const personal=new Set(['name','nombre','phone','celular','email','identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura','notes','position','fechaInicioHP','directoryKind','authUid','id','createdAt','createdDate','updatedAt']);
 function combine(a,b,path=''){
@@ -98,4 +108,4 @@ function assertUnique(before,after){
   if(a.some(y=>y!==x&&!samePerson(x,y)&&!(r.authUid&&r.authUid===y.record.authUid)&&((email(r.email)&&email(r.email)===email(y.record.email))||(identity(r.identity)&&identity(r.identity)===identity(y.record.identity)))))throw Error('El correo o la cédula ya pertenece a otro expediente. Unifica la coincidencia desde USUARIOS antes de guardar.');
  }
 }
-module.exports={ROLES,email,identity,highest,groups,merge,assertUnique,syncLinked};
+module.exports={ROLES,email,identity,highest,groups,merge,assertUnique,syncLinked,revision};
