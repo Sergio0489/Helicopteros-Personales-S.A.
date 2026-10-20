@@ -16,13 +16,14 @@ function cleanProfile(input){const profile={};for(const key of fields){if(key===
 function matchStudent(payload,email,uid){const matches=(payload.school?.students||[]).filter(s=>String(s.email||'').trim().toLowerCase()===email.toLowerCase());if(matches.length!==1||matches[0].authUid&&matches[0].authUid!==uid)return null;return matches[0];}
 const {matchRecord}=require('./record-link');
 const selfProfile=require('./self-profile');
+const audit=require('./audit');
 async function syncAccount(db,u,account,marker,readRoot){
  if(!u.emailVerified||!u.email)return account||{};
  if(account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===3)return account;
  let root=await readRoot();
  if(account?.verified&&account.email&&account.email.toLowerCase()!==u.email.toLowerCase()&&account.recordId){
   let failure='';const moved=await db.ref('dashboard').transaction(current=>{
-   if(!current)return current;try{const next=selfProfile.migrateEmail(JSON.parse(current.payload),u,account);return next?{...current,payload:JSON.stringify(next),operation:randomUUID(),revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:u.uid}:current;}catch(e){failure=e.message;return;}
+   if(!current)return current;try{const next=selfProfile.migrateEmail(JSON.parse(current.payload),u,account);return next?audit.attach(current,{...current,payload:JSON.stringify(next),operation:randomUUID(),revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:u.uid},null,'dashboard','Sincronización de correo verificado'):current;}catch(e){failure=e.message;return;}
   },undefined,false);
   if(failure||!moved.committed)throw Error(failure||'No se pudo sincronizar el nuevo correo. Intenta nuevamente.');
   root=moved.snapshot.val();
@@ -30,8 +31,8 @@ async function syncAccount(db,u,account,marker,readRoot){
  const payload=root?.payload?JSON.parse(root.payload):{},match=matchRecord(payload,u.email,u.uid);
  const profile={...account?.profile};if(match.record)for(const field of fields){const value=match.record[field];if(value!=null&&value!==''&&(!Array.isArray(value)||value.length))profile[field]=value;}
  if(!profile.name)profile.name=u.uid===DIRECTOR?'Sergio Herrera C.':u.displayName||'';
- const patch={profile,email:u.email,verified:true,verifiedAt:account?.verifiedAt||new Date().toISOString(),syncedOperation:root?.operation||null,syncVersion:3,syncStatus:match.status,studentId:match.kind==='student'?match.record.id:null,pilotId:match.kind==='pilot'?match.record.id:null,recordId:match.record?.id||null,recordKind:match.kind||null,recordName:match.record?.name||null};
- const ref=db.ref('accountRequests/'+u.uid);await ref.update(patch);return {...account,...patch};
+ const patch={auditReason:'Sincronización de expediente y correo verificado',profile,email:u.email,verified:true,verifiedAt:account?.verifiedAt||new Date().toISOString(),syncedOperation:root?.operation||null,syncVersion:3,syncStatus:match.status,studentId:match.kind==='student'?match.record.id:null,pilotId:match.kind==='pilot'?match.record.id:null,recordId:match.record?.id||null,recordKind:match.kind||null,recordName:match.record?.name||null};
+ const ref=db.ref('accountRequests/'+u.uid);await ref.transaction(old=>audit.attach(old,{...old,...patch},null,'account','Sincronización de expediente y correo verificado',u.uid));return {...account,...patch};
 }
 exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2},async(req,res)=>{
  res.set('Cache-Control','no-store');if(req.method==='GET'){res.json({ready:true});return;}if(req.method!=='POST'){res.status(405).end();return;}
@@ -40,9 +41,19 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const claims=await getAuth().verifyIdToken(token,true),user=await getAuth().getUser(claims.uid),action=req.body?.action,db=getDatabase(),ref=db.ref('accountRequests/'+user.uid);
  if(!user.email){res.status(400).json({error:'La cuenta necesita correo electrónico.'});return;}
  const actorAccount=(await ref.get()).val();
+ const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
+ if(action==='audit-list'||action==='audit-detail'){if(!isDirector){res.status(403).json({error:'Solo Directores pueden consultar el historial.'});return;}res.json(await (action==='audit-list'?audit.list(db,req.body):audit.detail(db,req.body)));return;}
+ if(isDirector)actor.role='Director';
+ if(action==='director-save'){
+  if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}
+  if(typeof req.body.payload!=='string'||Buffer.byteLength(req.body.payload)>10000000)throw Error('Datos no válidos.');
+  const data=JSON.parse(req.body.payload);if(!data||typeof data!=='object'||!data.fleet)throw Error('Respaldo no válido.');
+  let failure='';const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}return audit.attach(root,{...root,schemaVersion:1,payload:req.body.payload,operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
+  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision});return;
+ }
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
- if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:7,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:7,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
  if(action==='self-profile'||action==='self-profile-save'){
   if(user.disabled){res.status(403).json({error:'La cuenta está deshabilitada.'});return;}
   let root=(await db.ref('dashboard').get()).val();
@@ -53,11 +64,11 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
    let failure='',applied;const operation=randomUUID();
    const result=await db.ref('dashboard').transaction(current=>{
     failure='';if(!current)return current;if(current.operation!==req.body.operation){failure='Los datos cambiaron. Cierra el perfil, vuelve a abrirlo y revisa los datos antes de guardar.';return;}
-    try{applied=selfProfile.apply(JSON.parse(current.payload),user,profile);return {...current,payload:JSON.stringify(applied.data),operation,revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid};}catch(e){failure=e.message;return;}
+    try{applied=selfProfile.apply(JSON.parse(current.payload),user,profile);return audit.attach(current,{...current,payload:JSON.stringify(applied.data),operation,revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);}catch(e){failure=e.message;return;}
    },undefined,false);
    if(!result.committed||failure||!applied){res.status(409).json({error:failure||'No se confirmó el guardado. Vuelve a abrir el perfil.'});return;}
    root=result.snapshot.val();
-   await ref.update({profile:{...account?.profile,...profile},syncedOperation:null,updatedAt:new Date().toISOString()});
+   await ref.transaction(old=>audit.attach(old,{...old,profile:{...account?.profile,...profile},syncedOperation:null,updatedAt:new Date().toISOString()},actor,'account',req.body.reason,user.uid));
    account=await syncAccount(db,user,{...account,profile:{...account?.profile,...profile},syncedOperation:null},root.operation,async()=>root);
   }
   const data=root?.payload?JSON.parse(root.payload):{},stored=data.school?.userProfiles?.[user.uid]||{},match=user.emailVerified?matchRecord(data,user.email,user.uid):{status:'unverified'};
@@ -82,7 +93,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
    failure='';writes=0;if(root===null){failure='No hay datos disponibles para guardar.';return null;}if(root.operation!==req.body.operation){failure='Los datos cambiaron. Actualiza la página antes de guardar.';return;}
    try{const data=JSON.parse(root.payload),policy=policyFor(data,actorAccount);if(!visiblePages(policy).some(p=>p.id===req.body.page))throw Error('Ya no tienes acceso a esta página.');
     const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid});writes=applied.writes;
-    return {...root,payload:JSON.stringify(applied.data),revision:(root.revision||0)+1,operation,updatedBy:user.uid,updatedAt:new Date().toISOString()};
+    return audit.attach(root,{...root,payload:JSON.stringify(applied.data),revision:(root.revision||0)+1,operation,updatedBy:user.uid,updatedAt:new Date().toISOString()},actor,'dashboard',req.body.reason);
    }catch(e){failure=e.message;return;}
   },undefined,false);
   if(!result.committed||failure){res.status(409).json({error:failure||'No se pudo guardar. Actualiza la página.'});return;}
@@ -100,11 +111,11 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!roles.includes(req.body.role)||!req.body.uid||req.body.uid===DIRECTOR||req.body.uid===user.uid){res.status(400).json({error:'Cargo o usuario no válido.'});return;}
   const target=await getAuth().getUser(req.body.uid);if(!target.emailVerified||target.disabled){res.status(400).json({error:'El usuario debe verificar primero su correo.'});return;}
   const targetRef=db.ref('accountRequests/'+target.uid);
-  const assignedAt=new Date().toISOString();await db.ref().update({['accountRequests/'+target.uid+'/role']:req.body.role,['accountRequests/'+target.uid+'/assignedBy']:user.uid,['accountRequests/'+target.uid+'/assignedAt']:assignedAt,'dashboard/operation':randomUUID(),'dashboard/updatedAt':assignedAt,'dashboard/updatedBy':user.uid});res.json({ok:true});return;
+  const assignedAt=new Date().toISOString();await targetRef.transaction(old=>audit.attach(old,{...old,role:req.body.role,assignedBy:user.uid,assignedAt},actor,'account',req.body.reason,target.uid));await db.ref('dashboard').update({operation:randomUUID(),updatedAt:assignedAt,updatedBy:user.uid});res.json({ok:true});return;
  }
  if(!['submit','status'].includes(action)){res.status(400).json({error:'Operación no válida.'});return;}
  if(action==='submit'){
-  const profile=cleanProfile(req.body.profile||{});await ref.transaction(old=>({...old,role:old?.role||'Estudiante',profile,email:user.email,syncedOperation:null,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}));
+  const profile=cleanProfile(req.body.profile||{});await ref.transaction(old=>audit.attach(old,{...old,role:old?.role||'Estudiante',profile,email:user.email,syncedOperation:null,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()},actor,'account',req.body.reason,user.uid));
  }
  let account=(await ref.get()).val();
  if(user.emailVerified){const marker=(await db.ref('dashboard/operation').get()).val();account=await syncAccount(db,user,account,marker,async()=>(await db.ref('dashboard').get()).val());}

@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261020-hours-sync-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261020-audit-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -54,9 +54,9 @@
   }
   window.CLOUD_INITIAL=cfg.data;
   document.getElementById('access-screen').remove();document.getElementById('dashboard-app').hidden=false;
-  document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-profile">Mi perfil</button><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
+  document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-profile">Mi perfil</button><button id="readonly-reason">Motivo del cambio</button><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
   document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;
-  document.getElementById('profile-menu')?.remove();document.getElementById('readonly-profile').onclick=()=>send('profile');
+  document.getElementById('profile-menu')?.remove();document.getElementById('readonly-profile').onclick=()=>send('profile');document.getElementById('readonly-reason').onclick=()=>send('audit-reason');
   window.addEventListener('message',e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='profile-updated'){cfg.name=e.data.name;document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;document.getElementById('readonly-refresh').textContent='Actualizar datos';}});
   document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>send('logout');
   const safeAction=new Set(['select','statement','view']);
@@ -150,6 +150,7 @@
   const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
   const listener=e=>{
    if(e.source!==frame.contentWindow||e.data?.channel!==channel)return;
+   if(e.data.action==='audit-reason'){if(settled)window.ChangeHistory?.setReason();return;}
    if(e.data.action==='profile'){if(settled)window.AccountProfile?.open({onSaved:result=>frame.contentWindow?.postMessage({channel,action:'profile-updated',name:result.profile.name},'*')});return;}
    if(e.data.action==='box-save'){
     if(!settled)return;

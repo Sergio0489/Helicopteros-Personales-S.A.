@@ -16,7 +16,7 @@ window.getPaymentReceivers=()=>{
 };
 
 let cloudETag=null,cloudVersion=0,cloudBusy=false,cloudBlocked=false,appLoaded=false,importData=null;
-let lastCloudPayload=null;
+let lastCloudPayload=null,cloudOperation=null;
 const el=id=>document.getElementById(id);
 function accessMessage(text){el('access-message').textContent=text;}
 function setCloudStatus(text){
@@ -47,7 +47,7 @@ async function cloudRequest(method,body,etag,{silent=false,path=""}={}){
   return {value:response.status===204?null:await response.json(),etag:response.headers.get('ETag')};
  }catch(error){if(error.name==='AbortError')throw Error('No se pudo confirmar el guardado. Actualiza los datos antes de volver a guardar.');throw error;}finally{clearTimeout(timer);}
 }
-window.cloudWrite=async function(data){
+const legacyCloudWrite=async function(data){
  if(cloudBusy)throw Error('Espera a que termine el guardado actual.');
  if(cloudBlocked||!cloudETag)throw Error('Actualiza los datos antes de guardar para evitar sobrescribir cambios.');
  const payload=JSON.stringify(data);
@@ -65,6 +65,26 @@ window.cloudWrite=async function(data){
     try{const latest=await cloudRequest('GET',null,null,{silent:true});const marker=await cloudRequest('GET',null,null,{path:'/operation'});if(marker.value===operation)cloudETag=latest.etag;}catch{}
   }
   cloudBlocked=!cloudETag;
+  setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado · historial pendiente de activar');
+  return true;
+ }catch(error){window.failedCloudData=structuredClone(data);cloudBlocked=true;showCloudError(error);throw error;}
+ finally{cloudBusy=false;el('dashboard-app').inert=false;el('cloud-busy').hidden=true;}
+};
+let historyBackendReady=null;
+window.cloudWrite=async function(data){
+ if(historyBackendReady===null){const capabilities=await AccountRegistration.api('permission-capabilities');historyBackendReady=capabilities.auditHistory===true;}
+ if(!historyBackendReady)return legacyCloudWrite(data);
+ if(cloudBusy)throw Error('Espera a que termine el guardado actual.');
+ if(cloudBlocked||!cloudETag)throw Error('Actualiza los datos antes de guardar para evitar sobrescribir cambios.');
+ const payload=JSON.stringify(data);
+ if(payload===lastCloudPayload){setCloudStatus('✓ Sin cambios pendientes');return true;}
+ cloudBusy=true;el('dashboard-app').inert=true;el('cloud-busy').hidden=false;
+ setCloudStatus('Guardando en Firebase…');
+ const motive=window.ChangeHistory?.getReason()||'';
+ try{
+  const result=await AccountRegistration.api('director-save',{payload,operation:cloudOperation,reason:motive});
+  window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=payload;cloudVersion=result.revision;cloudOperation=result.operation;
+  cloudBlocked=false;
   setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado en Firebase');
   return true;
  }catch(error){window.failedCloudData=structuredClone(data);cloudBlocked=true;showCloudError(error);throw error;}
@@ -98,11 +118,11 @@ async function openDashboard(data){
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
  const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-profile-output-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
  const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261019-school-editor-4';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
- window.AccountRegistration?.installUsersPage();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ window.AccountRegistration?.installUsersPage();window.ChangeHistory?.install();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
- const result=await cloudRequest('GET');cloudETag=result.etag;cloudVersion=result.value?.revision||0;
+ const result=await cloudRequest('GET');cloudETag=result.etag;cloudVersion=result.value?.revision||0;cloudOperation=result.value?.operation||null;
  if(!cloudETag)throw Error('No se pudo verificar la versión de los datos. Recarga la página.');
  if(result.value){if(result.value.schemaVersion!==1||typeof result.value.payload!=='string')throw Error('Formato de base de datos no reconocido.');lastCloudPayload=result.value.payload;await openDashboard(JSON.parse(result.value.payload));}
  else{el('login-form').hidden=true;el('import-panel').hidden=false;el('access-logout').hidden=false;accessMessage('Tu acceso está listo. Falta importar el respaldo inicial.');}

@@ -1,10 +1,18 @@
 {
   "rules": {
-    ".read": "auth != null && auth.uid === 'glCsyjLhlyNRmazYA6Y9Gj3u0l13'",
-    ".write": "auth != null && auth.uid === 'glCsyjLhlyNRmazYA6Y9Gj3u0l13'",
+    ".read": false,
+    ".write": false,
     "dashboard": {
       ".read": "auth != null && (auth.uid === 'glCsyjLhlyNRmazYA6Y9Gj3u0l13' || (auth.token.email_verified === true && root.child('accountRequests').child(auth.uid).child('role').val() === 'Director' && root.child('accountRequests').child(auth.uid).child('assignedAt').isString()))",
-      ".write": "auth != null && (auth.uid === 'glCsyjLhlyNRmazYA6Y9Gj3u0l13' || (auth.token.email_verified === true && root.child('accountRequests').child(auth.uid).child('role').val() === 'Director' && root.child('accountRequests').child(auth.uid).child('assignedAt').isString()))"
+      ".write": false
+    },
+    "auditIndex": {
+      ".read": false,
+      ".write": false
+    },
+    "auditDetails": {
+      ".read": false,
+      ".write": false
     }
   }
 }
