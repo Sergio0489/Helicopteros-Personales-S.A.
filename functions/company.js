@@ -13,14 +13,20 @@
   {id:'service',label:'Servicios',value:'Transporte aéreo no regular de pasajeros, correo y carga, en modalidad de taxi aéreo.'}
  ],note:''};
  function value(school){const v=clone({...defaults,...school?.charter?.information});if(v.certificatesEmpty)v.certificates=[];return v;}
- function people(data){return [
-  ...(data.school?.personnel||[]).map(p=>({kind:'personnel',id:p.id,name:p.name})),
-  ...(data.pilotos||[]).map(p=>({kind:'pilot',id:p.id,name:p.nombre})),
-  ...(data.school?.students||[]).map(p=>({kind:'student',id:p.id,name:p.name}))
+ function rawPeople(data){return [
+  ...(data.school?.personnel||[]).map(p=>({kind:'personnel',id:p.id,authUid:p.authUid,name:p.name})),
+  ...(data.pilotos||[]).map(p=>({kind:'pilot',id:p.id,authUid:p.authUid,name:p.nombre})),
+  ...(data.school?.students||[]).map(p=>({kind:'student',id:p.id,authUid:p.authUid,name:p.name}))
  ].filter(p=>p.name).sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'}));}
- function resolve(row,data){const ref=row.personRef;return ref?people(data).find(p=>p.kind===ref.kind&&p.id===ref.id)?.name||row.name:row.name;}
+ function people(data){
+  const list=rawPeople(data),parents=list.map((_,i)=>i),find=i=>parents[i]===i?i:parents[i]=find(parents[i]),seen=new Map();
+  list.forEach((p,i)=>{const link=Object.entries(data.school?.identityLinks||{}).find(([,v])=>(v.records||[]).some(r=>r.kind===p.kind&&r.id===p.id))?.[0];for(const key of [p.authUid&&'u:'+p.authUid,link&&'p:'+link].filter(Boolean)){if(seen.has(key))parents[find(i)]=find(seen.get(key));else seen.set(key,i);}});
+  const groups=new Map();list.forEach((p,i)=>{const key=find(i);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);});
+  return [...groups.values()].map(group=>{group.sort((a,b)=>['personnel','pilot','student'].indexOf(a.kind)-['personnel','pilot','student'].indexOf(b.kind));return {...group[0],aliases:group.map(p=>({kind:p.kind,id:p.id}))};}).sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'}));
+ }
+ function resolve(row,data){const ref=row.personRef;return ref?people(data).find(p=>p.aliases.some(a=>a.kind===ref.kind&&a.id===ref.id))?.name||row.name:row.name;}
  // Materialize names before projecting permissions, without exposing source dossiers.
- function project(data){if(!data.school)return data;const names=new Map(people(data).map(p=>[p.kind+':'+p.id,p.name]));const info=value=>value?{...value,people:(value.people||[]).map(row=>row.personRef?{...row,name:names.get(row.personRef.kind+':'+row.personRef.id)||row.name}:row)}:value;const out={...data,school:{...data.school}};if(data.school.information)out.school.information=info(data.school.information);if(data.school.charter)out.school.charter={...data.school.charter,...(data.school.charter.information?{information:info(data.school.charter.information)}:{})};return out;}
+ function project(data){if(!data.school)return data;const names=new Map(people(data).flatMap(p=>p.aliases.map(a=>[a.kind+':'+a.id,p.name])));const info=value=>value?{...value,people:(value.people||[]).map(row=>row.personRef?{...row,name:names.get(row.personRef.kind+':'+row.personRef.id)||row.name}:row)}:value;const out={...data,school:{...data.school}};if(data.school.information)out.school.information=info(data.school.information);if(data.school.charter)out.school.charter={...data.school.charter,...(data.school.charter.information?{information:info(data.school.charter.information)}:{})};return out;}
  const fields=['authUid','directoryKind','id','name','identity','peso','estatura','birthDate','nationality','address','celular','email','emergencyName','emergencyPhone','fechaInicioHP','position','notes'];
  function validateChanges(before,after){
   const school=typeof module==='object'&&module.exports?require('./school-information'):root.HPSchoolInformation;

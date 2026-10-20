@@ -19,7 +19,7 @@ const {matchRecord}=require('./record-link');
 const selfProfile=require('./self-profile');
 const audit=require('./audit');
 const dossiers=require('./account-dossiers');
-const SYNC_VERSION=4;
+const SYNC_VERSION=5;
 async function syncAccount(db,u,account,marker,readRoot){
  if(account?.mergedInto||!u.emailVerified||!u.email)return account||{};
  if(account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===SYNC_VERSION&&account.syncedRole===(u.uid===DIRECTOR?'Director':account.role||'Estudiante'))return account;

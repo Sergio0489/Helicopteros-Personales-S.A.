@@ -36,6 +36,9 @@ function revision(root,group){
  const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,stable(v[k])])):v;
  return createHash('sha256').update(JSON.stringify(stable(values))).digest('hex');
 }
+const shared=['name','phone','email','identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura','notes','fechaInicioHP'];
+const field=(kind,key)=>key==='name'&&kind==='pilot'?'nombre':key==='phone'&&['pilot','personnel'].includes(kind)?'celular':key;
+const get=(row,key)=>row.record[field(row.kind,key)]??'';
 const personal=new Set(['name','nombre','phone','celular','email','identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura','notes','position','fechaInicioHP','directoryKind','authUid','id','createdAt','createdDate','updatedAt']);
 function combine(a,b,path=''){
  if(a==null||a==='')return clone(b);if(b==null||b==='')return clone(a);if(JSON.stringify(a)===JSON.stringify(b))return clone(a);
@@ -68,9 +71,13 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
  // Share the canonical personal fields while retaining each operational section.
  const linked=rows(data).filter(x=>linkedIds.has(x.kind+':'+x.record.id)),profile=uid?clone(accounts[uid].profile||{}):{...clone(primaryRecord),name:primaryRecord.nombre||primaryRecord.name||''};
  for(const u of ranked)for(const [k,v]of Object.entries(accounts[u].profile||{}))if(!profile[k]&&v)profile[k]=clone(v);
- if(primaryKey){for(const k of ['identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura'])if(primaryRecord[k])profile[k]=clone(primaryRecord[k]);profile.name=primaryRecord.nombre||primaryRecord.name||profile.name;}
- for(const {record:r}of linked)for(const k of personal)if(!['id','authUid','directoryKind','position','email','name','nombre','phone','celular'].includes(k)&&!profile[k]&&r[k])profile[k]=clone(r[k]);
- for(const {record:r,kind}of linked){for(const k of ['identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura'])if(profile[k])r[k]=profile[k];if(profile.name)r[kind==='pilot'?'nombre':'name']=profile.name;}
+ for(const key of shared.filter(k=>k!=='email')){
+  const chosen=primary&&originals.find(x=>x.key===primary.key);
+  const preferred=chosen&&get(chosen,key);
+  if(primaryKey&&preferred!==''&&preferred!=null)profile[key]=clone(preferred);
+  if(profile[key]==null||profile[key]===''){const source=linked.find(x=>get(x,key)!=='');if(source)profile[key]=clone(get(source,key));}
+  if(profile[key]!=null)for(const row of linked)row.record[field(row.kind,key)]=clone(profile[key]);
+ }
  const map=(kind,id)=>mappings.find(m=>m.kind===kind&&m.from===id)?.to||id;
  function remap(o){if(!o||typeof o!=='object')return;if(o.personRef)o.personRef.id=map(o.personRef.kind,o.personRef.id);if(o.personKind&&o.personId)o.personId=map(o.personKind,o.personId);if(o.recordKind&&o.recordId)o.recordId=map(o.recordKind,o.recordId);if(o.studentId)o.studentId=map('student',o.studentId);if(o.pilotId)o.pilotId=map('pilot',o.pilotId);if(typeof o.personKey==='string'){const [k,...rest]=o.personKey.split(':');o.personKey=k+':'+map(k,rest.join(':'));}for(const value of Object.values(o))if(value&&typeof value==='object')remap(value);}
  remap(data);
@@ -93,11 +100,22 @@ function syncLinked(before,after){
  const oldRows=rows(before),newRows=rows(after);
  for(const link of Object.values(before.school?.identityLinks||{})){
   const matches=newRows.filter(x=>(link.records||[]).some(r=>r.kind===x.kind&&r.id===x.record.id));
-  for(const key of ['email','identity']){
-   const changes=matches.filter(x=>{const old=oldRows.find(r=>r.kind===x.kind&&r.record.id===x.record.id);return old&&String(old.record[key]||'')!==String(x.record[key]||'');});
-   if(!changes.length)continue;const normalize=key==='email'?email:identity;
-   if(new Set(changes.map(x=>normalize(x.record[key]))).size>1)throw Error('Los expedientes unificados tienen cambios contradictorios en '+(key==='email'?'correo':'cédula')+'.');
-   for(const x of matches)x.record[key]=String(changes[0].record[key]||'').trim();
+  for(const key of shared){
+   const changes=matches.filter(x=>{const old=oldRows.find(r=>r.kind===x.kind&&r.record.id===x.record.id);return old&&String(get(old,key))!==String(get(x,key));});
+   const normalize=key==='email'?email:key==='identity'?identity:v=>String(v??'').trim();
+   if(new Set(changes.map(x=>normalize(get(x,key)))).size>1)throw Error('Los expedientes unificados tienen cambios contradictorios en '+key+'.');
+   // Backfill historical omissions only when the existing nonempty value is unambiguous.
+   const values=[...new Set(matches.map(x=>String(get(x,key))).filter(v=>v!==''))];
+   if(!changes.length&&values.length!==1)continue;
+   const value=changes.length?String(get(changes[0],key)).trim():values[0];
+   for(const x of matches)x.record[field(x.kind,key)]=value;
+   if(key==='name')for(const x of matches.filter(x=>x.kind==='pilot')){
+    const previous=oldRows.find(r=>r.kind==='pilot'&&r.record.id===x.record.id)?.record.nombre;
+    if(!previous||previous===value)continue;
+    if(oldRows.some(r=>r.kind==='pilot'&&r.record.id!==x.record.id&&r.record.nombre===previous))throw Error('Hay pilotos diferentes con el mismo nombre. Revisa sus nombres antes de sincronizar.');
+    for(const f of after.itinerarios||[])if(f.piloto===previous)f.piloto=value;
+    for(const f of after.school?.registry?.entries||[])for(const k of ['pilot','copilot'])if(f[k]===previous)f[k]=value;
+   }
   }
  }
  return after;

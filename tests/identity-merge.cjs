@@ -61,3 +61,11 @@ test('Merge still rejects changes to selected financial records or account roles
 });
 
 test('An outdated Firebase local cache retries against authoritative participants instead of aborting early',async()=>{const h=harness(),preview=await h.call('identity-preview'),g=preview.body.groups[0];h.stale();const r=await h.call('identity-merge',{members:g.members.map(m=>m.key),revision:g.revision,confirm:true});assert.equal(r.status,200,JSON.stringify(r));assert.equal(h.root.accountRequests.pilot.mergedInto,'manager');});
+
+test('Unified personal fields backfill omissions, propagate edits and clear values without touching ledgers',()=>{
+ const before={pilotos:[{id:'p',nombre:'Example',fechaInicioHP:'2020-01-02',celular:'TEST-CONTACT',verificaciones:[{id:'v'}]}],school:{personnel:[{id:'h',name:'Example'}],students:[{id:'s',name:'Example',courses:[{id:'course'}]}],identityLinks:{person:{records:[{kind:'pilot',id:'p'},{kind:'personnel',id:'h'},{kind:'student',id:'s'}]}}}};
+ const after=structuredClone(before);I.syncLinked(before,after);
+ assert.equal(after.school.personnel[0].fechaInicioHP,'2020-01-02');assert.equal(after.school.students[0].phone,'TEST-CONTACT');
+ const edited=structuredClone(after);edited.school.personnel[0].fechaInicioHP='2021-02-03';edited.school.students[0].phone='';I.syncLinked(after,edited);
+ assert.equal(edited.pilotos[0].fechaInicioHP,'2021-02-03');assert.equal(edited.pilotos[0].celular,'');assert.deepEqual(edited.school.students[0].courses,[{id:'course'}]);assert.deepEqual(edited.pilotos[0].verificaciones,[{id:'v'}]);
+});

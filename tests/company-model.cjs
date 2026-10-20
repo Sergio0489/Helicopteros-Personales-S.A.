@@ -13,3 +13,10 @@ test('company validation, stable name references and permission isolation',()=>{
 test('deleting the last school certificate is durable and does not resurrect default alerts',()=>{
  const before={school:{information:S.value({}),certificates:{operation:{expiresOn:'2020-01-01'}}}},after=structuredClone(before);after.school.information.certificates=[];after.school.information.certificatesEmpty=true;after.school.certificates={};S.validateChanges(before,after);C.validateChanges(before,after);delete after.school.information.certificates;assert.deepEqual(S.value(after.school).certificates,[]);assert.deepEqual(C.alerts(after.school.certificates,'2026-10-20',after.school.information),[]);
 });
+
+test('Organization selects a unified person once and resolves every historical reference',()=>{
+ const company=require('../functions/company');
+ const data={pilotos:[{id:'p',nombre:'Example'}],school:{personnel:[{id:'h',name:'Example'}],students:[{id:'s',name:'Example'},{id:'different',name:'Example'}],identityLinks:{person:{records:[{kind:'pilot',id:'p'},{kind:'personnel',id:'h'},{kind:'student',id:'s'}]}}}};
+ const list=company.people(data);assert.equal(list.length,2);assert.equal(list.find(x=>x.id==='h').aliases.length,3);
+ for(const kind of ['pilot','student','personnel'])assert.equal(company.resolve({personRef:{kind,id:{pilot:'p',student:'s',personnel:'h'}[kind]},name:'Old'},data),'Example');
+});
