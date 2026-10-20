@@ -3026,7 +3026,11 @@ document.addEventListener('click',async event=>{
   if(!active)return;const idx=Number(active.id.slice(6));
   if(tab.dataset.idx===String(idx))return;
   const key=aircraftKey(fleet[idx].reg);
-  const changed=aircraftDirty.has(idx)||JSON.stringify(decodeAircraft(state[idx]))!==JSON.stringify({...defaultAc(fleet[idx]),...decodeAircraft(previewData.fleet[key])});
+  // Restricted views normalize/redact previewData after building the panels.
+  // Those differences are not user edits and must never trigger a write on navigation.
+  const changed=window.ROLE_VIEW
+    ? window.ROLE_VIEW.editable&&aircraftDirty.has(idx)
+    : aircraftDirty.has(idx)||JSON.stringify(decodeAircraft(state[idx]))!==JSON.stringify({...defaultAc(fleet[idx]),...decodeAircraft(previewData.fleet[key])});
   if(changed){event.preventDefault();event.stopImmediatePropagation();if(await savePanel(idx)){confirmedNavigation=true;try{tab.click();}finally{confirmedNavigation=false;}}}
 },true);
 updateUndoButtons();
