@@ -119,28 +119,30 @@
   ]
 };
  const clone=v=>JSON.parse(JSON.stringify(v));
- const value=school=>clone({...defaults,...school?.information});
+ const value=school=>{const v=clone({...defaults,...school?.information});if(v.certificatesEmpty)v.certificates=[];return v;};
  function validDate(v){if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T12:00:00Z');return !isNaN(d)&&d.toISOString().slice(0,10)===v;}
- function validate(info){
-  if(!info||typeof info!=='object'||Array.isArray(info)||Object.keys(info).some(k=>!Object.hasOwn(defaults,k)))throw Error('Información de Escuela no válida.');
+ function validate(info,company=false){
+  if(!info||typeof info!=='object'||Array.isArray(info)||Object.keys(info).some(k=>!Object.hasOwn(defaults,k)&&k!=='certificatesEmpty'))throw Error('Información de Escuela no válida.');
   const text=(v,max)=>{if(typeof v!=='string'||!v.trim()||v.length>max)throw Error('Completa los campos y revisa la longitud del texto.');};
   const limits={people:50,courses:100,institution:30,certificates:30};
   const keys={people:['id','name','role','parent'],courses:['id','name','approvedOn'],institution:['id','label','value'],certificates:['id','name']};
   for(const kind of Object.keys(keys)){
-   const rows=info[kind];if(!Array.isArray(rows)||!rows.length||rows.length>limits[kind])throw Error('Cantidad de registros no válida.');
+   const rows=info[kind];if(!Array.isArray(rows)||(!rows.length&&kind!=='certificates'&&!company)||rows.length>limits[kind])throw Error('Cantidad de registros no válida.');
    const ids=new Set();for(const row of rows){
-    if(!row||typeof row!=='object'||Object.keys(row).length!==keys[kind].length||Object.keys(row).some(k=>!keys[kind].includes(k)))throw Error('Campos de Escuela no válidos.');
+    if(!row||typeof row!=='object'||keys[kind].some(k=>!Object.hasOwn(row,k))||Object.keys(row).some(k=>!keys[kind].includes(k)&&!(kind==='people'&&k==='personRef')))throw Error('Campos de Escuela no válidos.');
     if(typeof row.id!=='string'||!/^[a-z][a-z0-9-]{0,79}$/.test(row.id)||ids.has(row.id))throw Error('Identificador de registro no válido.');ids.add(row.id);
-    if(kind==='people'){text(row.name,150);text(row.role,150);if(row.parent!==(row.id==='manager'?'':row.id==='director'?'manager':'director'))throw Error('Conserva la jerarquía del organigrama.');}
+    if(kind==='people'){if(row.personRef&&(!['personnel','pilot','student'].includes(row.personRef.kind)||typeof row.personRef.id!=='string'||!row.personRef.id||row.personRef.id.length>150||Object.keys(row.personRef).some(k=>!['kind','id'].includes(k))))throw Error('Referencia de persona no válida.');text(row.name,150);text(row.role,150);if(row.parent!==(row.id==='manager'?'':row.id==='director'?'manager':'director'))throw Error('Conserva la jerarquía del organigrama.');}
     if(kind==='courses'){text(row.name,200);if(!validDate(row.approvedOn))throw Error('Ingresa una fecha de aprobación válida.');}
     if(kind==='institution'){text(row.label,120);text(row.value,2000);}
     if(kind==='certificates')text(row.name,200);
    }
-   for(const row of defaults[kind])if(!ids.has(row.id))throw Error('No se pueden retirar los registros iniciales.');
+   for(const row of (company?(kind==='people'?defaults.people.slice(0,2):[]):kind==='certificates'?[]:defaults[kind]))if(!ids.has(row.id))throw Error('No se pueden retirar los registros iniciales.');
   }
+  if(info.certificatesEmpty!==undefined&&typeof info.certificatesEmpty!=='boolean')throw Error('Estado de certificados no válido.');
   if(typeof info.note!=='string'||info.note.length>2000)throw Error('Nota institucional no válida.');
  }
  function validateChanges(before,after){if(JSON.stringify(before.school?.information)===JSON.stringify(after.school?.information))return;validate(after.school?.information);}
  const api={defaults,value,validate,validateChanges};
  if(typeof module==='object'&&module.exports)module.exports=api;else root.HPSchoolInformation=api;
 })(typeof globalThis==='undefined'?this:globalThis);
+

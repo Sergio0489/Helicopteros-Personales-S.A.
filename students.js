@@ -141,10 +141,10 @@ function modal(title,body,onSave,afterOpen){
   finally{saving=false;if(dialog.isConnected)dialog.querySelector('[type="submit"]').disabled=false;}
  };
  dialog.showModal();setupDates();if(afterOpen)afterOpen(dialog);draft=dialog.paymentDraft||null;
- const personal=['Editar estudiante','Nuevo estudiante','Agregar cliente','Crear piloto','Editar expediente de piloto','Licencias y habilitaciones','Certificado médico'];
+ const personal=['Registrar personal','Editar expediente de personal','Editar estudiante','Nuevo estudiante','Agregar cliente','Crear piloto','Editar expediente de piloto','Licencias y habilitaciones','Certificado médico'];
  if(personal.includes(title)){
   const page=document.querySelector('.aircraft-panel.active')?.id||'';
-  const context=page.includes('piloto')?window.pilotDraftContext?.():selected||'new';
+  const context=page==='panel-empresa'?window.personnelDraftContext?.():page.includes('piloto')?window.pilotDraftContext?.():selected||'new';
   draft=window.DraftRecovery?.form('form:'+page+':'+context+':'+title,dialog.querySelector('form'),title);
  }
 

@@ -19,6 +19,7 @@
   if(['dossier','pilots','licenses','documents'].some(b=>has('pilotos',b)))for(const [i,p]of list(data.pilotos).entries())add('pilot','pilotos',p.id||'index:'+i,p.nombre,'Piloto',has('pilotos','dossier')?[p.email,p.identity].join(' '):'',{index:i});
   if(['directory','personal','account','courses','hours'].some(b=>has('estudiantes',b)))for(const p of list(data.school?.students))add('student','estudiantes',p.id,p.name,'Estudiante',has('estudiantes','personal')?[p.email,p.identity].join(' '):'');
   if(has('estudiantes','clients')||(director&&available.has('estudiantes')))for(const p of list(data.school?.registry?.clients))add('client','estudiantes',p.id,p.name,'Cliente',has('estudiantes','clients')?[p.email,p.identity].join(' '):'');
+  if(has('charter','personnel'))for(const p of list(data.school?.personnel))add('personnel','charter',p.id,p.name,p.position||'Personal de la empresa');
   if(has('bitacora','history'))for(const e of list(data.school?.registry?.entries))add('log','bitacora',e.id,'Bitácora '+(e.book||'sin número'),[e.aircraft,date(e.date),e.personName,e.pilot,e.voidedAt?'Anulado':''].filter(Boolean).join(' · '),[e.origin,...list(e.destinations)].join(' '));
   if(has('pagos','receipts'))for(const r of list(data.school?.paymentReceipts)){
    let number=r.number||'';if(/^HP-/.test(number)){const year=(r.date||r.createdAt||'').slice(2,4);number=String(r.sequence||Number(number.slice(3))).padStart(6,'0')+'-'+year;}

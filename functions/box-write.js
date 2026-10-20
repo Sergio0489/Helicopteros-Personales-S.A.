@@ -16,6 +16,8 @@ function boxFor(path,root){
  if(top==='pilotos')return ['pilotos',['licencia','numeroLicencia','tipo','habilitaciones','licenseTypes','instructorRatings','instructorExpiry','rpaInstructor','rpaInstructorExpiry'].includes(field)?'licenses':['medico','medicoClase','charter','escuela','verificaciones'].includes(field)?'documents':'pilots'];
  if(top==='itinerarios')return ['itinerario','flights'];
  if(top==='school'){
+  if(key==='personnel')return ['charter','personnel'];
+  if(key==='charter')return ['charter',field==='certificates'||field==='information'&&['certificates','certificatesEmpty'].includes(path[3])?'certificates':'information'];
   if(key==='information')return ['escuela',field==='certificates'?'certificates':'information'];
   if(key==='certificates')return ['escuela','certificates'];
   if(key==='rates'||key==='services')return ['estudiantes','rates'];
@@ -39,7 +41,7 @@ function boxFor(path,root){
 function rights(policy,pair,action){if(!pair)return false;const [p,b]=pair;return permissions(policy,p,b)[action];}
 function allowed(policy,path,root,action,context={}){
  if(path.some(k=>['__proto__','prototype','constructor','authUid','accessConfiguration','userProfiles'].includes(String(k))))return false;
- if(path[0]==='school'&&path[1]==='information'&&action!=='view')return false;
+ if(path[0]==='school'&&(path[1]==='information'||path[1]==='charter'&&path[2]==='information')&&action!=='view')return false;
  const pair=boxFor(path,root);
  if(path[0]==='pilotos'&&['id','nombre','email','telefono','celular'].includes(path[2])&&rights(policy,['pilotos','dossier'],action))return true;
  if(action==='view'){
@@ -93,7 +95,8 @@ function applyChanges(current,before,after,policy,account){
   if(actual!==undefined&&actual!==null&&typeof actual==='object')checkTree(actual,path,context);
   checkTree(next===undefined?actual:next,path,context);return clone(next);
  }
- const result=merge(root,before,after,[]);require('./pilot-validity').validateChanges(current,result);require('./school-information').validateChanges(current,result);require('./school-certificates').validateChanges(current,result);return {data:result,writes};
+ const result=merge(root,before,after,[]);require('./company').validateChanges(current,result);require('./pilot-validity').validateChanges(current,result);require('./school-information').validateChanges(current,result);require('./school-certificates').validateChanges(current,result);return {data:result,writes};
 }
 module.exports={boxFor,allowed,applyChanges};
+
 

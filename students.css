@@ -73,13 +73,13 @@
 #school-print-sheet{display:none}
 
 /* HP Flight School: institutional information, organization and certificates. */
-#panel-escuela{font-family:'IBM Plex Sans',Arial,sans-serif}
-.school-institution-heading{display:block;position:static;background:none;border:0;box-shadow:none;padding:8px 0 22px;height:auto;margin:0;text-align:left}
+:is(#panel-escuela,#panel-empresa){font-family:'IBM Plex Sans',Arial,sans-serif}
+.school-institution-heading{height:auto!important;display:block;position:static;background:none;border:0;box-shadow:none;padding:8px 0 22px;height:auto;margin:0;text-align:left}
 .school-institution-heading h1{font:800 clamp(23px,3vw,34px)/1.2 'IBM Plex Sans',Arial,sans-serif;color:#123d68;letter-spacing:1px;margin:0 0 8px}
 .school-institution-heading p{font:600 13px/1.5 'IBM Plex Mono',monospace;letter-spacing:1px;color:#536a7e;margin:0}
-#panel-escuela>.card{margin:0 0 22px;padding:24px}
-#panel-escuela>.card::before{display:none}
-#panel-escuela h2{margin:0 0 20px;font-size:20px;color:#123d68;line-height:1.3}
+:is(#panel-escuela,#panel-empresa)>.card{margin:0 0 22px;padding:24px}
+:is(#panel-escuela,#panel-empresa)>.card::before{display:none}
+:is(#panel-escuela,#panel-empresa) h2{margin:0 0 20px;font-size:20px;color:#123d68;line-height:1.3}
 .school-org-tree,.school-org-tree ol{list-style:none;padding:0;margin:0}
 .school-org-tree>li{display:flex;flex-direction:column;align-items:center}
 .school-org-tree ol{position:relative;display:flex;justify-content:center;gap:36px;padding-top:28px;width:100%}
@@ -125,7 +125,7 @@
 .school-institution-details dd{font-size:14px;line-height:1.6;margin:0;color:#173956}
 .school-institution-details>p{font-size:12px;line-height:1.6;color:#536a7e;margin-bottom:0}
 @media(max-width:900px){.school-cert-grid{grid-template-columns:1fr}.school-certificate h3{min-height:0}.school-org-tree ol{gap:20px}.school-org-tree ol>li::after{left:-10px;right:-10px}.school-org-person{padding:14px 12px}}
-@media(max-width:600px){#panel-escuela>.card{padding:18px 14px}.school-org-tree ol{flex-direction:column;gap:22px;padding:22px 0 0 16px;box-sizing:border-box}.school-org-tree ol>li{width:100%;max-width:none}.school-org-tree ol::before{left:0;top:0;bottom:0;height:auto}.school-org-tree ol>li::before{top:25px;left:-16px;width:16px;height:0;border-left:0;border-top:2px solid #91b4d0}.school-org-tree ol>li::after{display:none}.school-org-tree ol>li:last-child::after{display:block;top:27px;left:-17px;right:auto;bottom:0;border:0;border-left:3px solid var(--panel);width:0}.school-org-person{max-width:none}.school-org-person h3{font-size:14px}.school-org-person p,.school-org-person>div{font-size:11px}.school-institution-details dl{grid-template-columns:1fr}.school-specifications li{gap:10px}}
+@media(max-width:600px){:is(#panel-escuela,#panel-empresa)>.card{padding:18px 14px}.school-org-tree ol{flex-direction:column;gap:22px;padding:22px 0 0 16px;box-sizing:border-box}.school-org-tree ol>li{width:100%;max-width:none}.school-org-tree ol::before{left:0;top:0;bottom:0;height:auto}.school-org-tree ol>li::before{top:25px;left:-16px;width:16px;height:0;border-left:0;border-top:2px solid #91b4d0}.school-org-tree ol>li::after{display:none}.school-org-tree ol>li:last-child::after{display:block;top:27px;left:-17px;right:auto;bottom:0;border:0;border-left:3px solid var(--panel);width:0}.school-org-person{max-width:none}.school-org-person h3{font-size:14px}.school-org-person p,.school-org-person>div{font-size:11px}.school-institution-details dl{grid-template-columns:1fr}.school-specifications li{gap:10px}}
 
 @media print{
  @page{size:A4;margin:15mm}
@@ -254,3 +254,6 @@
 @media(max-width:600px){.school-org-tree ol.school-org-team>li{flex:auto;min-width:0}}
 
 .school-org-person,.school-specifications h3,.school-certificate h3{overflow-wrap:anywhere}
+
+
+:is(#panel-escuela,#panel-empresa)>.card[data-box-caption]::before{display:block;position:static;inset:auto;width:auto;height:auto;background:none;color:#173556;font-size:10px;margin:0 0 10px;content:attr(data-box-caption)}

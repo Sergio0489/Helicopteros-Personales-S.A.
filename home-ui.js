@@ -10,6 +10,7 @@
  function focusTarget(row){const t=row?.target;if(!t)return;
   if(t.kind==='aircraft'||t.reg){const tab=[...document.querySelectorAll('#sidebar-tabs [data-idx]')].find(e=>M.norm(fleet[Number(e.dataset.idx)]?.reg)===M.norm(t.reg));if(tab){tab.closest('details')?.setAttribute('open','');tab.click();const panel=document.getElementById('panel-'+tab.dataset.idx);highlight(t.section?panel?.querySelector('[data-section="'+t.section+'"]'):panel?.querySelector('.aircraft-header'));}}
   else if(['student','client','receipt'].includes(t.kind))window.School?.openSearchTarget?.(t);
+  else if(t.kind==='personnel'){window.CompanyPersonnel?.select(t.id);}
   else if(t.kind==='pilot'){const p=pilotosData.findIndex((p,i)=>t.id===p.id||t.id==='index:'+i);if(p>=0)window.PilotDossiers?.select?.(p);}
   else if(t.kind==='log')highlight([...document.querySelectorAll('[data-edit-registry]')].find(e=>e.dataset.editRegistry===t.id)?.closest('.registro-entry'));
   else if(t.kind==='flight'&&row.page==='itinerario'){if(!/^\d{4}-\d{2}-\d{2}$/.test(t.date||''))return;plannerSelectDate(t.date);const i=flightsData.findIndex((f,j)=>t.id===f.id||t.id==='index:'+j);highlight(document.getElementById('planner-flight-'+i));}

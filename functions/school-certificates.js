@@ -17,7 +17,7 @@
   if(!Number.isFinite(days))return {level:'invalid',days:null,label:'Revisar fecha'};
   return {days,level:days<0?'danger':days<=60?'orange':days<=90?'warn':'ok',label:days<0?'Vencido hace '+Math.abs(days)+' día'+(days===-1?'':'s'):days===0?'Vence hoy':'Vence en '+days+' día'+(days===1?'':'s')};
  }
- const catalog=information=>information?.certificates||certificates;
+ const catalog=information=>information?.certificatesEmpty?[]:information?.certificates||certificates;
  function alerts(data,at=today(),information){
   return catalog(information).map(c=>({...c,date:data?.[c.id]?.expiresOn||'',...status(data?.[c.id]?.expiresOn,at)})).filter(c=>['warn','orange','danger'].includes(c.level));
  }
@@ -33,3 +33,4 @@
  const api={catalog,certificates,day,today,status,alerts,validateChanges};
  if(typeof module==='object'&&module.exports)module.exports=api;else root.HPSchoolCertificates=api;
 })(typeof globalThis==='undefined'?this:globalThis);
+

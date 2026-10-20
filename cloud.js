@@ -109,17 +109,18 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261020-home-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261020-charter-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
- const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-home-1';
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-charter-1';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261020-home-1';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261020-charter-1';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
- const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-home-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
- const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261019-school-editor-4';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
+ const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-charter-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
+ for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261020-charter-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
+ const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261020-charter-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
  window.AccountRegistration?.installUsersPage();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
@@ -252,7 +253,7 @@ const STAFF_ROLES=['Director','Gerente','Administrativo','Piloto','Estudiante','
 const ROLE_ACTIONS={view:'Ver',create:'Crear',edit:'Modificar',delete:'Eliminar',print:'Imprimir',export:'Exportar',resolve:'Resolver / aprobar'};
 const ROLE_PAGES=[
  {id:'horario',name:'Horario del día',areas:['Vuelos y rutas','Tripulación y pasajeros'],actions:['view','print','export']},
- {id:'pendientes',name:'Pendientes',areas:['Alertas de aeronaves','Alertas de pilotos','Alertas de escuela y empresa'],actions:['view','print','export']},
+ {id:'pendientes',name:'Pendientes',areas:['Alertas de aeronaves','Alertas de pilotos','Alertas de escuela','Alertas de HP CHARTER'],actions:['view','print','export']},
  {id:'aeronaves',name:'Aeronaves',areas:['Información y estatus','Motores y hélices','Horas e inspecciones','Mantenimiento y taller','Documentos y emergencia','Pedidos','Tarifas'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'pilotos',name:'Pilotos',areas:['Datos personales','Licencias y habilitaciones','Vencimientos y documentos'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'bitacora',name:'Registro de bitácora',areas:['Vuelos e instructores','Tacómetros y horas','Cargos por servicios','Historial de registros'],actions:['view','create','edit','delete','print','export']},
@@ -260,7 +261,7 @@ const ROLE_PAGES=[
  {id:'itinerario',name:'Itinerario',areas:['Calendario','Programación de vuelos','Solicitudes de vuelos'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'estudiantes',name:'Estudiantes / Clientes',areas:['Datos personales','Cursos y licencias','Horas registradas','Estado de cuenta y abonos','Documentos'],actions:['view','create','edit','delete','print','export']},
  {id:'escuela',name:'Escuela',areas:['Información y documentos','Cursos y fechas','Tarifas de servicios'],actions:['view','create','edit','delete','print','export','resolve']},
- {id:'charter',name:'HP CHARTER',areas:['Información de la empresa','Documentos y vencimientos','Servicios'],actions:['view','create','edit','delete','print','export','resolve']},
+ {id:'charter',name:'HP CHARTER',areas:['Información de la empresa','Documentos y vencimientos','Personal de la empresa','Servicios'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'estadisticas',name:'Estadísticas',areas:['Estadísticas generales','Estadísticas para AAC','Estadísticas Helicópteros Personales'],actions:['view','print','export']},
  {id:'saldos',name:'Alerta de saldos',areas:['Estudiantes','Clientes'],actions:['view','edit','print','export']}
 ];
