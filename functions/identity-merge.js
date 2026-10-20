@@ -22,7 +22,8 @@ function groups(root){
  const grouped=new Map();all.forEach((x,i)=>{const k=find(i);if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(x);});
  return [...grouped.values()].filter(g=>{const records=g.filter(x=>x.kind),uids=new Set(g.filter(x=>x.key.startsWith('user:')).map(x=>x.uid));
   const oneOwner=records.length&&records.every(x=>x.uid&&x.uid===records[0].uid),onePerson=records.length&&records.every(x=>x.personKey&&x.personKey===records[0].personKey);
-  return uids.size>1||records.some(x=>!x.uid)&&uids.size>0||records.length>1&&!oneOwner&&!onePerson||['student','pilot','personnel','client'].some(k=>records.filter(x=>x.kind===k).length>1);
+  const different=g.some(x=>x.kind)&&['name','email','identity'].some(key=>new Set(g.map(x=>key==='identity'?identity(x[key]):email(x[key]).replace(/\s+/g,' ')).filter(Boolean)).size>1);
+  return different||uids.size>1||records.some(x=>!x.uid)&&uids.size>0||records.length>1&&!oneOwner&&!onePerson||['student','pilot','personnel','client'].some(k=>records.filter(x=>x.kind===k).length>1);
  }).map(g=>({members:g,uids:[...new Set(g.filter(x=>x.key.startsWith('user:')).map(x=>x.uid))],role:g.some(x=>x.key.startsWith('user:'))?highest(g.filter(x=>x.key.startsWith('user:')&&x.assigned).map(x=>x.role)):null}));
 }
 const personal=new Set(['name','nombre','phone','celular','email','identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura','notes','position','fechaInicioHP','directoryKind','authUid','id','createdAt','createdDate','updatedAt']);
@@ -41,7 +42,7 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
  const role=!uid?null:uid===rootDirector?'Director':highest(ranked.map(u=>accounts[u].assignedAt?accounts[u].role:'Estudiante'));
  if(members.some(m=>m.kind&&m.uid&&!ranked.includes(m.uid)))throw Error('Un expediente está vinculado a una cuenta no incluida. Actualiza USUARIOS antes de unificar.');
  const primary=members.find(m=>m.key===primaryKey&&m.kind)||members.find(m=>m.kind);
- if(!uid&&(!primary||primaryKey&&!members.some(m=>m.key===primaryKey&&m.kind)))throw Error('Selecciona un expediente principal válido.');
+ if((!uid&&!primary)||(primaryKey&&!members.some(m=>m.key===primaryKey&&m.kind)))throw Error('Selecciona un expediente principal válido.');
  const oldRecords=rows(data),originals=members.filter(m=>m.kind).map(m=>{const found=m.id?oldRecords.find(x=>x.kind===m.kind&&x.record.id===m.id):oldRecords[m.index];if(!found||found.kind!==m.kind)throw Error('El expediente cambió. Actualiza.');const original=clone(found.record);found.record.id ||= 'identity-record-'+randomUUID();return {...found,key:m.key,original,record:clone(found.record)};});
  const primaryRecord=originals.find(x=>x.key===primary?.key)?.record||{};
  const principalEmail=uid?accounts[uid].email:primaryRecord.email||originals.find(x=>x.record.email)?.record.email||'';
@@ -57,6 +58,7 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
  // Share the canonical personal fields while retaining each operational section.
  const linked=rows(data).filter(x=>linkedIds.has(x.kind+':'+x.record.id)),profile=uid?clone(accounts[uid].profile||{}):{...clone(primaryRecord),name:primaryRecord.nombre||primaryRecord.name||''};
  for(const u of ranked)for(const [k,v]of Object.entries(accounts[u].profile||{}))if(!profile[k]&&v)profile[k]=clone(v);
+ if(primaryKey){for(const k of ['identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura'])if(primaryRecord[k])profile[k]=clone(primaryRecord[k]);profile.name=primaryRecord.nombre||primaryRecord.name||profile.name;}
  for(const {record:r}of linked)for(const k of personal)if(!['id','authUid','directoryKind','position','email','name','nombre','phone','celular'].includes(k)&&!profile[k]&&r[k])profile[k]=clone(r[k]);
  for(const {record:r,kind}of linked){for(const k of ['identity','birthDate','nationality','address','emergencyName','emergencyPhone','peso','estatura'])if(profile[k])r[k]=profile[k];if(profile.name)r[kind==='pilot'?'nombre':'name']=profile.name;}
  const map=(kind,id)=>mappings.find(m=>m.kind===kind&&m.from===id)?.to||id;

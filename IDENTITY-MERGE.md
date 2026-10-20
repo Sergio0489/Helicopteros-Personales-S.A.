@@ -29,3 +29,5 @@ También se pueden unificar coincidencias sin cuenta de Firebase, entre Pilotos,
 Los duplicados del mismo tipo se consolidan; las secciones operativas de tipos distintos quedan asociadas a una sola identidad mediante `school.identityLinks`, sin volver a presentarse como coincidencias pendientes. Los cambios posteriores de correo y cédula se sincronizan en el servidor entre esas secciones. Los registros antiguos sin ID reciben uno estable. Si luego la persona registra y verifica su cuenta con el correo principal, se reutilizan y vinculan sus expedientes.
 
 Esta ampliación requiere volver a desplegar `functions:accounts` con el mismo comando indicado arriba.
+
+Los expedientes que ya comparten UID o identidad unificada también aparecen para revisión si sus nombres, correos o cédulas difieren. El selector de expediente principal se ofrece igualmente para cuentas existentes: define el nombre y datos personales a conservar, sin cambiar el correo verificado ni la prioridad del cargo de la cuenta principal.
