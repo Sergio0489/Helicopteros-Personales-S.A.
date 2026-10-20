@@ -87,7 +87,7 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261019-school-editor-4';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261020-hours-sync-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-profile-output-1';

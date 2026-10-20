@@ -202,7 +202,7 @@ function pct(v, l) {
   if (!n || !lim) return null;
   return Math.min(100, Math.round(n / lim * 100));
 }
-// Vencimiento bar helpers (shows remaining hours, green < 70% used, red >= 70%)
+// Hour indicators use the configured component limit.
 function updateHorasWarning(input,limit) {
   if(!input)return;
   const value=Number(input.value||0);
@@ -216,28 +216,31 @@ function setFechaHoy(elemId) {
   if (el) el.textContent = fechaVista(panamaISO());
 }
 
+// Shared by aircraft bars, Pendientes and itinerary warnings. Never invent a limit.
+function vencHoursLevel(hv, limit) {
+  if(hv==='' || hv==null || !Number.isFinite(Number(hv)) || !(Number(limit)>0) || !Number.isFinite(Number(limit)))return 'empty';
+  const used=Number(hv),max=Number(limit);
+  return used>=max?'danger':used>=max*.8?'warn':'ok';
+}
 function vencBarPct(hv, limit) {
-  if(!parseFloat(limit)) return 0;
-  const v = parseFloat(hv), l = parseFloat(limit) || 2000;
-  if (!v) return 0; // empty bar if no data
-  return Math.min(100, Math.round(v / l * 100)); // shows USED %
+  if(vencHoursLevel(hv,limit)==='empty')return 0;
+  return Math.max(0,Math.min(100,Math.round(Number(hv)/Number(limit)*100)));
 }
 function vencBarCls(hv, limit) {
-  const v = parseFloat(hv), l = parseFloat(limit) || 2000;
-  if (!v) return 'fill-ok';
-  const remaining = (l - v) / l * 100; // % remaining
-  return remaining <= 20 ? 'fill-danger' : 'fill-ok';
+  return 'fill-'+vencHoursLevel(hv,limit);
 }
 function vencBarLabel(hv, limit) {
-  if(!parseFloat(limit)) return 'Límite pendiente de confirmar';
-  const v = parseFloat(hv), l = parseFloat(limit) || 2000;
-  if (!v) return '—';
-  const rem = (l - v).toFixed(2);
-  const used = Math.round(v / l * 100);
-  return parseFloat(rem) > 0 ? `Quedan ${rem} HV (${100-used}%)` : 'VENCIDO';
+  if(!(Number(limit)>0)||!Number.isFinite(Number(limit)))return 'Límite pendiente de confirmar';
+  if(vencHoursLevel(hv,limit)==='empty')return '—';
+  const rem=Number(limit)-Number(hv),used=Math.round(Number(hv)/Number(limit)*100);
+  return rem>0?`Quedan ${rem.toFixed(2)} HV (${100-used}%)`:'VENCIDO';
+}
+function aircraftHourAlerts(reg,d) {
+  return vencimientoSnapshot(reg,d).map(c=>({...c,level:vencHoursLevel(c.total,c.limite)}))
+    .filter(c=>c.level==='warn'||c.level==='danger');
 }
 function updateVencBar(tipo, idx, val, limit) {
-  if(isMultimotor(fleet[idx].reg)) limit=state[idx][VENC_FIELD_MAP[tipo].limiteField];
+  limit=state[idx][VENC_FIELD_MAP[tipo].limiteField];
   const tipoId = tipo === 'motor' ? 'motor' : (tipo === 'helices' ? 'helices' : tipo);
   const pb = document.getElementById('pb-' + tipoId + '-' + idx);
   const pct = document.getElementById('pct-' + tipoId + '-' + idx);
@@ -1155,8 +1158,8 @@ function getLimite(tipo, idx) {
 function updateLimiteVenc(tipo, idx, val) {
   const d = state[idx];
   const map = VENC_FIELD_MAP[tipo];
-  const l = parseFloat(val) || 2000;
-  d[map.limiteField] = l.toString();
+  const l = Number(val);
+  d[map.limiteField] = Number.isFinite(l)&&l>0 ? String(l) : '';
   updateVencBar(tipo, idx, d[map.dataField], l);
 }
 
@@ -2010,37 +2013,8 @@ function buildResumen() {
       if(days!==null&&days<=DAYS_WARN)addAlert('🚨 Equipos de Emergencia',reg,name,days<0?'VENCIDO':`Vence en ${days} días`,dateAlertLevel(days),days);
     });
 
-    // Motor (horas) - warn when <= 20% remaining (>= 80% used of 2000)
-    if (d.ciclos_totales) {
-      const pctUsed = parseFloat(d.ciclos_totales) / 2000 * 100;
-      if (pctUsed >= 80) {
-        const rem = (2000 - parseFloat(d.ciclos_totales)).toFixed(2);
-        addAlert('⚙️ Vencimientos en Horas', reg, reg === 'HP-880BL' ? 'Motor izquierdo' : 'Motor', `Quedan ${rem} HV (${Math.round(100-pctUsed)}%)`, 'danger');
-      }
-    }
-
-    // Helices / Motor 2 (horas)
-    if (d.ciclos_limite) {
-      const pctUsed = parseFloat(d.ciclos_limite) / 2000 * 100;
-      if (pctUsed >= 80) {
-        const rem = (2000 - parseFloat(d.ciclos_limite)).toFixed(2);
-        addAlert('⚙️ Vencimientos en Horas', reg, reg === 'HP-880BL' ? 'Motor derecho' : 'Hélices', `Quedan ${rem} HV (${Math.round(100-pctUsed)}%)`, 'danger');
-      }
-    }
-
-    // Helice 1 / Helice 2 (HP-880BL)
-    if (reg === 'HP-880BL') {
-      ['helice1','helice2'].forEach((tipo, i) => {
-        const val = d[tipo + '_ciclos'];
-        const limite = parseFloat(d[tipo + '_limite'] || 2000);
-        if (val) {
-          const pctUsed = parseFloat(val) / limite * 100;
-          if (pctUsed >= 80) {
-            const rem = (limite - parseFloat(val)).toFixed(2);
-            addAlert('⚙️ Vencimientos en Horas', reg, 'Hélice ' + (i+1), `Quedan ${rem} HV (${Math.round(100-pctUsed)}%)`, 'danger');
-          }
-        }
-      });
+    for(const c of aircraftHourAlerts(reg,d)){
+      addAlert('⚙️ Vencimientos en Horas',reg,c.label,vencBarLabel(c.total,c.limite),c.level);
     }
 
     // Include every applicable inspection warning, including the yellow threshold.
@@ -2527,11 +2501,8 @@ function getAircraftWarnings(reg, flightDate=panamaISO()) {
   if (acum100 >= 100) warnings.push({ level: 'danger', msg: `🔧 INSP. 100 HRS VENCIDA (${acum100.toFixed(2)} HV)` });
   else if (acum100 >= 90) warnings.push({ level: 'warn', msg: `⚠️ Insp. 100 hrs próxima (${acum100.toFixed(2)}/100 HV)` });
 
-  for(const [key,label] of vencimientoComponents(reg)){
-    const map=VENC_FIELD_MAP[key],hours=Number(d[map.dataField]||0),limit=Number(d[map.limiteField]);
-    if(!(limit>0))continue;
-    if(hours>=limit)warnings.push({level:'danger',msg:label+' VENCIDO ('+hours.toFixed(2)+' / '+limit+' HV)'});
-    else if(hours>=limit*.8)warnings.push({level:'warn',msg:label+' próximo ('+hours.toFixed(2)+' / '+limit+' HV)'});
+  for(const c of aircraftHourAlerts(reg,d)){
+    warnings.push({level:c.level,msg:c.label+(c.level==='danger'?' VENCIDO':' próximo')+' ('+c.total.toFixed(2)+' / '+c.limite+' HV)'});
   }
   emergencyAlerts(d).forEach(([label,date])=>{
     const days=daysUntil(date);
@@ -3442,3 +3413,4 @@ document.getElementById('flight-student')?.addEventListener('keydown',event=>{co
 setInterval(()=>{if(!document.hidden){buildResumen();updatePilotDropdown();window.PilotDossiers?.refresh();}},30000);
 
 function personAge(birthDate,at=panamaISO()){const born=isoFecha(birthDate);if(!Number.isFinite(dayNumber(born))||born>at)return '';const years=Number(at.slice(0,4))-Number(born.slice(0,4))-(at.slice(5)<born.slice(5)?1:0);return years;}
+
