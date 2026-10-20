@@ -15,10 +15,19 @@ const roles=['Director','Gerente','Administrativo','Piloto','Estudiante','Mecán
 function cleanProfile(input){const profile={};for(const key of fields){if(key==='interests'){profile[key]=(Array.isArray(input[key])?input[key]:[]).filter(v=>['privado','comercial','ifr','multimotor','rpa','instructor'].includes(v));continue;}profile[key]=String(input[key]||'').trim().slice(0,key==='notes'?4000:500);}if(input.photo){if(typeof input.photo!=='string'||input.photo.length>300000||!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(input.photo))throw Error('Foto no válida.');profile.photo=input.photo;}if(!profile.name)throw Error('Ingresa el nombre completo.');if(profile.birthDate&&!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate))throw Error('Revisa la fecha de nacimiento.');return profile;}
 function matchStudent(payload,email,uid){const matches=(payload.school?.students||[]).filter(s=>String(s.email||'').trim().toLowerCase()===email.toLowerCase());if(matches.length!==1||matches[0].authUid&&matches[0].authUid!==uid)return null;return matches[0];}
 const {matchRecord}=require('./record-link');
+const selfProfile=require('./self-profile');
 async function syncAccount(db,u,account,marker,readRoot){
  if(!u.emailVerified||!u.email)return account||{};
  if(account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===3)return account;
- const root=await readRoot(),payload=root?.payload?JSON.parse(root.payload):{},match=matchRecord(payload,u.email,u.uid);
+ let root=await readRoot();
+ if(account?.verified&&account.email&&account.email.toLowerCase()!==u.email.toLowerCase()&&account.recordId){
+  let failure='';const moved=await db.ref('dashboard').transaction(current=>{
+   if(!current)return current;try{const next=selfProfile.migrateEmail(JSON.parse(current.payload),u,account);return next?{...current,payload:JSON.stringify(next),operation:randomUUID(),revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:u.uid}:current;}catch(e){failure=e.message;return;}
+  },undefined,false);
+  if(failure||!moved.committed)throw Error(failure||'No se pudo sincronizar el nuevo correo. Intenta nuevamente.');
+  root=moved.snapshot.val();
+ }
+ const payload=root?.payload?JSON.parse(root.payload):{},match=matchRecord(payload,u.email,u.uid);
  const profile={...account?.profile};if(match.record)for(const field of fields){const value=match.record[field];if(value!=null&&value!==''&&(!Array.isArray(value)||value.length))profile[field]=value;}
  if(!profile.name)profile.name=u.uid===DIRECTOR?'Sergio Herrera C.':u.displayName||'';
  const patch={profile,email:u.email,verified:true,verifiedAt:account?.verifiedAt||new Date().toISOString(),syncedOperation:root?.operation||null,syncVersion:3,syncStatus:match.status,studentId:match.kind==='student'?match.record.id:null,pilotId:match.kind==='pilot'?match.record.id:null,recordId:match.record?.id||null,recordKind:match.kind||null,recordName:match.record?.name||null};
@@ -33,12 +42,34 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const actorAccount=(await ref.get()).val();
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
- if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:6,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:7,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='self-profile'||action==='self-profile-save'){
+  if(user.disabled){res.status(403).json({error:'La cuenta está deshabilitada.'});return;}
+  let root=(await db.ref('dashboard').get()).val();
+  let account=await syncAccount(db,user,actorAccount,root?.operation,async()=>root);
+  if(account?.syncedOperation&&root?.operation!==account.syncedOperation)root=(await db.ref('dashboard').get()).val();
+  if(action==='self-profile-save'){
+   const profile=selfProfile.clean(req.body.profile);if(typeof req.body.operation!=='string')throw Error('Cierra el perfil y vuelve a abrirlo antes de guardar.');
+   let failure='',applied;const operation=randomUUID();
+   const result=await db.ref('dashboard').transaction(current=>{
+    failure='';if(!current)return current;if(current.operation!==req.body.operation){failure='Los datos cambiaron. Cierra el perfil, vuelve a abrirlo y revisa los datos antes de guardar.';return;}
+    try{applied=selfProfile.apply(JSON.parse(current.payload),user,profile);return {...current,payload:JSON.stringify(applied.data),operation,revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid};}catch(e){failure=e.message;return;}
+   },undefined,false);
+   if(!result.committed||failure||!applied){res.status(409).json({error:failure||'No se confirmó el guardado. Vuelve a abrir el perfil.'});return;}
+   root=result.snapshot.val();
+   await ref.update({profile:{...account?.profile,...profile},syncedOperation:null,updatedAt:new Date().toISOString()});
+   account=await syncAccount(db,user,{...account,profile:{...account?.profile,...profile},syncedOperation:null},root.operation,async()=>root);
+  }
+  const data=root?.payload?JSON.parse(root.payload):{},stored=data.school?.userProfiles?.[user.uid]||{},match=user.emailVerified?matchRecord(data,user.email,user.uid):{status:'unverified'};
+  res.json({profile:{name:match.record?.name||stored.name||account?.profile?.name||user.displayName||'',phone:match.record?.phone??stored.phone??account?.profile?.phone??'',photo:stored.photo??account?.profile?.photo??''},role:isDirector?'Director':account?.role||'Estudiante',email:user.email,verified:user.emailVerified,linked:match.status==='matched',syncStatus:match.status,operation:root?.operation||null});return;
+ }
  if(action==='access'){
   if(!user.emailVerified||user.disabled){res.status(403).json({error:'Verifica tu correo para consultar el acceso.'});return;}
   let account=(await ref.get()).val();
-  const root=(await db.ref('dashboard').get()).val();const data=root?.payload?JSON.parse(root.payload):{};
+  let root=(await db.ref('dashboard').get()).val();
   account=await syncAccount(db,user,account,root?.operation,async()=>root);
+  if(account?.syncedOperation&&root?.operation!==account.syncedOperation)root=(await db.ref('dashboard').get()).val();
+  const data=root?.payload?JSON.parse(root.payload):{};
   const policy=policyFor(data,account),pages=visiblePages(policy);
   if(req.body.page&&!pages.some(p=>p.id===req.body.page)){res.status(403).json({error:'No tienes permiso para consultar esta página.'});return;}
   res.json({mode:'box-permissions',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native:req.body.page&&req.body.layout==='main'?{...boxView(data,account,policy,req.body.page),operation:root.operation,uid:user.uid}:null,page:req.body.page&&req.body.layout!=='main'?projectPage(boxView(data,account,policy,req.body.page).data,account,policy,req.body.page):null});return;
@@ -82,6 +113,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 

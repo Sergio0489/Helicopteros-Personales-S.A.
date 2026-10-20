@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261020-aircraft-navigation-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261020-profile-output-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -38,15 +38,34 @@
   window.getPaymentReceivers=()=>[{uid:cfg.uid,label:cfg.name||'Usuario'}];
 
   window.fetch=blocked;window.XMLHttpRequest=undefined;window.WebSocket=undefined;
-  window.printPilotSheet=window.print.bind(window);window.open=()=>null;window.print=()=>{};
+  let outputContext=null,statementScope=null;
+  const nativePrint=window.print.bind(window);
+  const mayOutput=pair=>pair&&HPBoxes.outputAllowed(cfg.policy,...pair);
+  window.print=()=>{if(mayOutput(outputContext)&&outputContext[2]==='print'){outputContext=null;nativePrint();}};
+  window.printPilotSheet=window.print;window.open=()=>null;
+  function outputFor(e){
+   if(e.matches('[data-pilot-action="print"],[data-pilot-action="blank-print"]'))return ['pilotos','dossier','print'];
+   if(e.matches('[data-action="print-student"],[data-action="blank-registration"]'))return ['estudiantes','personal','print'];
+   if(e.matches('[data-print],[data-own-statement-print]'))return cfg.page==='saldos'?(statementScope||['saldos','students','print']):['estudiantes','account','print'];
+   if(e.matches('[data-receipt-print]'))return ['pagos','receipts','print'];
+   if(e.matches('[data-aac-download]'))return ['estadisticas','aac','export'];
+   if(e.matches('[data-hp-download]'))return ['estadisticas','company','export'];
+   return null;
+  }
   window.CLOUD_INITIAL=cfg.data;
   document.getElementById('access-screen').remove();document.getElementById('dashboard-app').hidden=false;
-  document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
+  document.querySelector('.cloud-toolbar').innerHTML='<span id="readonly-name"></span><span>'+ (cfg.editable?'Edición según permisos':'Solo consulta')+'</span><button id="readonly-profile">Mi perfil</button><button id="readonly-refresh">Actualizar</button><button id="readonly-logout">Cerrar sesión</button>';
   document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;
+  document.getElementById('profile-menu')?.remove();document.getElementById('readonly-profile').onclick=()=>send('profile');
+  window.addEventListener('message',e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='profile-updated'){cfg.name=e.data.name;document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;document.getElementById('readonly-refresh').textContent='Actualizar datos';}});
   document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>send('logout');
   const safeAction=new Set(['select','statement','view']);
   function readonlyControl(e){
-   if(e.closest('#sidebar,#readonly-refresh,#readonly-logout,#hamburgerBtn,#drawerCloseBtn,#drawerOverlay'))return true;
+   const output=outputFor(e);if(output)return !!mayOutput(output);
+   if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
+   if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
+   if(e.matches('[data-receipt-close]'))return true;
+   if(e.closest('#sidebar,#readonly-profile,#readonly-refresh,#readonly-logout,#hamburgerBtn,#drawerCloseBtn,#drawerOverlay'))return true;
    if(e.closest('[data-aac-filters],[data-hp-filters]'))return true;
    if(e.matches('[data-pilot-select],[data-pilot-search],[data-pilot-action="print"],[data-pilot-action="blank-print"]'))return true;
    if(e.matches('[data-payment-person],[data-person-id],[role=option],[data-balance-person]'))return true;
@@ -62,6 +81,7 @@
   }
   let dialogPermission=null;
   function canEditControl(e){
+   if(outputFor(e))return false;
    if(!cfg.policy||!cfg.editable)return false;
    const pair=window.HPBoxUI?.owner(e)||((e.closest('dialog,.app-calendar'))?dialogPermission:null);
    if(pair==='filter')return false;
@@ -71,7 +91,7 @@
    if(e.closest('.aircraft-status-control'))return HPBoxes.permissions(cfg.policy,'aeronaves','status').edit;
    return false;
   }
-  document.addEventListener('click',e=>{const control=e.target.closest('button,a,input,select,textarea,[onclick],[data-action]');if(control&&canEditControl(control)){dialogPermission=window.HPBoxUI?.owner(control)||dialogPermission;return;}if(control&&readonlyControl(control)&&control.matches('input'))dialogPermission='filter';if(control&&!readonlyControl(control)){e.preventDefault();e.stopImmediatePropagation();}},true);
+  document.addEventListener('click',e=>{const control=e.target.closest('button,a,input,select,textarea,[onclick],[data-action]');if(control?.matches('[data-balance-person]'))statementScope=['saldos',control.dataset.balancePerson.startsWith('client:')?'clients':'students','print'];if(control&&outputFor(control)){outputContext=outputFor(control);if(!mayOutput(outputContext)){outputContext=null;e.preventDefault();e.stopImmediatePropagation();}return;}if(control&&canEditControl(control)){dialogPermission=window.HPBoxUI?.owner(control)||dialogPermission;return;}if(control&&readonlyControl(control)&&control.matches('input'))dialogPermission='filter';if(control&&!readonlyControl(control)){e.preventDefault();e.stopImmediatePropagation();}},true);
   document.addEventListener('submit',e=>{if(!canEditControl(e.target)&&!e.target.matches('[data-aac-filters],[data-hp-filters]')){e.preventDefault();e.stopImmediatePropagation();}},true);
   window.finishRoleView=()=>{
    document.getElementById('drawerCloseBtn').onclick=()=>closeDrawer();
@@ -99,6 +119,7 @@
     document.querySelectorAll('.school-course-grid').forEach(e=>{e.hidden=!['courses','account','hours'].some(b=>HPBoxes.permissions(cfg.policy,'estudiantes',b).view);});
     document.querySelectorAll('[data-action]').forEach(e=>{const owner=HPBoxUI.owner(e);if(owner)e.hidden=!HPBoxes.permissions(cfg.policy,...owner).view;});
     document.querySelectorAll('button,input,select,textarea').forEach(e=>{if(!readonlyControl(e)&&!canEditControl(e)){e.disabled=true;e.title='Solo consulta';}});
+    document.querySelectorAll('button').forEach(e=>{const output=outputFor(e);if(output&&!mayOutput(output)){e.disabled=true;e.title='El Director debe autorizar '+(output[2]==='print'?'Imprimir / PDF':'Exportar Excel')+' para este cuadro.';}});
     document.querySelectorAll('[data-action="view"]').forEach(e=>{const box={students:'directory',clients:'clients',rates:'rates','course-rates':'course-rates',intakes:'intakes'}[e.dataset.view];e.hidden=box?!HPBoxes.permissions(cfg.policy||{},'estudiantes',box).view:false;});
    }
    baseline=clean(previewData);previewData={...structuredClone(baseline),undoFleet:{}};
@@ -115,7 +136,7 @@
   const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
   const csp=document.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: "+location.origin+"; connect-src 'none'; form-action 'none';";doc.head.prepend(csp);
-  const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+page;frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
+  const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+page;frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-downloads');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
   const style=document.createElement('style');style.textContent='[hidden]{display:none!important}button:disabled{cursor:default}input:disabled,select:disabled,textarea:disabled{opacity:1;color:inherit;-webkit-text-fill-color:currentColor}';doc.head.appendChild(style);
   const cfg={...result.native,page,pages:result.pages,name:result.name,role:result.role,channel};
   const add=code=>{const s=doc.createElement('script');s.textContent=code;doc.body.appendChild(s);};
@@ -129,6 +150,7 @@
   const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
   const listener=e=>{
    if(e.source!==frame.contentWindow||e.data?.channel!==channel)return;
+   if(e.data.action==='profile'){if(settled)window.AccountProfile?.open({onSaved:result=>frame.contentWindow?.postMessage({channel,action:'profile-updated',name:result.profile.name},'*')});return;}
    if(e.data.action==='box-save'){
     if(!settled)return;
     AccountRegistration.api('box-save',{page,operation:e.data.operation,before:e.data.before,after:e.data.after}).then(result=>frame.contentWindow?.postMessage({channel,action:'box-save-result',requestId:e.data.requestId,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'box-save-result',requestId:e.data.requestId,error:error.message},'*'));return;
@@ -150,5 +172,6 @@
  }
  window.RoleMainView={mount};
 })();
+
 
 

@@ -23,9 +23,13 @@
  add('estadisticas','ranking','Horas por aeronave: año','Estadísticas generales','#stats-chart-ranking',false);add('estadisticas','monthly','Horas por aeronave: meses','Estadísticas generales','#stats-chart',false);add('estadisticas','aac','Estadísticas para AAC','Estadísticas para AAC','#registro-transport-report',false);add('estadisticas','company','Estadísticas Helicópteros Personales','Estadísticas Helicópteros Personales','#registro-personal-report',false);
  add('saldos','students','Alertas de saldos: estudiantes','Estudiantes','[data-balance-person^="student:"]');add('saldos','clients','Alertas de saldos: clientes','Clientes','[data-balance-person^="client:"]');
  add('usuarios','directory','Usuarios y cargos','Usuarios','#panel-usuarios .users-table');
+ const outputs={pilotos:{dossier:['print'],licenses:['print']},estudiantes:{personal:['print'],account:['print']},pagos:{receipts:['print']},saldos:{students:['print'],clients:['print']},estadisticas:{aac:['export'],company:['export']}};
+ for(const [page,boxes]of Object.entries(catalog))for(const b of boxes)b.outputs=outputs[page]?.[b.id]||[];
+ function outputAllowed(policy,page,id,kind){return ['print','export'].includes(kind)&&catalog[page]?.find(b=>b.id===id)?.outputs.includes(kind)&&permissions(policy,page,id).view&&policy[page].actions?.[kind]===true&&policy[page].boxes?.[id]?.[kind]===true;}
  function permissions(policy,page,id){const box=catalog[page]?.find(b=>b.id===id),p=policy?.[page];if(!box||!p?.actions?.view)return {view:false,edit:false};const v=p.boxes?.[id];const view=v?v.view===true:p.areas?.[box.area]===true;return {view,edit:view&&box.editable&&p.actions?.edit===true&&v?.edit===true};}
- function normalize(policy){const out={};for(const [page,boxes]of Object.entries(catalog)){const p=policy?.[page]||{};out[page]={...p,actions:{...p.actions},areas:{},boxes:{}};for(const b of boxes){const rights=permissions(policy,page,b.id);out[page].boxes[b.id]=rights;if(rights.view)out[page].areas[b.area]=true;}}return out;}
+ function normalize(policy){const out={};for(const [page,boxes]of Object.entries(catalog)){const p=policy?.[page]||{};out[page]={...p,actions:{...p.actions},areas:{},boxes:{}};for(const b of boxes){const rights=permissions(policy,page,b.id);out[page].boxes[b.id]={...rights};for(const kind of b.outputs)out[page].boxes[b.id][kind]=!!outputAllowed(policy,page,b.id,kind);if(rights.view)out[page].areas[b.area]=true;}}return out;}
  function aircraftAllowed(policy,reg){const scope=policy?.horario?.aircraft;if(scope==null||scope.mode==='all')return true;if(scope.mode!=='selected'||!Array.isArray(scope.registrations))return false;const key=v=>String(v||'').replace(/[^a-z0-9]/gi,'').toUpperCase();return scope.registrations.some(r=>key(r)===key(reg));}
- const api={catalog,permissions,normalize,aircraftAllowed};if(typeof module!=='undefined')module.exports=api;else root.HPBoxes=api;
+ const api={catalog,permissions,normalize,aircraftAllowed,outputAllowed};if(typeof module!=='undefined')module.exports=api;else root.HPBoxes=api;
 })(typeof window==='undefined'?globalThis:window);
+
 
