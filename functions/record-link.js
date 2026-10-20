@@ -2,7 +2,7 @@
 function matchRecord(payload,email,uid){
  const normalized=String(email||'').trim().toLowerCase();if(!normalized)return {status:'missing-email'};
  const records=[...(payload.school?.students||[]).map(record=>({record,kind:'student'})),...(payload.school?.personnel||[]).map(p=>({kind:'personnel',record:{...p,phone:p.celular||p.phone||''}})),...(payload.school?.registry?.clients||[]).map(record=>({record,kind:'client'})),...(payload.pilotos||[]).map((p,i)=>({kind:'pilot',record:{...p,id:p.id||'legacy-pilot-'+i,name:p.nombre||p.name||'',phone:p.celular||p.phone||'',residentialPhone:p.telefono||p.residentialPhone||''}}))];
- const matches=records.filter(({record})=>String(record.email||'').trim().toLowerCase()===normalized);
+ const matches=records.filter(({record})=>(uid&&record.authUid===uid)||String(record.email||'').trim().toLowerCase()===normalized);
  const pointer=payload.school?.userProfiles?.[uid]?.dossier;
  if(matches.some(p=>p.record.authUid&&p.record.authUid!==uid))return {status:'linked-to-another-user'};
  if(new Set(matches.map(p=>p.kind)).size!==matches.length)return {status:'duplicate-email'};

@@ -96,7 +96,7 @@ function applyChanges(current,before,after,policy,account){
   if(actual!==undefined&&actual!==null&&typeof actual==='object')checkTree(actual,path,context);
   checkTree(next===undefined?actual:next,path,context);return clone(next);
  }
- const result=merge(root,before,after,[]);require('./company').validateChanges(current,result);require('./pilot-validity').validateChanges(current,result);require('./school-information').validateChanges(current,result);require('./school-certificates').validateChanges(current,result);return {data:result,writes};
+ const result=merge(root,before,after,[]);require('./identity-merge').assertUnique(current,result);require('./company').validateChanges(current,result);require('./pilot-validity').validateChanges(current,result);require('./school-information').validateChanges(current,result);require('./school-certificates').validateChanges(current,result);return {data:result,writes};
 }
 module.exports={boxFor,allowed,applyChanges};
 

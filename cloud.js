@@ -109,18 +109,18 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261020-navigation-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261020-identity-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
- const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-navigation-1';
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-identity-1';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261020-navigation-1';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261020-identity-1';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
- const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-navigation-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
- for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261020-navigation-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
- const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261020-navigation-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
+ const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-identity-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
+ for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261020-identity-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
+ const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261020-identity-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
  window.AccountRegistration?.installUsersPage();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
@@ -260,7 +260,7 @@ document.addEventListener('click',event=>{const menu=el('profile-menu');if(menu&
 
 
 // Role policies are staged until Firebase supports isolated per-page access.
-const STAFF_ROLES=['Director','Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
+const STAFF_ROLES=['Director','Gerente','Administrativo','Contabilidad','Mecánico','Piloto','Estudiante'];
 const ROLE_ACTIONS={view:'Ver',create:'Crear',edit:'Modificar',delete:'Eliminar',print:'Imprimir',export:'Exportar',resolve:'Resolver / aprobar'};
 const ROLE_PAGES=[
  {id:'horario',name:'Horario del día',areas:['Vuelos y rutas','Tripulación y pasajeros'],actions:['view','print','export']},

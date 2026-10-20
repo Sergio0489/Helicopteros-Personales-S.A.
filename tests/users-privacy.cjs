@@ -37,13 +37,15 @@ test('Users UI still loads authorized dynamic data, filters and saves roles',asy
  const browser=await chromium.launch({...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{}),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
  t.after(()=>browser.close());
  const page=await browser.newPage(),errors=[],requests=[];
- page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
+ let acceptMerge=false;page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.message().startsWith('¿Confirmas que todos')&&!acceptMerge?dialog.dismiss():dialog.accept());
  await page.route('**/*',async route=>{
   const request=route.request();
   if(!request.url().endsWith('/accountRegistration'))return route.fulfill({body:''});
   assert.equal(request.headers().authorization,'Bearer synthetic-token');
   const body=request.postDataJSON();requests.push(body);
   const users=[{uid:'member-z',name:'Zulu de prueba',email:'zulu@example.test',phone:'TEST-PHONE',role:'Estudiante',verified:true},{uid:'member-a',name:'Ana de prueba',email:'ana@example.test',phone:'TEST-CONTACT',role:'Piloto',verified:true}];
+  if(body.action==='identity-preview')return route.fulfill({json:{operation:'test-version',groups:[{role:'Gerente',uids:['member-a','member-z'],members:[{key:'user:member-a',uid:'member-a',name:'Ana de prueba',email:'ana@example.test',identity:'TEST-ALPHA',role:'Gerente'},{key:'user:member-z',uid:'member-z',name:'Ana duplicada',email:'alternate@example.test',identity:'TESTALPHA',role:'Piloto'}]}]}});
+  if(body.action==='identity-merge')return route.fulfill({json:{ok:true,email:'ana@example.test',role:'Gerente',warnings:[]}});
   await route.fulfill({json:body.action==='users'?{users:[users[body.pageToken?1:0]],nextPageToken:body.pageToken?null:'page-two'}:{ok:true}});
  });
  await page.setContent('<button id="create-account"></button><p id="access-message"></p><button id="profile-requests"></button><details id="profile-menu"></details><div id="content-area"></div><div id="sidebar-tabs"></div>');
@@ -64,6 +66,7 @@ test('Users UI still loads authorized dynamic data, filters and saves roles',asy
  await page.selectOption('[data-edit]','Piloto');await page.click('[data-save]');await page.locator('[data-status]').filter({hasText:'Cargo guardado'}).waitFor();
  assert.deepEqual(requests.at(-1),{action:'assign',uid:'member-z',role:'Piloto'});
  await page.fill('[data-search]','');await page.selectOption('[data-role-filter]','Estudiante');assert((await page.locator('tbody').innerText()).includes('Sin usuarios'));
+ await page.click('[data-identities]');await page.locator('dialog[open] [data-unify]').waitFor();assert.match(await page.locator('dialog[open]').innerText(),/Gerente/);await page.click('[data-unify]');assert.equal(requests.filter(r=>r.action==='identity-merge').length,0,'Cancel must not merge');acceptMerge=true;await page.click('[data-unify]');await page.locator('[data-merge-status]').filter({hasText:'Unificación guardada'}).waitFor();assert.deepEqual(requests.at(-1),{action:'identity-merge',members:['user:member-a','user:member-z'],operation:'test-version',confirm:true});await page.click('[data-close]');
  assert.deepEqual(errors,[]);
 });
 

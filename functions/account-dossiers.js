@@ -13,7 +13,10 @@ const recordRows=data=>[
 function ensure(data,user,account={},now=new Date().toISOString()){
  const next=clone(data),email=normalize(user.email),role=account.role||'Estudiante',kind=user.emailVerified?kindFor(role):'student';
  if(!email||user.disabled)return {data,changed:false,status:'unavailable'};
- const candidates=recordRows(next).filter(p=>normalize(p.record.email)===email);
+ const candidates=recordRows(next).filter(p=>p.record.authUid===user.uid||normalize(p.record.email)===email);
+ const idKey=require('./identity-merge').identity;
+ const identityKeys=new Set([account.profile?.identity,...candidates.map(p=>p.record.identity)].map(idKey).filter(Boolean));
+ if(recordRows(next).some(p=>!candidates.some(c=>c.record===p.record)&&identityKeys.has(idKey(p.record.identity))))return {data,changed:false,status:'duplicate-identity'};
  // Unverified registrations must never read, claim, or overwrite an existing dossier.
  if(!user.emailVerified&&candidates.length)return {data,changed:false,status:'unverified'};
  if(candidates.some(p=>p.record.authUid&&p.record.authUid!==user.uid))return {data,changed:false,status:'linked-to-another-user'};
