@@ -128,19 +128,26 @@ function modal(title,body,onSave,afterOpen){
  if(activeDialog)return;
  const dialog=document.createElement('dialog');dialog.className='record-dialog school-dialog';
  dialog.innerHTML='<form><h3>'+esc(title)+'</h3><div class="school-form">'+body+'</div><p class="record-error" role="alert"></p><div class="record-actions"><button type="button" class="record-btn" data-close>Cancelar</button><button type="submit" class="save-btn">Guardar</button></div></form>';
- document.body.appendChild(dialog);activeDialog=dialog;let dirty=false,saving=false;
+ document.body.appendChild(dialog);activeDialog=dialog;let dirty=false,saving=false,draft=null;
  dialog.addEventListener('input',()=>{dirty=true;dialog.dataset.dirty='1';});dialog.addEventListener('change',()=>{dirty=true;dialog.dataset.dirty='1';});
  function canClose(){return !saving&&(!dirty||window.confirm('¿Descartar los cambios de este formulario?'));}
  dialog.querySelector('[data-close]').onclick=()=>{if(canClose())dialog.close();};
  dialog.addEventListener('cancel',e=>{if(!canClose())e.preventDefault();});
- dialog.addEventListener('close',()=>{dialog.remove();activeDialog=null;});
+ dialog.addEventListener('close',()=>{draft?.clear();dialog.remove();activeDialog=null;});
  dialog.querySelector('form').onsubmit=async event=>{
   event.preventDefault();if(saving)return;saving=true;dialog.querySelector('[type="submit"]').disabled=true;
   try{const fields=Object.fromEntries(new FormData(event.target));await onSave(fields,event.target);dirty=false;dialog.close();}
   catch(e){dialog.querySelector('.record-error').textContent=e.message||'No se pudo completar la operación.';}
   finally{saving=false;if(dialog.isConnected)dialog.querySelector('[type="submit"]').disabled=false;}
  };
- dialog.showModal();setupDates();if(afterOpen)afterOpen(dialog);
+ dialog.showModal();setupDates();if(afterOpen)afterOpen(dialog);draft=dialog.paymentDraft||null;
+ const personal=['Editar estudiante','Nuevo estudiante','Agregar cliente','Crear piloto','Editar expediente de piloto','Licencias y habilitaciones','Certificado médico'];
+ if(personal.includes(title)){
+  const page=document.querySelector('.aircraft-panel.active')?.id||'';
+  const context=page.includes('piloto')?window.pilotDraftContext?.():selected||'new';
+  draft=window.DraftRecovery?.form('form:'+page+':'+context+':'+title,dialog.querySelector('form'),title);
+ }
+
 }
 const STUDENT_CREDENTIALS=['Privado','Comercial','IFR','Multi-Motor','Instructor','RPA (Drone)'];
 function studentCredentialsForm(s){return '<h4 class="school-form-section">Certificado médico</h4><label>Clase<select name="medicalClass"><option value="">Sin registrar</option>'+options(['Primera','Segunda','Tercera'],s.medicalClass||'')+'</select></label><label>Fecha de expiración · MM/AAAA<div style="display:flex;gap:6px"><input name="medicalExpiryMonth" placeholder="MM/AAAA" inputmode="numeric" pattern="(0[1-9]|1[0-2])/[0-9]{4}" value="'+esc(s.medicalExpiry?String(s.medicalExpiry).slice(5,7)+'/'+String(s.medicalExpiry).slice(0,4):'')+'"><button type="button" class="record-btn" data-student-month-toggle aria-label="Abrir calendario" aria-expanded="false">▦</button></div><div data-student-month-panel hidden style="padding:12px;border:1px solid #a9c6e2;border-radius:6px"><div class="school-row"><button type="button" data-student-month-prev aria-label="Año anterior">‹</button><b data-student-month-year></b><button type="button" data-student-month-next aria-label="Año siguiente">›</button></div><div data-student-month-options style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div></div></label><fieldset class="school-full"><legend>Licencias y habilitaciones obtenidas</legend><div class="school-checks">'+STUDENT_CREDENTIALS.map(v=>'<label class="school-check"><input type="checkbox" name="obtainedCredential" value="'+esc(v)+'" '+(list(s.obtainedCredentials).includes(v)?'checked':'')+'>'+esc(v)+'</label>').join('')+'</div></fieldset>';}
@@ -608,7 +615,7 @@ function showReceipt(id){
  document.body.appendChild(dialog);dialog.querySelector('[data-receipt-close]').onclick=()=>dialog.close();dialog.querySelector('[data-receipt-print]').onclick=()=>printSchoolHtml(receiptHtml(r,receiptStatus(r)),'school-receipt-print');dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();dialog.scrollTop=0;
 }
 function openPayment(key,defaultFee='',defaultCourse=''){
- const person=receiptPerson(data(),key),id=uid(),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
+ let id=uid();const person=receiptPerson(data(),key),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
  modal('Crear abono · '+person.record.name,'<div class="school-full" data-payment-lines></div><button type="button" class="record-btn" data-add-payment-line>+ Agregar servicio / curso</button><p class="school-full"><b>Total del abono: <span data-payment-total>$0.00</span></b></p><datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label||'Usuario autorizado · registrar nombre')+'</option>').join('')+'</select></label>'+(paymentReceivers().some(user=>!user.label)?input('receiverName','Nombre del usuario que recibe','','text','required maxlength="160"'): '')+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
   f.allocations=[...form.querySelectorAll('[data-payment-line]')].map(row=>({serviceName:row.querySelector('[name="serviceName"]').value,amount:row.querySelector('[name="amount"]').value,targetCourse:row.querySelector('[name="targetCourse"]').value}));
   const attachment=await paymentPhoto(form.querySelector('[name="proof"]').files[0]);
@@ -630,6 +637,12 @@ function openPayment(key,defaultFee='',defaultCourse=''){
   };
   dialog.querySelector('[data-add-payment-line]').onclick=()=>addLine();addLine(true);
   const refresh=()=>{dialog.querySelector('[name="reference"]').required=['ACH','Yappy'].includes(dialog.querySelector('[name="method"]').value);};dialog.querySelector('[name="method"]').onchange=refresh;refresh();
+  dialog.paymentDraft=window.DraftRecovery?.bind('payment:'+key+':'+defaultFee+':'+defaultCourse,dialog.querySelector('form'),()=>({fields:DraftRecovery.fields(dialog),id,count:container.children.length}),draft=>{
+   container.replaceChildren();for(let i=0;i<Math.min(draft.count,100);i++)addLine();
+   DraftRecovery.applyFields(dialog,draft.fields);id=draft.id;total();refresh();
+   const note=document.createElement('p');note.textContent='Revisa el abono y vuelve a adjuntar la foto del comprobante si corresponde. Aún no se ha registrado ningún pago.';dialog.querySelector('form').append(note);
+  },'Abono de '+person.record.name);
+
  });
 }
 

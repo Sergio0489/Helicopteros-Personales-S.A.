@@ -3,6 +3,7 @@
  const panel=document.getElementById('panel-pilotos');if(!panel||!window.School)return;
  const root=document.createElement('section');root.id='pilot-dossiers';root.className='card';root.style.cssText='padding:18px;margin-bottom:20px';root.dataset.permissionPage='pilotos';root.dataset.permissionBox='dossier';root.dataset.boxName='Expediente de pilotos';panel.insertBefore(root,panel.children[1]||null);
  const esc=escapeRecord;let selected=sortedPilotEntries()[0]?.i??0,query='',signature='';
+ window.pilotDraftContext=()=>pilotosData[selected]?.id||('pilot-index:'+selected);
 
  const models={HP1819:'PA 28',HP1907:'PA 28',HP1784:'PA 28',HP1815:'PA 28',HP1579:'PA 28',HP1930:'GROB 115',HP880BL:'PA 34',HP18BLM:'BE 90',HP1805BLM:'PA 31',HP1186:'PA 31'};
  const companyModels=['PA 28','PA 34','PA 31','BE 90','BELL 206','GROB 115'];

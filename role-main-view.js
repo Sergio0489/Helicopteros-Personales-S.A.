@@ -5,12 +5,12 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261020-navigation-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261020-drafts-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
  async function assets(page){
-  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js'].map(asset)).catch(e=>{bundle=null;throw e;});
   if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
   return [...await bundle,page==='estadisticas'?await chartBundle:''];
  }
@@ -58,13 +58,14 @@
   document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;
   document.getElementById('profile-menu')?.remove();document.getElementById('readonly-profile').onclick=()=>send('profile');document.getElementById('readonly-reason').onclick=()=>send('audit-reason');
   window.addEventListener('message',e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='profile-updated'){cfg.name=e.data.name;document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;document.getElementById('readonly-refresh').textContent='Actualizar datos';}});
-  document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>send('logout');
+  document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>{if(!window.hasDraftChanges?.()||confirm('Hay cambios pendientes. Cerrar sesión eliminará los borradores de este usuario en este dispositivo. ¿Continuar?'))send('logout');};
   const safeAction=new Set(['select','statement','view']);
   function readonlyControl(e){
    const output=outputFor(e);if(output)return !!mayOutput(output);
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
    if(e.matches('[data-receipt-close]'))return true;
+   if(e.closest('[data-draft-notice]'))return true;
    if(e.closest('#sidebar,#readonly-profile,#readonly-refresh,#readonly-logout,#hamburgerBtn,#drawerCloseBtn,#drawerOverlay'))return true;
    if(e.closest('[data-aac-filters],[data-hp-filters]'))return true;
    if(e.matches('[data-pilot-select],[data-pilot-search],[data-pilot-action="print"],[data-pilot-action="blank-print"]'))return true;
@@ -132,21 +133,28 @@
     const rememberAircraft=()=>{const p=document.querySelector('.aircraft-panel.active');if(p&&/^panel-\d+$/.test(p.id))send('aircraft',fleet[Number(p.id.slice(6))]?.reg);};
     new MutationObserver(rememberAircraft).observe(document.getElementById('content-area'),{attributes:true,attributeFilter:['class'],subtree:true});
    }
+   const draftWrites=new Map();
+   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='draft-stored')return;const item=draftWrites.get(e.data.id);if(!item)return;clearTimeout(item.timer);draftWrites.delete(e.data.id);e.data.error?item.reject(Error(e.data.error)):item.resolve();});
+   DraftRecovery.init({revision:()=>cfg.operation,read:key=>cfg.draftEntries[key],write:(key,value)=>new Promise((resolve,reject)=>{cfg.draftEntries[key]=value;const id=crypto.randomUUID(),timer=setTimeout(()=>{draftWrites.delete(id);reject(Error('Borrador sin confirmar.'));},3000);draftWrites.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'draft-store',id,key,value},'*');})});
+   window.installAircraftDrafts?.();window.Registro?.installDraft?.();
+   const writer=window.cloudWrite;window.cloudWrite=async value=>{await DraftRecovery.beforeSave();try{const result=await writer(value);DraftRecovery.saved();return result;}catch(e){DraftRecovery.error(e.message);throw e;}};
    send('ready');
   };
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,chart]=await assets(page);
+  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,chart]=await assets(page);
   const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
   const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
   const csp=document.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: "+location.origin+"; connect-src 'none'; form-action 'none';";doc.head.prepend(csp);
   const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+page;frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-downloads');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
   const style=document.createElement('style');style.textContent='[hidden]{display:none!important}button:disabled{cursor:default}input:disabled,select:disabled,textarea:disabled{opacity:1;color:inherit;-webkit-text-fill-color:currentColor}';doc.head.appendChild(style);
-  const cfg={...result.native,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
+  const draftScope='role:'+result.role+':'+page+':';
+  const draftEntries=Object.fromEntries(Object.entries(window.DraftRecovery?.list()||{}).filter(([k,v])=>k.startsWith(draftScope)&&result.native.editable&&v.revision===String(result.native.operation??'')&&v.policy===JSON.stringify(result.native.policy)).map(([k,v])=>[k.slice(draftScope.length),v]));
+  const cfg={...result.native,draftEntries,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
   const add=code=>{const s=doc.createElement('script');s.textContent=code;doc.body.appendChild(s);};
-  add(boxesScript);
+  add(boxesScript);add(draftScript);
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
@@ -156,6 +164,10 @@
   const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
   const listener=e=>{
    if(e.source!==frame.contentWindow||e.data?.channel!==channel)return;
+   if(e.data.action==='draft-store'){
+    if(!settled)return;let error=null;try{if(typeof e.data.key!=='string'||e.data.key.length>500)throw Error('Borrador inválido.');DraftRecovery.store(draftScope+e.data.key,e.data.value===null?null:{...e.data.value,policy:JSON.stringify(result.native.policy)});}catch{error='No se pudo conservar el borrador.';}
+    frame.contentWindow?.postMessage({channel,action:'draft-stored',id:e.data.id,error},'*');return;
+   }
    if(e.data.action==='audit-reason'){if(settled)window.ChangeHistory?.setReason();return;}
    if(e.data.action==='profile'){if(settled)window.AccountProfile?.open({onSaved:result=>frame.contentWindow?.postMessage({channel,action:'profile-updated',name:result.profile.name},'*')});return;}
    if(e.data.action==='box-save'){

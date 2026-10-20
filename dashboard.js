@@ -3012,8 +3012,17 @@ let panelSavePending=false;
 async function savePanel(idx){
  if(panelSavePending)return false;
  panelSavePending=true;
- try{return await savePanelInternal(idx);}catch(e){showCloudError(e);return false;}finally{panelSavePending=false;}
+ try{window.DraftRecovery?.capture('aircraft:'+fleet[idx].reg);const ok=await savePanelInternal(idx);if(ok)await window.DraftRecovery?.clear('aircraft:'+fleet[idx].reg);return ok;}catch(e){showCloudError(e);return false;}finally{panelSavePending=false;}
 }
+window.installAircraftDrafts=()=>{
+ const install=()=>fleet.forEach((ac,idx)=>{
+  const root=document.getElementById('panel-'+idx);if(!root)return;
+  window.DraftRecovery?.bind('aircraft:'+ac.reg,root,()=>({state:structuredClone(state[idx]),fields:DraftRecovery.fields(root)}),draft=>{
+   state[idx]=structuredClone(draft.state);const replacement=buildPanel(ac,state[idx],idx);replacement.className=root.className;root.replaceWith(replacement);refreshPanel(idx);setupDates();
+   DraftRecovery.applyFields(replacement,draft.fields);aircraftDirty.add(idx);updateTAC(idx);updateSummary();buildResumen();updateUndoButtons();
+  },ac.reg);
+ });install();new MutationObserver(install).observe(contentEl,{childList:true,subtree:true});
+};
 window.hasDraftChanges=()=>aircraftDirty.size>0;
 window.exportCurrentData=()=>exportPreview();
 
