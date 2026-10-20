@@ -118,7 +118,7 @@ async function openDashboard(data){
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
  const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-profile-output-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
  const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261019-school-editor-4';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
- window.AccountRegistration?.installUsersPage();window.ChangeHistory?.install();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ window.AccountRegistration?.installUsersPage();window.ChangeHistory?.install();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
@@ -147,20 +147,20 @@ try{
  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION).then(()=>{
   firebase.auth().onAuthStateChanged(async user=>{
    directorSessionUid=null;
-   if(!user){if(appLoaded){location.reload();return;}accessMessage('Ingresa con tu usuario autorizado.');return;}
+   if(!user){el('login-form').hidden=false;if(appLoaded){location.reload();return;}accessMessage('Ingresa con tu usuario autorizado.');return;}
    let director=false;try{director=await loadDirectorSession(user);}catch(error){accessMessage(error.message);return;}
    if(!director){if(window.AccountRegistration)await window.AccountRegistration.landing();else accessMessage('Recarga la página para consultar tu solicitud.');return;}
    el('login-form').hidden=true;el('access-logout').hidden=false;accessMessage('Cargando datos…');
    try{await refreshCloud();}catch(error){accessMessage(error.message);}
   });
- }).catch(()=>accessMessage('No se pudo iniciar la sesión. Revisa los permisos del navegador.'));
+ }).catch(()=>{el('login-form').hidden=false;accessMessage('No se pudo iniciar la sesión. Revisa los permisos del navegador.');});
  el('login-form').onsubmit=async event=>{
   event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;accessMessage('Verificando acceso…');
   try{await firebase.auth().signInWithEmailAndPassword(el('login-email').value.trim(),el('login-password').value);el('login-password').value='';}
   catch(error){accessMessage(error.code==='auth/too-many-requests'?'Demasiados intentos. Espera unos minutos.':'No se pudo ingresar. Revisa tu correo, contraseña y conexión.');}
   finally{button.disabled=false;}
  };
-}catch(error){accessMessage(error.code==='app/duplicate-app'?'La sesión ya está iniciada en esta página. Recarga para continuar.':error.message||'No se pudo iniciar el módulo de acceso. Recarga la página.');}
+}catch(error){el('login-form').hidden=false;accessMessage(error.code==='app/duplicate-app'?'La sesión ya está iniciada en esta página. Recarga para continuar.':error.message||'No se pudo iniciar el módulo de acceso. Recarga la página.');}
 
 document.addEventListener('click',event=>{const menu=el('cloud-menu');if(menu&&!menu.contains(event.target))menu.open=false;});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=el('cloud-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});

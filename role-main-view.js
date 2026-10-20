@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261020-audit-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261020-navigation-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -126,6 +126,12 @@
    for(const [i,ac]of fleet.entries())baseline.fleet[aircraftKey(ac.reg)]={...defaultAc(ac),...decodeAircraft(baseline.fleet[aircraftKey(ac.reg)])};
    if(baseline.school){baseline.school.rates={Simulador:{cents:9000},...baseline.school.rates};}
    restrict();const observer=new MutationObserver(restrict);observer.observe(document.body,{childList:true,subtree:true});
+   if(cfg.page==='aeronaves'){
+    const wanted=[...document.querySelectorAll('#sidebar-tabs [data-idx]')].find(t=>fleet[Number(t.dataset.idx)]?.reg===cfg.savedAircraft);
+    if(wanted)wanted.click();
+    const rememberAircraft=()=>{const p=document.querySelector('.aircraft-panel.active');if(p&&/^panel-\d+$/.test(p.id))send('aircraft',fleet[Number(p.id.slice(6))]?.reg);};
+    new MutationObserver(rememberAircraft).observe(document.getElementById('content-area'),{attributes:true,attributeFilter:['class'],subtree:true});
+   }
    send('ready');
   };
  }
@@ -138,7 +144,7 @@
   const csp=document.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: "+location.origin+"; connect-src 'none'; form-action 'none';";doc.head.prepend(csp);
   const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+page;frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-downloads');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
   const style=document.createElement('style');style.textContent='[hidden]{display:none!important}button:disabled{cursor:default}input:disabled,select:disabled,textarea:disabled{opacity:1;color:inherit;-webkit-text-fill-color:currentColor}';doc.head.appendChild(style);
-  const cfg={...result.native,page,pages:result.pages,name:result.name,role:result.role,channel};
+  const cfg={...result.native,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
   const add=code=>{const s=doc.createElement('script');s.textContent=code;doc.body.appendChild(s);};
   add(boxesScript);
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
