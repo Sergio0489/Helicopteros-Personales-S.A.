@@ -21,7 +21,7 @@
  function resolve(row,data){const ref=row.personRef;return ref?people(data).find(p=>p.kind===ref.kind&&p.id===ref.id)?.name||row.name:row.name;}
  // Materialize names before projecting permissions, without exposing source dossiers.
  function project(data){if(!data.school)return data;const names=new Map(people(data).map(p=>[p.kind+':'+p.id,p.name]));const info=value=>value?{...value,people:(value.people||[]).map(row=>row.personRef?{...row,name:names.get(row.personRef.kind+':'+row.personRef.id)||row.name}:row)}:value;const out={...data,school:{...data.school}};if(data.school.information)out.school.information=info(data.school.information);if(data.school.charter)out.school.charter={...data.school.charter,...(data.school.charter.information?{information:info(data.school.charter.information)}:{})};return out;}
- const fields=['id','name','identity','peso','estatura','birthDate','nationality','address','celular','email','emergencyName','emergencyPhone','fechaInicioHP','position','notes'];
+ const fields=['authUid','directoryKind','id','name','identity','peso','estatura','birthDate','nationality','address','celular','email','emergencyName','emergencyPhone','fechaInicioHP','position','notes'];
  function validateChanges(before,after){
   const school=typeof module==='object'&&module.exports?require('./school-information'):root.HPSchoolInformation;
   const cert=typeof module==='object'&&module.exports?require('./school-certificates'):root.HPSchoolCertificates;

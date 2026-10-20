@@ -13,7 +13,7 @@ function nativeView(data,account,policy,page){
  const clients=list(s.registry?.clients).filter(p=>account.role!=='Estudiante'||(account.syncStatus==='matched'&&account.recordKind==='client'&&p.id===account.recordId));
  const ids=new Set([...students.map(p=>'student:'+p.id),...clients.map(p=>'client:'+p.id)]);
  const entries=list(s.registry?.entries).filter(e=>account.role!=='Estudiante'||ids.has(e.personKind+':'+e.personId));
- const personKeys='peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
+ const personKeys='directoryKind peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
  const moneyKeys='expenses extraPayments registryFlights deletedCourses';
  const courseKeys='id type status state startDate endDate licenseDate licenseNumber createdAt';
  const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 voidedAt deletedAt createdAt';
@@ -39,7 +39,7 @@ function nativeView(data,account,policy,page){
   const personal=page==='estudiantes'&&has('Datos personales'),finance=page==='saldos'||has('Estado de cuenta y abonos'),courses=page==='estudiantes'&&has('Cursos y licencias'),hours=page==='estudiantes'&&has('Horas registradas');
   if(page==='saldos')out.school.balanceAlertDismissals=Object.fromEntries(Object.entries(s.balanceAlertDismissals||{}).filter(([key])=>ids.has(key)));
   const project=p=>{
-   const q=pick(p,personal?personKeys:finance?'id name identity':'id name stage phone');q.courses=[];
+   const q=pick(p,personal?personKeys:finance?'id name identity directoryKind':'id name stage phone directoryKind');q.courses=[];
    if(finance)Object.assign(q,pick(p,moneyKeys));
    if(hours&&!finance)q.registryFlights=list(p.registryFlights).map(f=>pick(f,'id date aircraft equipment hours100 kind fee note voidedAt'));
    if(finance||courses||hours)q.courses=list(p.courses).map(c=>({...pick(c,courseKeys),payments:finance?copy(list(c.payments)):[],flights:finance?copy(list(c.flights)):hours?list(c.flights).map(f=>pick(f,'id date aircraft equipment hours100 kind fee note voidedAt')):[],...(finance?pick(c,'budgets tutoriaEnabled'): {})}));

@@ -8,13 +8,13 @@
  window.OrganizationPeople={form,link};
  let selected=null,query='',saving=false;
  const rights=action=>!window.ROLE_VIEW||HPBoxes.permissions(ROLE_VIEW.policy,'charter','personnel')[action];
- const rows=()=>previewData.school?.personnel||[];
+ const rows=()=>(previewData.school?.personnel||[]).filter(p=>!p.directoryKind||p.directoryKind==='personnel');
  const specs=()=>window.PilotPersonalFields;
  function edit(id){if(!rights('edit'))return;window.personnelDraftContext=()=>id||'new';const row=rows().find(p=>p.id===id)||{},before=JSON.stringify(row),personal=specs(),p={...row,nombre:row.name||'',fechaInicioHP:row.fechaInicioHP??panamaISO()};if(!personal)return;
   School.modal(id?'Editar expediente de personal':'Registrar personal',personal.fields.map(s=>personal.field(s,p)).join('')+'<label>Cargo en la empresa<input name="position" maxlength="150" value="'+esc(row.position||'')+'"></label><label class="school-full">Observaciones<textarea name="notes" maxlength="2000">'+esc(row.notes||'')+'</textarea></label>',async f=>{
    if(!rights('edit'))throw Error('No tienes permiso para editar personal.');if(saving)throw Error('Espera a que termine el guardado.');
    if(id&&JSON.stringify(rows().find(p=>p.id===id))!==before)throw Error('El expediente cambió. Cierra y vuelve a abrir el formulario.');
-   const item={id:id||crypto.randomUUID()};for(const [key,,type]of personal.fields){if(key==='age')continue;item[key==='nombre'?'name':key]=type==='date'?isoFecha(f[key]||''):String(f[key]||'').trim();}
+   const item={...row,id:id||crypto.randomUUID()};for(const [key,,type]of personal.fields){if(key==='age')continue;item[key==='nombre'?'name':key]=type==='date'?isoFecha(f[key]||''):String(f[key]||'').trim();}
    item.email=item.email.toLowerCase();if(item.estatura)item.estatura=Number(item.estatura).toFixed(2);item.position=String(f.position||'').trim();item.notes=String(f.notes||'').trim();
    const next=structuredClone(previewData);next.school ||= {};next.school.personnel ||= [];if(id)next.school.personnel[next.school.personnel.findIndex(p=>p.id===id)]=item;else next.school.personnel.push(item);
    model.validateChanges(previewData,next);saving=true;try{if(!await commitPreview(next))throw Error('No se pudo guardar el expediente.');selected=item.id;window.CharterInformation?.refresh();window.SchoolInformation?.refresh();}finally{saving=false;}

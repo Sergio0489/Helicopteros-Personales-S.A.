@@ -465,11 +465,11 @@ function render(){
  if(view==='intakes'){renderIntakes(body,school);return;}
  body.innerHTML='<div class="school-workspace"><aside class="card school-directory"><label>Buscar estudiante<input id="school-search" type="search" value="'+esc(query)+'" placeholder="Nombre, cédula, correo o celular"></label><label>Etapa<select id="school-stage"><option value="">Todas</option>'+options(STAGES,stageFilter)+'</select></label><div id="school-student-list"></div></aside><div id="school-student-profile"></div></div>';
  body.querySelector('#school-search').oninput=e=>{query=e.target.value;renderDirectory();};body.querySelector('#school-stage').onchange=e=>{stageFilter=e.target.value;renderDirectory();};renderDirectory();
- const s=school.students.find(s=>s.id===selected);body.querySelector('#school-student-profile').innerHTML=s?profileHtml(s):'<div class="card school-empty"><h3>Expediente del estudiante</h3><p>Selecciona un estudiante o registra al primer interesado.</p><p>Cursos, pagos, horas y licencias se guardan en su expediente.</p></div>';
+ const s=school.students.find(s=>s.id===selected&&(!s.directoryKind||s.directoryKind==='student'));body.querySelector('#school-student-profile').innerHTML=s?profileHtml(s):'<div class="card school-empty"><h3>Expediente del estudiante</h3><p>Selecciona un estudiante o registra al primer interesado.</p><p>Cursos, pagos, horas y licencias se guardan en su expediente.</p></div>';
 }
 function renderDirectory(){
  const element=panel.querySelector('#school-student-list');if(!element)return;
- const students=data().students.filter(s=>(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
+ const students=data().students.filter(s=>(!s.directoryKind||s.directoryKind==='student')&&(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
  element.innerHTML='<p class="school-muted">'+students.length+' estudiantes / clientes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('');
 }
 function renderIntakes(body,school){

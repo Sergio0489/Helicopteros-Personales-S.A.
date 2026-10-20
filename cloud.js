@@ -109,18 +109,18 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261020-charter-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261020-dossiers-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
- const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-charter-1';
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261020-dossiers-1';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261020-charter-1';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261020-dossiers-1';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
- const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-charter-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
- for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261020-charter-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
- const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261020-charter-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
+ const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261020-dossiers-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
+ for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261020-dossiers-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
+ const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261020-dossiers-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
  window.AccountRegistration?.installUsersPage();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
@@ -131,6 +131,17 @@ async function refreshCloud(){
  if(result.value){if(result.value.schemaVersion!==1||typeof result.value.payload!=='string')throw Error('Formato de base de datos no reconocido.');lastCloudPayload=result.value.payload;await openDashboard(JSON.parse(result.value.payload));}
  else{el('login-form').hidden=true;el('import-panel').hidden=false;el('access-logout').hidden=false;accessMessage('Tu acceso está listo. Falta importar el respaldo inicial.');}
 }
+window.refreshAccountDossiers=async()=>{
+ if(!appLoaded||!isDirectorUser())return true;
+ if(cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.())return false;
+ const result=await cloudRequest('GET'),envelope=result.value;if(!envelope?.payload||envelope.operation===cloudOperation)return true;
+ // Do not accept a new save marker while keeping stale flight/aircraft state.
+ const data=validateBackup(JSON.parse(envelope.payload)),before=lastCloudPayload?validateBackup(JSON.parse(lastCloudPayload)):{};
+ if(cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.()||['fleet','itinerarios','undoFleet'].some(k=>JSON.stringify(data[k])!==JSON.stringify(before[k])))return false;
+ previewData=structuredClone(data);pilotosData.splice(0,pilotosData.length,...structuredClone(data.pilotos||[]));
+ cloudETag=result.etag;cloudVersion=envelope.revision||0;cloudOperation=envelope.operation;lastCloudPayload=envelope.payload;
+ renderPilotos();updatePilotDropdown();window.PilotDossiers?.refresh();window.School?.refresh();window.SchoolInformation?.refresh();window.CharterInformation?.refresh();buildResumen();return true;
+};
 function confirmLeaving(){return !cloudBusy&&(!(profileDirty||window.hasDraftChanges?.()||cloudBlocked)||confirm('Hay cambios pendientes o un guardado sin confirmar. Descarga un respaldo antes de continuar. ¿Deseas continuar?'));}
 el('cloud-reload').onclick=()=>{if(confirmLeaving())location.reload();};
 async function logout(){if(!confirmLeaving())return;if(Object.keys(window.DraftRecovery?.list()||{}).length&&!confirm('Cerrar sesión eliminará los borradores locales de este usuario. ¿Continuar?'))return;window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();}

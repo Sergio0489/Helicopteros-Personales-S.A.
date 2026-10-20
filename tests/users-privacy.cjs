@@ -8,7 +8,7 @@ test('Users endpoint requires a valid session and current Director authorization
  const actor={uid:'actor',email:'director@example.test',emailVerified:true,disabled:false};
  const account={role:'Director',assignedAt:'synthetic'};
  const member={uid:'member',email:'member@example.test',emailVerified:true,disabled:false,metadata:{}};
- const profile={role:'Estudiante',verified:true,email:member.email,syncedOperation:'op',syncVersion:3,profile:{name:'Usuario de prueba',phone:'TEST-PHONE'}};
+ const profile={role:'Estudiante',verified:true,email:member.email,syncedOperation:'op',syncVersion:4,syncedRole:'Estudiante',profile:{name:'Usuario de prueba',phone:'TEST-PHONE'}};
  let directoryReads=0,writes=0;
  const db={ref:key=>({get:async()=>({val:()=>key==='accountRequests/actor'?account:key==='accountRequests/member'?profile:key==='dashboard/operation'?'op':null}),update:async()=>{writes++;}})};
  const auth={verifyIdToken:async token=>{if(token!=='valid'){const error=Error();error.code='auth/id-token-revoked';throw error;}return {uid:actor.uid};},getUser:async()=>actor,listUsers:async()=>{directoryReads++;return {users:[member]};}};

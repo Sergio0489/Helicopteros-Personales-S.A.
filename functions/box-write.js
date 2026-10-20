@@ -3,7 +3,7 @@ const {permissions}=require('./boxes');
 const eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const clone=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
 const words=s=>new Set(s.split(' '));
-const personal=words('peso estatura medicalClass medicalExpiry obtainedCredentials name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdDate createdAt updatedAt stage funding interests notes withdrawalReason completedDate completedCourses history');
+const personal=words('directoryKind peso estatura medicalClass medicalExpiry obtainedCredentials name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdDate createdAt updatedAt stage funding interests notes withdrawalReason completedDate completedCourses history');
 const aircraft={identity:words('serial year voltaje component_schema_v2'),motor:words('motor_fabricante motor_modelo motor_serie motor_serie_izq motor_fabricante_izq motor_modelo_izq motor_serie_der motor_fabricante_der motor_modelo_der'),propeller:words('helice_fabricante helice_modelo helice_serie helice_serie_izq helice_fabricante_izq helice_modelo_izq helice_serie_der helice_fabricante_der helice_modelo_der'),inspection:words('tac_anterior tac_actual horas_diarias fecha_diaria horas_acum_50 horas_acum_100 fecha_50 fecha_100 proxima_inspeccion horas_totales horas_limite'),flight:words('bitacora_horas'),venc:words('ciclos_totales ciclos_limite limite_motor limite_helice fecha_motor fecha_helices helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_helice1 fecha_helice2 ultimo_venc_hv ultimo_venc_fecha ultimo_venc_registry_id'),status:words('status estatus_nota estatus_label horas_desde_revision horas_hasta_revision'),tac:words('bitacora_tac'),inspections:words('bitacora_inspecciones'),orders:words('bitacora_pedidos'),'hours-history':words('bitacora_vencimientos'),documents:words('documentos')};
 function boxFor(path,root){
  const [top,key,field]=path;
@@ -40,6 +40,7 @@ function boxFor(path,root){
 }
 function rights(policy,pair,action){if(!pair)return false;const [p,b]=pair;return permissions(policy,p,b)[action];}
 function allowed(policy,path,root,action,context={}){
+ if(action!=='view'&&path.includes('directoryKind'))return false;
  if(path.some(k=>['__proto__','prototype','constructor','authUid','accessConfiguration','userProfiles'].includes(String(k))))return false;
  if(path[0]==='school'&&(path[1]==='information'||path[1]==='charter'&&path[2]==='information')&&action!=='view')return false;
  const pair=boxFor(path,root);
@@ -48,7 +49,7 @@ function allowed(policy,path,root,action,context={}){
   if(path[0]==='fleet'&&path[2]==='mantenimiento'&&['nombre','resuelto'].includes(path[4])&&rights(policy,['aeronaves','tracking'],'view'))return true;
   if(path[0]==='school'&&path[1]==='students'&&path[3]==='courses'&&['id','type'].includes(path[5])&&['courses','account','hours'].some(b=>rights(policy,['estudiantes',b],'view')))return true;
   if(path[0]==='itinerarios'&&['planner','calendar','create'].some(b=>rights(policy,['itinerario',b],'view')))return true;
-  if(path[0]==='school'&&path[1]==='students'&&['id','name','stage','funding'].includes(path[3])&&rights(policy,['estudiantes','directory'],'view'))return true;
+  if(path[0]==='school'&&path[1]==='students'&&['id','name','stage','funding','directoryKind'].includes(path[3])&&rights(policy,['estudiantes','directory'],'view'))return true;
  }
  if(rights(policy,pair,action))return true;
  // Creating a flight uses the same records as the daily flight list.
