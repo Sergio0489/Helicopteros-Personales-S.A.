@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261020-dossiers-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261020-navigation-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -210,7 +210,7 @@
   frame.style.visibility='hidden';frame.style.position='absolute';
   container.appendChild(frame);frame.srcdoc='<!DOCTYPE html>'+doc.documentElement.outerHTML;
   timer=setTimeout(()=>{if(!settled){settled=true;rejectReady(Error('La página no terminó de cargar. Puedes usar el visor de consulta.'));}},12000);
-  try{await ready;clearTimeout(timer);frame.style.visibility='';frame.style.position='';container.replaceChildren(frame);return dispose;}
+  try{await ready;clearTimeout(timer);frame.style.visibility='';frame.style.position='';/* Keep the initialized iframe attached: reinserting it reloads srcdoc. */for(const child of [...container.childNodes])if(child!==frame)child.remove();return dispose;}
   catch(error){dispose();throw error;}
  }
  window.RoleMainView={mount};
