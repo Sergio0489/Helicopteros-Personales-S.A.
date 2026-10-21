@@ -166,11 +166,11 @@ function loadData(reg) { return null; }
 function defaultAc(ac) {
   return {
     status: "",
-    serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "2000", limite_helice: "2000", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
+    serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "", limite_helice: "", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
     horas_totales: "", horas_limite: "", fecha_50: "", fecha_100: "",
     ciclos_totales: "", ciclos_limite: "",
-    helice1_ciclos: "", helice1_limite: "2000", fecha_helice1: "",
-    helice2_ciclos: "", helice2_limite: "2000", fecha_helice2: "",
+    helice1_ciclos: "", helice1_limite: "", fecha_helice1: "",
+    helice2_ciclos: "", helice2_limite: "", fecha_helice2: "",
     horas_desde_revision: "", horas_hasta_revision: "", estatus_nota: "",
     mantenimiento: [
       { nombre: "", fecha: "", resuelto: false, piezas: [] },
@@ -238,6 +238,12 @@ function vencBarLabel(hv, limit) {
 function aircraftHourAlerts(reg,d) {
   return vencimientoSnapshot(reg,d).map(c=>({...c,level:vencHoursLevel(c.total,c.limite)}))
     .filter(c=>c.level==='warn'||c.level==='danger');
+}
+// Configuration notices belong in Pendientes, not in expiration calculations.
+function aircraftHourConfigurationAlerts(reg,d) {
+  return vencimientoSnapshot(reg,d)
+    .filter(c=>c.total!==null && (!(c.limite>0) || !Number.isFinite(c.limite)))
+    .map(c=>({...c,level:'info'}));
 }
 function updateVencBar(tipo, idx, val, limit) {
   limit=state[idx][VENC_FIELD_MAP[tipo].limiteField];
@@ -2017,6 +2023,10 @@ function buildResumen() {
       addAlert('⚙️ Vencimientos en Horas',reg,c.label,vencBarLabel(c.total,c.limite),c.level);
     }
 
+    for(const c of aircraftHourConfigurationAlerts(reg,d)){
+      addAlert('ℹ️ Configuración de mantenimiento',reg,c.label,'Límite pendiente de configurar','info');
+    }
+
     // Include every applicable inspection warning, including the yellow threshold.
     for(const limit of [50,100]){
       if(limit===50&&Number(d.proxima_inspeccion||50)===100)continue;
@@ -2070,7 +2080,8 @@ function buildResumen() {
   });
   const allItems=Object.values(byReg).flat();
   const urgent=allItems.filter(item=>item.type==='danger').length;
-  let html=`<div class="pending-overview"><div><strong>${allItems.length}</strong><span>Alertas totales</span></div><div class="pending-urgent"><strong>${urgent}</strong><span>Prioridad alta</span></div><div class="pending-upcoming"><strong>${allItems.length-urgent}</strong><span>Avisos próximos</span></div></div><div class="pendientes-grid">`;
+  const configuration=allItems.filter(item=>item.type==='info').length;
+  let html=`<div class="pending-overview"><div><strong>${allItems.length}</strong><span>Alertas totales</span></div><div class="pending-urgent"><strong>${urgent}</strong><span>Prioridad alta</span></div><div class="pending-upcoming"><strong>${allItems.length-urgent-configuration}</strong><span>Avisos próximos</span></div>${configuration?`<div class="pending-configuration"><strong>${configuration}</strong><span>Configuración pendiente</span></div>`:''}</div><div class="pendientes-grid">`;
   sortedRegs.forEach(reg=>{
     const items=byReg[reg],total=items.length,isPilotoGroup=reg.includes('VIGENCIA'),isSchoolGroup=reg==='HP FLIGHT SCHOOL';
     const regLabel=isPilotoGroup
@@ -2078,12 +2089,12 @@ function buildResumen() {
       : `<span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent)">${escapeRecord(reg)}</span>`;
     html+=`<div class="pending-uniform-card" data-alert-kind="${isPilotoGroup?'pilots':isSchoolGroup?'school':reg==='HP CHARTER'?'charter':'aircraft'}"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
     items.forEach(item=>{
-      const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
-      const bg=item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';
+      const color=item.type==='info'?'var(--accent)':item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
+      const bg=item.type==='info'?'rgba(0,89,179,.08)':item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';
       const rowLabel=isPilotoGroup
         ? `<div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${escapeRecord(item.reg)}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px">${escapeRecord(item.item)}</div>`
         : `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${escapeRecord(item.cat)}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text);margin-top:2px">${escapeRecord(item.item)}</div>`;
-      html+=`<div class="alert-row" style="background:${bg}"><div>${rowLabel}</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:${color};font-weight:700;white-space:nowrap">${escapeRecord(item.detail)}</span></div>`;
+      html+=`<div class="alert-row" data-alert-level="${item.type}" style="background:${bg}"><div>${rowLabel}</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:${color};font-weight:700;white-space:nowrap">${escapeRecord(item.detail)}</span></div>`;
     });
     html+='</div></div>';
   });
