@@ -30,11 +30,38 @@ test('Every multimotor includes both propellers with their own limits; missing l
  for(const reg of ['HP-18BLM','HP-880BL','HP-1805BLM','HP1186']){
   const {context:c,container}=setup(reg);
   c.state[0]={ciclos_totales:2200,limite_motor:'',helice1_ciclos:1920,helice1_limite:2400,helice2_ciclos:3000,helice2_limite:3000};
-  c.buildResumen();assert.match(container.innerHTML,/Hélice izquierda/);assert.match(container.innerHTML,/Hélice derecha/);assert.doesNotMatch(container.innerHTML,/Motor izquierdo/);
+  c.buildResumen();assert.match(container.innerHTML,/Hélice izquierda/);assert.match(container.innerHTML,/Hélice derecha/);assert.match(container.innerHTML,/Motor izquierdo/);assert.match(container.innerHTML,/Límite pendiente de configurar/);
   assert.equal(c.getAircraftWarnings(reg).length,2);assert.equal(c.vencBarCls(2200,''),'fill-empty');
  }
  const {context:c}=setup('HP1784');c.state[0]={ciclos_totales:2000,limite_motor:2500,ciclos_limite:2400,limite_helice:2400,helice1_ciclos:9000,helice1_limite:2000};
  assert.equal(c.aircraftHourAlerts('HP1784',c.state[0]).length,2);
  for(const value of ['',null,undefined,'bad'])assert.equal(c.vencBarCls(value,2400),'fill-empty');
  assert.equal(c.vencBarCls(0,2400),'fill-ok');assert.match(c.vencBarLabel(0,2400),/2400.00/);
+});
+
+test('Fictional aircraft: configuration notices cover engines and propellers without changing data or flight warnings',()=>{
+ for(const reg of ['TEST-SINGLE','HP-18BLM']){
+  const {context:c,container}=setup(reg);
+  for(const limit of ['',null,undefined,'incorrecto',0,-20,Infinity,'Infinity']){
+   c.state[0]={ciclos_totales:2200,limite_motor:limit,ciclos_limite:100,limite_helice:limit,helice1_ciclos:1920,helice1_limite:2400,helice2_ciclos:3000,helice2_limite:3000};
+   const before=JSON.stringify(c.state);
+   assert.equal(c.aircraftHourConfigurationAlerts(reg,c.state[0]).length,2);
+   c.buildResumen();assert.match(container.innerHTML,/data-alert-level="info"/);assert.match(container.innerHTML,/Configuración pendiente/);
+   assert.equal(c.getAircraftWarnings(reg).length,reg==='TEST-SINGLE'?0:2);
+   assert.equal(JSON.stringify(c.state),before);
+  }
+  for(const hours of ['',null,undefined,'incorrecto',Infinity]){
+   c.state[0]={ciclos_totales:hours,limite_motor:''};assert.equal(c.aircraftHourConfigurationAlerts(reg,c.state[0]).length,0);
+  }
+  c.state[0]={ciclos_totales:0,limite_motor:''};assert.equal(c.aircraftHourConfigurationAlerts(reg,c.state[0]).length,1);
+  c.state[0]={ciclos_totales:2200,limite_motor:3600};assert.equal(c.aircraftHourConfigurationAlerts(reg,c.state[0]).length,0);assert.equal(c.aircraftHourAlerts(reg,c.state[0]).length,0);
+ }
+});
+test('Each fictional twin propeller independently reports a missing or invalid limit',()=>{
+ const {context:c,container}=setup('HP-18BLM');
+ c.state[0]={helice1_ciclos:850,helice1_limite:'',helice2_ciclos:900,helice2_limite:'incorrecto'};
+ assert.deepEqual(Array.from(c.aircraftHourConfigurationAlerts('HP-18BLM',c.state[0]),x=>x.key),['helice1','helice2']);
+ c.buildResumen();assert.match(container.innerHTML,/Hélice izquierda/);assert.match(container.innerHTML,/Hélice derecha/);
+ c.state[0].helice1_limite=2400;c.state[0].helice2_limite=3000;
+ c.buildResumen();assert.match(container.innerHTML,/Sin tareas/);assert.equal(c.getAircraftWarnings('HP-18BLM').length,0);
 });
