@@ -17,14 +17,15 @@ async function configure(auth,db,input,actor,now=new Date().toISOString()){
  try{target=await auth.getUserByEmail(address);}catch(e){if(e.code!=='auth/user-not-found')throw e;if(input.createAdministrative!==true)throw Error('Ese correo no tiene usuario. Autoriza crear su cuenta administrativa.');target=await auth.createUser({email:address,displayName:name,emailVerified:false,disabled:false});created=true;}
  if(target.disabled||target.uid===actor.uid)throw Error('No se puede asignar este acceso a esa cuenta.');
  let failure='';const result=await db.ref('accountRequests/'+target.uid).transaction(old=>{
-  failure='';if(old?.mergedInto){failure='La cuenta fue unificada. Usa la cuenta principal.';return;}
+  failure='';if(old===null&&!created&&input.createAdministrative!==true)return old;
+  if(old?.mergedInto){failure='La cuenta fue unificada. Usa la cuenta principal.';return;}
   if(old?.assignedAt&&!STAFF.includes(old.role)){failure='El usuario tiene otro cargo. Revísalo en Usuarios.';return;}
   if(!old?.assignedAt&&input.createAdministrative!==true){failure='Primero confirma su cargo administrativo.';return;}
   const next={...old,email:address,profile:{...old?.profile,name:old?.profile?.name||name},prospectAccess:{area,email:address,assignedAt:now,assignedBy:actor.uid},updatedAt:now};
   if(!old?.assignedAt)Object.assign(next,{role:'Administrativo',assignedAt:now,assignedBy:actor.uid,createdAt:old?.createdAt||now});
   return require('./audit').attach(old,next,actor,'account','Acceso individual a interesados: '+area,target.uid);
  },undefined,false);
- if(failure||!result.committed)throw Error(failure||'No se confirmó el acceso.');
+ if(failure||!result.committed||!result.snapshot.val())throw Error(failure||'No se confirmó el acceso. Confirma primero el cargo del usuario.');
  return {ok:true,email:address,area,role:result.snapshot.val().role,created,verified:target.emailVerified};
 }
 module.exports={scope,configure};
