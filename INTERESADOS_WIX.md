@@ -19,6 +19,12 @@ Estado: código preparado para revisión. No desplegado y ninguna automatizació
 `prospects-ui.js`: pantalla del Director.
 Los datos viven en `prospects/contacts`, `prospects/inquiries` y `prospects/receipts` de la base existente. Las reglas actuales deniegan acceso directo por defecto; el acceso pasa por el servidor con los permisos actuales. No ampliar reglas públicas.
 
+## Borrador nativo de Wix preparado
+
+El 22/10/2026 se guardó **Apps HP - Consultas Charters (pendiente de activar)**, draftId `5049de58-6767-4754-a371-cf2ad866b6cd`. Estado BORRADOR comprobado. Disparador de Wix Formularios con condición de ID exacto del formulario de Charters; acción POST con nueve parámetros. `siteId` y `formId` son literales; `submissionId`, `submittedAt`, `name`, `email`, `phone` e `interest` están vinculados a las propiedades nativas correspondientes. `token` contiene el marcador NO válido `PENDIENTE_DE_CONFIGURAR_NO_ACTIVAR`. Se omitieron cursos y avisos porque el formulario de Charters no los solicita. No se pulsó Probar ni Activar.
+
+Antes de activar, revisar el cuerpo real y sustituir el marcador únicamente por el secreto autorizado. El borrador de escuela aún no se ha creado.
+
 ## Activación pendiente
 
 1. Revisar y publicar los cambios en la rama principal sin sustituir otros cambios de Apps HP. Publicar después las funciones del codebase `accounts` en el proyecto **helicopteros-personales**. No crear otro proyecto ni habilitar facturación adicional sin autorización.
