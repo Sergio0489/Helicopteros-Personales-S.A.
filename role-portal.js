@@ -23,6 +23,9 @@
   const logout=document.createElement('button');logout.textContent='Cerrar sesión';logout.onclick=async()=>{window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();};
   const row=document.createElement('div');row.style.cssText='display:flex;gap:12px;flex-wrap:wrap;padding:16px';row.append(retry,fallback,logout);target.appendChild(row);
  }
+ function prospectEntry(result){
+  if(result.prospectAccess){const bar=document.createElement('div');bar.style.cssText='padding:10px 16px;background:#eaf2fa;display:flex;gap:12px;align-items:center';const b=document.createElement('button');b.textContent='Interesados y consultas — '+(result.prospectAccess.area==='school'?'Cursos de pilotos':'Charters');b.onclick=()=>window.Prospects.openStaff(result.prospectAccess,()=>load(selected));bar.append(b);shell.prepend(bar);}
+ }
  async function load(page='',searchTarget=null){
   if(busy)return;busy=true;selected=page;
   if(!shell){shell=document.createElement('section');shell.id='role-portal';document.body.appendChild(shell);}
@@ -31,6 +34,7 @@
   try{
    let result=await request(page&&page!=='inicio'?{page,layout:'main'}:{});
    if(!page&&result.pages.length){const saved=window.PageMemory?.read();page=(saved?.mode==='role'&&(saved.page==='inicio'||result.pages.some(p=>p.id===saved.page))?saved.page:'inicio');}
+   if(!result.pages.length)prospectEntry(result);
    if(!result.pages.length){msg.textContent='Tu Director debe asignarte un cargo y guardar sus permisos de consulta.';actions(shell);return;}
    selected=page;
    const home=page==='inicio';
@@ -46,7 +50,7 @@
     if(event.action==='logout'){window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();}
     if(event.action==='load-error'&&!shell.querySelector('[data-view-error]')){const note=document.createElement('div');note.dataset.viewError='true';note.setAttribute('role','alert');note.textContent=event.message;actions(note);shell.prepend(note);}
    });
-   if(result.prospectAccess){const bar=document.createElement('div');bar.style.cssText='padding:10px 16px;background:#eaf2fa;display:flex;gap:12px;align-items:center';const b=document.createElement('button');b.textContent='Interesados y consultas — '+(result.prospectAccess.area==='school'?'Cursos de pilotos':'Charters');b.onclick=()=>window.Prospects.openStaff(result.prospectAccess,()=>load(selected));bar.append(b);shell.prepend(bar);}
+   prospectEntry(result);
    window.PageMemory?.rememberRole(home?'inicio':page);
   }catch(e){msg.textContent='No se pudo abrir el diseño principal: '+e.message;shell.replaceChildren(msg);actions(shell);}
   finally{busy=false;}

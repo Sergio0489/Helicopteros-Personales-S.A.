@@ -6,6 +6,7 @@ function memory(seed={}){let root=structuredClone(seed);const read=path=>path.sp
 const user={uid:'fernando',email:'school@example.test',emailVerified:true,disabled:false},account={role:'Administrativo',assignedAt:now,profile:{name:'Fernando'},prospectAccess:{email:'school@example.test',area:'school',assignedAt:now}};
 test('individual grant is bound to verified identity and current administrative role',()=>{
  assert.equal(a.scope(user,account).area,'school');
+ assert.equal(a.scope({...user,emailVerified:false},account,true),null);
  for(const patch of [{emailVerified:false},{disabled:true},{email:'other@example.test'}])assert.equal(a.scope({...user,...patch},account),null);
  for(const patch of [{mergedInto:'someone'},{role:'Estudiante'},{assignedAt:null},{prospectAccess:null},{prospectAccess:{...account.prospectAccess,area:'all'}}])assert.equal(a.scope(user,{...account,...patch}),null);
  assert.equal(a.scope(user,{role:'Administrativo',assignedAt:now}),null);assert.equal(a.scope(user,account,true).director,true);
