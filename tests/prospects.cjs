@@ -3,6 +3,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const now='2026-10-21T18:00:00.000Z',earlier='2026-10-20T12:00:00.000Z';
 const cfg={token:'x'.repeat(50),siteId:'site',forms:{school:{area:'school',consentVersion:'v1',consentStatement:'Quiero recibir información de nuevos cursos por correo.'},charters:{area:'charters'}}};
 const base={token:cfg.token,siteId:'site',formId:'school',submissionId:'first',submittedAt:earlier,name:'María Ejemplo',email:'  MARIA@example.test ',interest:'Piloto privado',courseUpdates:true,courses:['privado']};
+for(const envelope of [{data:base},JSON.stringify({data:base}),Buffer.from(JSON.stringify(base))])assert.deepEqual(p.webhookInput(envelope,cfg,now),p.webhookInput(base,cfg,now));
+for(const envelope of [{token:'wrong',data:base},{data:{...base,token:'wrong'}},'invalid',[],JSON.stringify({padding:'x'.repeat(33000),data:base})])assert.throws(()=>p.webhookInput(envelope,cfg,now));
 const input=p.webhookInput(base,cfg,now);assert.equal(input.email,'maria@example.test');assert.equal(input.consent.status,'granted');assert(!JSON.stringify(input).includes(cfg.token));
 for(const bad of [{token:'bad'},{siteId:'other'},{formId:'unknown'},{submissionId:''},{email:'invalid'},{submittedAt:'tomorrow'},{submittedAt:'2099-01-01T00:00:00Z'},{courses:['garbage']},{name:'x'.repeat(161)}])assert.throws(()=>p.webhookInput({...base,...bad},cfg,now));
 assert.throws(()=>p.webhookInput({...base,formId:'charters'},cfg,now));
