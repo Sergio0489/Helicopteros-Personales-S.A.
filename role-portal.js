@@ -46,6 +46,7 @@
     if(event.action==='logout'){window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();}
     if(event.action==='load-error'&&!shell.querySelector('[data-view-error]')){const note=document.createElement('div');note.dataset.viewError='true';note.setAttribute('role','alert');note.textContent=event.message;actions(note);shell.prepend(note);}
    });
+   if(result.prospectAccess){const bar=document.createElement('div');bar.style.cssText='padding:10px 16px;background:#eaf2fa;display:flex;gap:12px;align-items:center';const b=document.createElement('button');b.textContent='Interesados y consultas — '+(result.prospectAccess.area==='school'?'Cursos de pilotos':'Charters');b.onclick=()=>window.Prospects.openStaff(result.prospectAccess,()=>load(selected));bar.append(b);shell.prepend(bar);}
    window.PageMemory?.rememberRole(home?'inicio':page);
   }catch(e){msg.textContent='No se pudo abrir el diseño principal: '+e.message;shell.replaceChildren(msg);actions(shell);}
   finally{busy=false;}

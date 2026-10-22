@@ -62,9 +62,15 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  if(actorAccount?.mergedInto){res.status(403).json({error:'Esta cuenta fue unificada. Inicia sesión con la cuenta principal indicada por el Director.'});return;}
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
+ const prospectScope=require('./prospect-access').scope(user,actorAccount,isDirector);
+ if(action==='prospect-configure'){
+  if(!isDirector){res.status(403).json({error:'Solo el Director puede conceder accesos.'});return;}
+  res.json(await require('./prospect-access').configure(getAuth(),db,req.body,{...actor,role:'Director'}));return;
+ }
+ if(action==='prospect-session'){res.json({access:prospectScope});return;}
  if(action==='prospect-list'||action==='prospect-save'||action==='prospect-detail'){
-  if(!isDirector){res.status(403).json({error:'Solo Directores pueden consultar interesados.'});return;}
-  res.json(await require('./prospects').handle(db,action,req.body,actor));return;
+  if(!prospectScope){res.status(403).json({error:'No tienes acceso al registro de interesados.'});return;}
+  res.json(await require('./prospects').handle(db,action,req.body,{...actor,prospectArea:prospectScope.area}));return;
  }
  if(action==='identity-preview'||action==='identity-merge'){
   if(!isDirector){res.status(403).json({error:'Solo Directores pueden unificar identidades.'});return;}
@@ -135,7 +141,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   const data=root?.payload?JSON.parse(root.payload):{};
   const policy=policyFor(data,account),pages=visiblePages(policy);
   if(req.body.page&&!pages.some(p=>p.id===req.body.page)){res.status(403).json({error:'No tienes permiso para consultar esta página.'});return;}
-  res.json({mode:'box-permissions',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native:req.body.page&&req.body.layout==='main'?{...boxView(data,account,policy,req.body.page),operation:root.operation,uid:user.uid}:null,page:req.body.page&&req.body.layout!=='main'?projectPage(boxView(data,account,policy,req.body.page).data,account,policy,req.body.page):null});return;
+  res.json({prospectAccess:prospectScope,mode:'box-permissions',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native:req.body.page&&req.body.layout==='main'?{...boxView(data,account,policy,req.body.page),operation:root.operation,uid:user.uid}:null,page:req.body.page&&req.body.layout!=='main'?projectPage(boxView(data,account,policy,req.body.page).data,account,policy,req.body.page):null});return;
  }
  if(action==='box-save'){
   if(!user.emailVerified||user.disabled||!actorAccount?.assignedAt){res.status(403).json({error:'Tu cuenta no tiene acceso de edición.'});return;}
