@@ -31,7 +31,7 @@ function diff(before,after){
  }
  walk(before,after,[]);return rows;
 }
-function accountData(v){if(!v)return {};const out={};for(const k of ['profile','email','verified','role','assignedAt'])if(v[k]!=null)out[k]=v[k];return out;}
+function accountData(v){if(!v)return {};const out={};for(const k of ['profile','email','verified','role','assignedAt','prospectAccess'])if(v[k]!=null)out[k]=v[k];return out;}
 function dashboardData(v){if(!v?.payload)return {};return JSON.parse(v.payload);}
 function attach(before,after,actor,source,motive='',target=''){
  const changes=diff(source==='dashboard'?dashboardData(before):accountData(before),source==='dashboard'?dashboardData(after):accountData(after));
@@ -59,3 +59,4 @@ async function list(db,input){
 }
 async function detail(db,input){if(!/^\d{13}_[a-f0-9]{24}$/.test(input.id||''))throw Error('Registro no válido.');const chunk=Number(input.chunk||0);if(!Number.isInteger(chunk)||chunk<0)throw Error('Detalle no válido.');const data=(await db.ref('auditDetails/'+input.id+'/'+String(chunk).padStart(6,'0')).get()).val();return {changes:data||[],chunk};}
 module.exports={diff,reason,attach,deliver,list,detail};
+
