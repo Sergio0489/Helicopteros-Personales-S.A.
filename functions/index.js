@@ -62,6 +62,10 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  if(actorAccount?.mergedInto){res.status(403).json({error:'Esta cuenta fue unificada. Inicia sesión con la cuenta principal indicada por el Director.'});return;}
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
+ if(action==='prospect-list'||action==='prospect-save'||action==='prospect-detail'){
+  if(!isDirector){res.status(403).json({error:'Solo Directores pueden consultar interesados.'});return;}
+  res.json(await require('./prospects').handle(db,action,req.body,actor));return;
+ }
  if(action==='identity-preview'||action==='identity-merge'){
   if(!isDirector){res.status(403).json({error:'Solo Directores pueden unificar identidades.'});return;}
   const [dash,requests]=await Promise.all([db.ref('dashboard').get(),db.ref('accountRequests').get()]);
@@ -186,6 +190,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 
