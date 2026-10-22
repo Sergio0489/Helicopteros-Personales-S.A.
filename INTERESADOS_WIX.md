@@ -36,7 +36,14 @@ Se conservan los controles del sitio y formulario, tamaño, fecha, correo, conse
 
 ### Conexión de formularios antiguos de HP Flight School
 
-Estado al 22/10/2026: preparación de código y pruebas locales; sin acceso autorizado a Wix en esta sesión. No se verificaron identificadores ni campos reales de Escuela, no se modificó el secreto, no se desplegó esta revisión y no se activó ninguna automatización. La activación previa de Charters consta en el PR #11; no se comprobó de nuevo en vivo.
+Estado al 22/10/2026, actualizado tras conectar Wix: se verificaron los dos formularios antiguos de Escuela mediante el esquema dinámico del disparador y sus páginas públicas. Se crearon, validaron con resultado VALID y comprobaron por lectura posterior dos automatizaciones INACTIVE: **Apps HP - Escuela - Contacto** y **Apps HP - Escuela - Contacto 2**. Los ID reales de formulario, claves de campos y credencial permanecen dentro de Wix; deben añadirse a la configuración privada de Firebase, sin publicarlos en este archivo. Charters se comprobó ACTIVE y no fue modificado.
+
+| Formulario verificado | Página | Campos reales | Campos ausentes |
+| --- | --- | --- | --- |
+| Contacto | /hpflightschooldivision | Nombre, Email, Edad, Mensaje | Teléfono, curso, consentimiento comercial |
+| Contacto 2 | /escueladepilotos | Nombre, Email, Edad (placeholder: Escribe el asunto), Mensaje | Teléfono, curso, consentimiento comercial |
+
+Ambas conexiones inactivas mapean nombre, correo, mensaje y los valores nativos estables submissionId/submissionTime al receptor existente; incluyen sitio y formulario exactos. No se importa Edad ni se interpreta el asunto como curso. No se envía courseUpdates. No se han agregado campos al sitio. El origen y los campos disponibles están comprobados; no se ha ejecutado el flujo real ni se ha verificado visualmente el editor de automatizaciones. Firebase no tiene herramientas de administración ni sesión CLI disponible en este entorno, por lo que el secreto no se leyó ni modificó y no se desplegó esta revisión.
 
 1. En el sitio correcto de Wix, inventariar todos los formularios existentes de Escuela: página, nombre, generación (antiguo/nuevo), ID del sitio, ID real del formulario y claves/tipos reales de sus campos. Revisar la configuración del formulario, sin exportar contactos ni envíos reales. No usar nombres visibles como identificadores.
 2. Registrar para cada formulario la correspondencia siguiente a partir de su esquema y de una vista previa con datos ficticios. Si falta correo, nombre, fecha original o ID estable del envío, resolverlo antes de activar; el receptor los exige.
@@ -72,7 +79,7 @@ Estado al 22/10/2026: preparación de código y pruebas locales; sin acceso auto
 6. Tras integrar y desplegar la revisión del codebase existente que exporta `wixInterests`, actualizar el secreto por un canal privado y volver a desplegar la función para que use su nueva versión. No imprimir ni copiar credenciales al chat. No cambiar otras funciones ni proyectos.
 7. Antes de enviar pruebas reales, revisar y deshabilitar para ellas notificaciones, respuestas, campañas e integraciones secundarias de Wix. Usar exclusivamente una identidad sintética y un buzón de pruebas controlado por la empresa, nunca un contacto real. Comprobar un envío por cada formulario, otro sin aceptación, uno con aceptación solo si existe esa casilla, y el reintento del mismo envío con ID y fecha originales. Verificar en Apps HP nombre, correo, teléfono, curso, consulta, fecha y origen; el reintento debe dejar una sola consulta. Probar también Charters y el mismo correo ficticio en ambas áreas: contacto común, historiales y permisos separados. Comparar antes/después usuarios, estudiantes y matrículas: ningún alta automática. No importar históricos.
 
-Pendiente externo: acceso Wix, inventario de IDs y campos reales, texto/versionado de consentimiento si corresponde, configuración privada, despliegue y prueba Wix → Firebase → Apps HP. Las pruebas locales usan el manejador HTTP real con Firebase simulado; no sustituyen esa comprobación.
+Pendiente externo: autorizar los dos ID comprobados en la configuración privada de Firebase, integrar/desplegar esta revisión, revisar visualmente las conexiones inactivas y ejecutar la prueba Wix → Firebase → Apps HP antes de activar. Teléfono y curso solo podrán registrarse desde los formularios si se agregan esos campos; el consentimiento requiere además una casilla expresa y su texto/versionado. No activar todavía las conexiones creadas. Las pruebas locales usan el manejador HTTP real con Firebase simulado; no sustituyen esa comprobación.
 
 Validación local adicional: `node --test tests/wix-school.cjs` cubre los campos conservados, mapeo exacto, consentimiento, recepción HTTP, deduplicación, separación por área y escrituras limitadas a `prospects`. No envía correos ni llama servicios reales.
 
