@@ -62,7 +62,13 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  if(actorAccount?.mergedInto){res.status(403).json({error:'Esta cuenta fue unificada. Inicia sesión con la cuenta principal indicada por el Director.'});return;}
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
- const prospectScope=require('./prospect-access').scope(user,actorAccount,isDirector);
+ let prospectPolicy={};
+ if(!isDirector&&(action==='access'||String(action||'').startsWith('prospect-'))){
+  const payload=(await db.ref('dashboard/payload').get()).val();
+  const data=typeof payload==='string'?JSON.parse(payload):payload||{};
+  prospectPolicy=data.school?.accessConfiguration?.roles?.[actorAccount?.role]||{};
+ }
+ const prospectScope=require('./prospect-access').scope(user,actorAccount,isDirector,prospectPolicy);
  if(action==='prospect-configure'){
   if(!isDirector||!prospectScope){res.status(403).json({error:'Solo el Director con correo verificado puede conceder accesos.'});return;}
   res.json(await require('./prospect-access').configure(getAuth(),db,req.body,{...actor,role:'Director'}));return;
@@ -70,6 +76,8 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  if(action==='prospect-session'){res.json({access:prospectScope});return;}
  if(action==='prospect-list'||action==='prospect-save'||action==='prospect-detail'){
   if(!prospectScope){res.status(403).json({error:'No tienes acceso al registro de interesados.'});return;}
+  if(action==='prospect-save'&&prospectScope.edit===false){res.status(403).json({error:'Solo tienes permiso de consulta.'});return;}
+  if(req.body.export===true&&prospectScope.export===false){res.status(403).json({error:'No tienes permiso para exportar interesados.'});return;}
   res.json(await require('./prospects').handle(db,action,req.body,{...actor,prospectArea:prospectScope.area}));return;
  }
  if(action==='identity-preview'||action==='identity-merge'){
@@ -111,7 +119,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision});return;
  }
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
- if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:7,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:7,prospectRolePermissions:true,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
  if(action==='self-profile'||action==='self-profile-save'){
   if(user.disabled){res.status(403).json({error:'La cuenta está deshabilitada.'});return;}
   let root=(await db.ref('dashboard').get()).val();

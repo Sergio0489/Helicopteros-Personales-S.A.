@@ -34,3 +34,14 @@ test('provisioning preserves existing administrative role and creates no passwor
  result=await a.configure(auth,db,{email:'new@example.test',name:'Antonio',area:'charters',confirm:true,createAdministrative:true},{uid:'director',role:'Director'},now);assert.equal(result.created,true);assert.equal(result.role,'Administrativo');assert(!('password'in createInput));assert.equal(createInput.emailVerified,false);assert.equal(a.scope({...createInput,uid:'antonio'},db.root().accountRequests.antonio),null);
  await assert.rejects(a.configure(auth,db,{email:user.email,name:'Fernando',area:'school'},{uid:'director'}),/Confirma/);
 });
+test('role page grants require confirmed Administrative identity and honor explicit revocation',()=>{
+ const grant={interesados:{actions:{view:true,edit:true,export:true},boxes:{contacts:{view:true,edit:true,export:true}}}};
+ const noIndividual={...account,prospectAccess:null};
+ assert.deepEqual(a.scope(user,noIndividual,false,grant),{director:false,full:true,area:null,name:'Fernando',edit:true,export:true});
+ const read=structuredClone(grant);read.interesados.actions.edit=false;read.interesados.actions.export=false;
+ assert.equal(a.scope(user,noIndividual,false,read).edit,false);assert.equal(a.scope(user,noIndividual,false,read).export,false);
+ for(const patch of [{role:'Piloto'},{role:'Estudiante'},{role:'Gerente'},{assignedAt:null},{mergedInto:'other'}])assert.equal(a.scope(user,{...noIndividual,...patch},false,grant),null);
+ assert.equal(a.scope({...user,emailVerified:false},noIndividual,false,grant),null);
+ assert.equal(a.scope(user,account,false,{interesados:{}}),null);
+ assert.equal(a.scope(user,account,true,{interesados:{}}).director,true);
+});

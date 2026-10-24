@@ -24,7 +24,7 @@
   const row=document.createElement('div');row.style.cssText='display:flex;gap:12px;flex-wrap:wrap;padding:16px';row.append(retry,fallback,logout);target.appendChild(row);
  }
  function prospectEntry(result){
-  if(result.prospectAccess){const bar=document.createElement('div');bar.style.cssText='padding:10px 16px;background:#eaf2fa;display:flex;gap:12px;align-items:center';const b=document.createElement('button');b.textContent='Interesados y consultas — '+(result.prospectAccess.area==='school'?'Cursos de pilotos':'Charters');b.onclick=()=>window.Prospects.openStaff(result.prospectAccess,()=>load(selected));bar.append(b);shell.prepend(bar);}
+  if(result.prospectAccess){const bar=document.createElement('div');bar.style.cssText='padding:10px 16px;background:#eaf2fa;display:flex;gap:12px;align-items:center';const b=document.createElement('button');b.textContent='Interesados y consultas — '+(result.prospectAccess.full?'Charters y Escuela':result.prospectAccess.area==='school'?'Cursos de pilotos':'Charters');b.onclick=()=>window.Prospects.openStaff(result.prospectAccess,()=>load(selected));bar.append(b);shell.prepend(bar);}
  }
  async function load(page='',searchTarget=null){
   if(busy)return;busy=true;selected=page;

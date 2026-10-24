@@ -609,6 +609,29 @@ test(
         assert.equal((await call(page, action, body)).ok, false);
       assert.deepEqual(db.root(), before);
     }
+    // Role page grants work without an individual grant and remain enforced by HTTP.
+    const rolePayload=JSON.parse(db.root().dashboard.payload);
+    rolePayload.school.accessConfiguration.roles.Administrativo={interesados:{actions:{view:true,edit:false,export:false},boxes:{contacts:{view:true,edit:false,export:false}}}};
+    db.root().dashboard.payload=JSON.stringify(rolePayload);
+    const rolePage=await staff("denied");
+    assert.equal(await rolePage.getByRole('button',{name:'Registrar consulta',exact:true}).isVisible(),false);
+    assert.equal(await rolePage.getByRole('button',{name:'Exportar CSV filtrado',exact:true}).isVisible(),false);
+    assert.equal(await rolePage.getByRole('button',{name:'Accesos de Antonio y Fernando',exact:true}).count(),0);
+    const all=await call(rolePage,'prospect-list');assert.equal(all.ok,true);
+    assert(all.data.contacts.some(c=>c.areas.includes('charters')));assert(all.data.contacts.some(c=>c.areas.includes('school')));
+    assert.equal((await call(rolePage,'prospect-save',{record:{}})).ok,false);
+    assert.equal((await call(rolePage,'prospect-list',{export:true})).ok,false);
+    const rights=rolePayload.school.accessConfiguration.roles.Administrativo.interesados;
+    rights.actions.edit=true;rights.actions.export=true;rights.boxes.contacts.edit=true;rights.boxes.contacts.export=true;
+    db.root().dashboard.payload=JSON.stringify(rolePayload);
+    const roleEditor=await staff('denied');
+    assert.equal(await roleEditor.getByRole('button',{name:'Registrar consulta',exact:true}).isVisible(),true);
+    assert.equal((await call(roleEditor,'prospect-list',{export:true})).ok,true);
+    assert.equal((await call(roleEditor,'prospect-configure',{confirm:true})).ok,false);
+    rights.actions.view=false;db.root().dashboard.payload=JSON.stringify(rolePayload);
+    assert.equal((await call(roleEditor,'prospect-list')).ok,false);
+    assert.equal((await call(charters,'prospect-list')).ok,false);
+    db.root().dashboard=structuredClone(initialDashboard);
     // Revocation and loss of verification take effect on the next request in an open CRM.
     for (const patch of [
       { prospectAccess: null },
