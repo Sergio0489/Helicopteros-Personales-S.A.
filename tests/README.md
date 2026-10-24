@@ -66,6 +66,14 @@ npm run test:all
 ficticios en memoria; no se inicializa el SDK de Firebase ni se cargan credenciales.
 Toda petición del navegador fuera de ese origen se bloquea y hace fallar la prueba.
 
+La integración con el PR #16 recibe primero consultas web sintéticas de ambas
+áreas, repite los envíos y comprueba que `requestedCourse` se conserva en el
+historial de Escuela sin aparecer en Charters ni perderse al editar el CRM.
+También exige que los filtros de cursos y avisos y los controles del formulario
+permanezcan ocultos en Charters. El UID especial del Director se sustituye por
+el UID ficticio de la prueba para comprobar que tampoco omita la verificación
+de correo; el verificador simulado exige la comprobación de revocación.
+
 Las cinco cuentas usan `example.test`: Director, administrativo de Charters,
 administrativo de Escuela, administrativo sin concesión y cuenta sin verificar.
 Los contactos son exclusivos de cada área o compartidos. Se comprueban lecturas,

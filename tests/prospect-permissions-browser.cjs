@@ -45,6 +45,7 @@ function memory(seed) {
           for (const part of parts.slice(0, -1)) v = v[part] ||= {};
           v[parts.at(-1)] = structuredClone(value);
         },
+        update: async (value) => ref.set({ ...read(key), ...value }),
         transaction: async (fn) => {
           const next = fn(structuredClone(read(key) ?? null));
           if (next === undefined)
@@ -166,7 +167,8 @@ function fixture() {
 function handler(db, users) {
   const exports = {};
   vm.runInNewContext(
-    fs.readFileSync(path.join(rootDir, "functions/index.js"), "utf8"),
+    fs.readFileSync(path.join(rootDir, "functions/index.js"), "utf8")
+      .replace(/const DIRECTOR='[^']+';/, "const DIRECTOR='director';"),
     {
       exports,
       console,
@@ -176,7 +178,8 @@ function handler(db, users) {
           "firebase-admin/app": { initializeApp() {} },
           "firebase-admin/auth": {
             getAuth: () => ({
-              verifyIdToken: async (token) => {
+              verifyIdToken: async (token, checkRevoked) => {
+                assert.equal(checkRevoked, true);
                 if (!users[token]) throw Error("Fictional token required");
                 return { uid: token };
               },
@@ -199,6 +202,29 @@ test(
       api = handler(db, users),
       initialDashboard = structuredClone(db.root().dashboard),
       initialAccounts = structuredClone(db.root().accountRequests);
+    // PR #16: receive web inquiries before opening the PR #15 CRM, in memory.
+    const wixConfig = {
+      token: "fixture-only-".repeat(5),
+      siteId: "fixture-site",
+      forms: { school: { area: "school" }, charters: { area: "charters" } },
+    };
+    for (const area of ["school", "charters"]) {
+      const input = p.webhookInput({
+        token: wixConfig.token,
+        siteId: wixConfig.siteId,
+        formId: area,
+        submissionId: "fixture-" + area,
+        submittedAt: now,
+        name: "FICTICIO shared",
+        email: "shared@example.test",
+        interest: area + " WIX HISTORY",
+        ...(area === "school" ? { requestedCourse: "FICTICIO SCHOOL COURSE" } : {}),
+      }, wixConfig, now);
+      await p.receive(db, input, now);
+      assert.equal((await p.receive(db, input, now)).duplicate, true);
+    }
+    assert.deepEqual(db.root().dashboard, initialDashboard);
+    assert.deepEqual(db.root().accountRequests, initialAccounts);
     const server = http.createServer(async (req, res) => {
       try {
         if (req.url === "/api") {
@@ -375,8 +401,19 @@ test(
         other + " HISTORY",
         "DIRECTOR NOTE",
         "PRIVATE-STUDENT",
+        other + " WIX HISTORY",
       ])
         assert(!wire.includes(secret), secret);
+      const wixHistory = (await call(page, "prospect-detail", { id: shared })).data;
+      assert(wixHistory.inquiries.some((q) => q.interest === area + " WIX HISTORY"));
+      assert(!JSON.stringify(wixHistory).includes(other + " WIX HISTORY"));
+      if (area === "school") {
+        assert(wixHistory.inquiries.some((q) => q.requestedCourse === "FICTICIO SCHOOL COURSE"));
+      } else {
+        assert(!JSON.stringify(wixHistory).includes("FICTICIO SCHOOL COURSE"));
+        assert.equal(await page.locator("[data-course]").isVisible(), false);
+        assert.equal(await page.locator("[data-updates]").isVisible(), false);
+      }
       assert.equal(
         (
           await call(page, "prospect-detail", {
@@ -402,7 +439,7 @@ test(
       );
       assert.deepEqual(db.root().prospects.contacts[foreign.id], foreign);
       await page.locator(`[data-history="${shared}"]`).click();
-      await page.locator("dialog [data-items] article").waitFor();
+      await page.locator("dialog [data-items] article").first().waitFor();
       assert(
         (await page.locator("dialog").textContent()).includes(
           area + " HISTORY",
@@ -428,6 +465,7 @@ test(
         0,
       );
       if (area === "charters") {
+        assert.equal(await page.locator("dialog fieldset").nth(1).isVisible(), false);
         assert.equal(
           await page.locator("dialog [name=consentStatus]").isVisible(),
           false,
@@ -621,6 +659,9 @@ test(
     );
     assert.deepEqual(db.root().dashboard, initialDashboard);
     assert.deepEqual(db.root().accountRequests, initialAccounts);
+    assert(Object.values(db.root().prospects.inquiries[shared]).some(
+      (q) => q.requestedCourse === "FICTICIO SCHOOL COURSE",
+    ));
     const data = JSON.parse(initialDashboard.payload);
     for (const account of Object.values(initialAccounts)) {
       assert.deepEqual(
