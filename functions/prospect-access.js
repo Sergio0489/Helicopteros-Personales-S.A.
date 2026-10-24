@@ -3,10 +3,10 @@
 const {email}=require('./prospects');
 const STAFF=['Administrativo','Gerente'];
 function scope(user,account,director=false){
- if(user.disabled||account?.mergedInto)return null;
+ if(!user.emailVerified||user.disabled||account?.mergedInto)return null;
  if(director)return {director:true,area:null,name:account?.profile?.name||user.displayName||''};
  const grant=account?.prospectAccess;
- if(!user.emailVerified||!account?.assignedAt||!STAFF.includes(account.role)||!grant?.assignedAt||!['charters','school'].includes(grant.area)||grant.email!==String(user.email||'').toLowerCase())return null;
+ if(!account?.assignedAt||!STAFF.includes(account.role)||!grant?.assignedAt||!['charters','school'].includes(grant.area)||grant.email!==String(user.email||'').toLowerCase())return null;
  return {director:false,area:grant.area,name:account.profile?.name||user.displayName||''};
 }
 async function configure(auth,db,input,actor,now=new Date().toISOString()){

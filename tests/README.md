@@ -52,3 +52,34 @@ Las pruebas de Escuela usan datos sintéticos y comprueban los límites de 90 y 
 `npm run test:all` ejecuta todas las pruebas, incluidas navegación de páginas y aeronaves en escritorio/móvil, calendarios, autorización del nuevo usuario Estudiante y conservación de borradores al volver a la pestaña. GitHub Actions usa esta suite completa. Las pruebas de usuarios comprueban que Guardar/Confirmar cargo active una cuenta nueva sin exigir cambiarla a un cargo distinto.
 
 Los calendarios se comprueban con entrada manual, selección de día, ancho de pantalla y formularios dinámicos. La navegación se prueba con edición en escritorio y consulta en móvil, y exige que cambiar de página no escriba datos.
+
+## Permisos del CRM de interesados
+
+```sh
+node --test tests/prospect-permissions-browser.cjs tests/prospect-access.cjs tests/prospects.cjs
+npm run test:all
+```
+
+`prospect-permissions-browser.cjs` abre Chromium contra un servidor HTTP en
+`127.0.0.1`. Ejecuta `prospects-ui.js`, `role-portal.js` y el manejador real de
+`functions/index.js`. Solo Auth y Realtime Database se sustituyen por objetos
+ficticios en memoria; no se inicializa el SDK de Firebase ni se cargan credenciales.
+Toda petición del navegador fuera de ese origen se bloquea y hace fallar la prueba.
+
+La integración con el PR #16 recibe primero consultas web sintéticas de ambas
+áreas, repite los envíos y comprueba que `requestedCourse` se conserva en el
+historial de Escuela sin aparecer en Charters ni perderse al editar el CRM.
+También exige que los filtros de cursos y avisos y los controles del formulario
+permanezcan ocultos en Charters. El UID especial del Director se sustituye por
+el UID ficticio de la prueba para comprobar que tampoco omita la verificación
+de correo; el verificador simulado exige la comprobación de revocación.
+
+Las cinco cuentas usan `example.test`: Director, administrativo de Charters,
+administrativo de Escuela, administrativo sin concesión y cuenta sin verificar.
+Los contactos son exclusivos de cada área o compartidos. Se comprueban lecturas,
+ediciones por formulario, historial, notas, responsables, estados, consentimiento,
+rechazo de solicitudes manipuladas, revocación de concesión/cargo/verificación,
+expedientes de estudiantes protegidos y ausencia de cambios en los otros módulos.
+El acceso al CRM se comprueba sin conceder páginas adicionales al administrativo.
+La suite completa incluye esta prueba automáticamente mediante `tests/*.cjs` en CI.
+Esto valida la aplicación con servicios simulados, no un despliegue de Firebase.

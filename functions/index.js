@@ -64,7 +64,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  const prospectScope=require('./prospect-access').scope(user,actorAccount,isDirector);
  if(action==='prospect-configure'){
-  if(!isDirector){res.status(403).json({error:'Solo el Director puede conceder accesos.'});return;}
+  if(!isDirector||!prospectScope){res.status(403).json({error:'Solo el Director con correo verificado puede conceder accesos.'});return;}
   res.json(await require('./prospect-access').configure(getAuth(),db,req.body,{...actor,role:'Director'}));return;
  }
  if(action==='prospect-session'){res.json({access:prospectScope});return;}
