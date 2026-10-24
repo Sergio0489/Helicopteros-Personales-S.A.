@@ -2,9 +2,15 @@
 // Individual grants supplement the existing company role; they never broaden a role policy.
 const {email}=require('./prospects');
 const STAFF=['Administrativo','Gerente'];
-function scope(user,account,director=false){
+function scope(user,account,director=false,policy={}){
  if(!user.emailVerified||user.disabled||account?.mergedInto)return null;
  if(director)return {director:true,area:null,name:account?.profile?.name||user.displayName||''};
+ if(Object.hasOwn(policy,'interesados')){
+  if(account?.role!=='Administrativo'||!account.assignedAt)return null;
+  const {permissions,outputAllowed}=require('./boxes'),rights=permissions(policy,'interesados','contacts');
+  if(!rights.view)return null;
+  return {director:false,full:true,area:null,name:account.profile?.name||user.displayName||'',edit:rights.edit,export:!!outputAllowed(policy,'interesados','contacts','export')};
+ }
  const grant=account?.prospectAccess;
  if(!account?.assignedAt||!STAFF.includes(account.role)||!grant?.assignedAt||!['charters','school'].includes(grant.area)||grant.email!==String(user.email||'').toLowerCase())return null;
  return {director:false,area:grant.area,name:account.profile?.name||user.displayName||''};

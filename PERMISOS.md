@@ -52,3 +52,11 @@ node tests/permissions-editor-mobile.cjs
 ```
 
 Puede indicarse `CHROME_BIN` para usar Chromium instalado. Se comprobaron también el guardado de una aeronave con un único cuadro editable, controles de solo lectura, el selector de aeronave y calendario en móvil, y registros vinculados con TAC de aeronave física. La validación contra Firebase real requiere desplegar la función e iniciar sesión con una cuenta de prueba.
+
+## Interesados y consultas por cargo
+
+La matriz incluye **Interesados y consultas → Contactos y consultas de Charters y Escuela**. El Director conserva acceso completo. Para Administrativo, el Director elige el permiso de página y cuadro: sin acceso, solo ver, o ver y editar. Exportar CSV (compatible con Excel) requiere habilitar exportación en ambos niveles. La concesión por cargo permite ambas áreas a los administrativos confirmados con correo verificado; no concede gestión de usuarios ni permisos.
+
+Antes de configurar por primera vez esta página se conservan las concesiones individuales por área. Una configuración explícita de la página sustituye esas concesiones: «Sin acceso» revoca también el acceso anterior. Guardar otra página sin modificar Interesados no migra ni revoca concesiones individuales. La interfaz no habilita este ajuste hasta que `accountRegistration` anuncie `prospectRolePermissions`.
+
+Publicar la web y desplegar `functions:accounts:accountRegistration`. Después, el Director configura el cargo Administrativo; los usuarios actualizan su página. No se concede acceso de producción automáticamente. El servidor consulta los permisos vigentes en cada solicitud y rechaza escrituras o exportaciones no autorizadas.
