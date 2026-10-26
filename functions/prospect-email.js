@@ -1,7 +1,6 @@
 'use strict';
 // Internal notifications only. Recipients cannot be supplied by forms or browsers.
 const {createHash,randomUUID}=require('node:crypto');
-const RECIPIENTS=Object.freeze(['info@helicopterospersonales.com','flightschooldivision@helicopterospersonales.com']);
 const APP_URL='https://sergio0489.github.io/Helicopteros-Personales-S.A./';
 const COURSES={privado:'Piloto privado',comercial:'Piloto comercial',ifr:'IFR',multimotor:'Multimotor',rpa:'RPA (Drone)',instructor:'Instructor de vuelo'};
 const hash=v=>createHash('sha256').update(v).digest('hex');
@@ -9,10 +8,15 @@ const clean=(v,max=3000)=>typeof v==='string'?v.replace(/\u0000/g,'').trim().sli
 const address=v=>typeof v==='string'&&v.length<=254&&/^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(v)?v.toLowerCase():'';
 const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+function recipientList(value){
+ if(!Array.isArray(value)||value.length!==2||value.some(v=>!address(v))||new Set(value.map(address)).size!==2)throw Error('Configura los dos destinatarios internos autorizados.');
+ return value.map(address);
+}
+
 function configuration(raw){
  let cfg;try{cfg=JSON.parse(raw);}catch{throw Error('Configuración de correo no válida.');}
  if(!cfg||!address(cfg.from)||typeof cfg.host!=='string'||!/^([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/.test(cfg.host)||![465,587].includes(cfg.port)||typeof cfg.user!=='string'||!cfg.user.trim()||typeof cfg.password!=='string'||!cfg.password||cfg.password.length>4096)throw Error('Configuración de correo incompleta.');
- return {from:address(cfg.from),transport:{host:cfg.host,port:cfg.port,secure:cfg.port===465,requireTLS:true,tls:{minVersion:'TLSv1.2'},auth:{user:cfg.user,pass:cfg.password},connectionTimeout:20000,greetingTimeout:15000,socketTimeout:25000,dnsTimeout:10000,logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true}};
+ return {from:address(cfg.from),recipients:recipientList(cfg.recipients),transport:{host:cfg.host,port:cfg.port,secure:cfg.port===465,requireTLS:true,tls:{minVersion:'TLSv1.2'},auth:{user:cfg.user,pass:cfg.password},connectionTimeout:20000,greetingTimeout:15000,socketTimeout:25000,dnsTimeout:10000,logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true}};
 }
 
 function panamaDate(value){
@@ -45,7 +49,7 @@ function failure(error){
  return {retry:false,review:true,code:'smtp-unconfirmed'};
 }
 
-async function deliver({db,event,from,send,now=()=>Date.now(),report=()=>{}}){
+async function deliver({db,event,from,recipients,send,now=()=>Date.now(),report=()=>{}}){
  const {contactId,inquiryId}=event.params||{};
  if(!/^[a-f0-9]{64}$/.test(contactId||'')||!/^\d{13}_[a-f0-9]{64}$/.test(inquiryId||''))throw Error('Evento de consulta no válido.');
  const inquiry=event.data.val();if(!inquiry||!Array.isArray(inquiry.areas))return;
@@ -53,7 +57,7 @@ async function deliver({db,event,from,send,now=()=>Date.now(),report=()=>{}}){
  const contact=inquiry.contact||(await db.ref('prospects/contacts/'+contactId).get()).val();
  if(!contact||(!clean(contact.name,160)&&!address(contact.email))){report('contact-missing',hash(contactId+'|'+inquiryId));return;}
  const deliveryId=hash(contactId+'|'+inquiryId);let retry=false;
- for(const to of RECIPIENTS){
+ for(const to of recipientList(recipients)){
   const key=hash(to),ref=db.ref('prospects/emailDeliveries/'+deliveryId+'/'+key),token=randomUUID(),started=now();
   const claimed=await ref.transaction(old=>{
    if(['sent','failed','review'].includes(old?.status))return;
@@ -87,4 +91,4 @@ async function deliver({db,event,from,send,now=()=>Date.now(),report=()=>{}}){
  if(retry)throw Error('Entrega de correo pendiente de reintento.');
 }
 
-module.exports={RECIPIENTS,configuration,panamaDate,message,failure,deliver};
+module.exports={recipientList,configuration,panamaDate,message,failure,deliver};

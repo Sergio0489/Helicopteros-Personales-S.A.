@@ -13,7 +13,7 @@ exports.emailProspectInquiry=onValueCreated({
  const cfg=email.configuration(config.value());
  const transport=require('nodemailer').createTransport(cfg.transport);
  try{
-  await email.deliver({db:getDatabase(),event,from:cfg.from,send:mail=>transport.sendMail(mail),
+  await email.deliver({db:getDatabase(),event,from:cfg.from,recipients:cfg.recipients,send:mail=>transport.sendMail(mail),
    report:(code,deliveryId)=>logger.error('Aviso de interesado pendiente de revisión.',{code,deliveryId})});
  }finally{transport.close();}
 });

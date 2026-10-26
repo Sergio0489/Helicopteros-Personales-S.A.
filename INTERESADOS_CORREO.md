@@ -1,13 +1,13 @@
 # Avisos internos de interesados por correo
 
-Preparado el 26/10/2026. **Pendiente de conectar el correo remitente y desplegar en Firebase.** Publicar el código en GitHub Pages no activa los envíos.
+Preparado el 26/10/2026. La captura aportada por el propietario confirma el servidor SMTP privado del correo empresarial, puerto **465**, cifrado **SSL/TLS**, para la cuenta empresarial utilizada desde Outlook. **Pendiente de autenticar el correo remitente y desplegar en Firebase.** Publicar el código en GitHub Pages no activa los envíos.
 
 ## Destinatarios y contenido
 
 Cada consulta nueva se envía a las dos direcciones autorizadas:
 
-- info@helicopterospersonales.com
-- flightschooldivision@helicopterospersonales.com
+- Correo de información indicado por el propietario.
+- Correo de la escuela indicado por el propietario.
 
 El correo contiene nombre, celular y correo disponibles, área (Escuela/Chárter), curso solicitado, consulta, origen, fecha y hora de Panamá y enlace a la app. «Responder» apunta al correo del interesado cuando es válido. Nunca se incluyen notas internas, permisos, pagos o expedientes. Ningún campo del formulario puede cambiar los destinatarios.
 
@@ -21,7 +21,19 @@ Los reintentos del evento omiten destinatarios ya confirmados por SMTP. Un recha
 
 ## Conexión del remitente
 
-Primero identificar el proveedor de la cuenta de la empresa: Google Workspace, Microsoft 365 o el alojamiento del correo. Comprobar qué método de envío admite antes de configurar. Esta implementación usa SMTP autenticado con contraseña de aplicación/credencial específica; si el proveedor requiere OAuth, hay que incorporar ese método antes de activarla. No solicitar ni compartir la contraseña principal por chat.
+Se usará el correo de información autorizado por el propietario como remitente. Los nombres del servidor y las direcciones se guardan solo en el secreto, nunca en el código público. La captura confirma servidor, puerto y cifrado, pero todavía falta comprobar la autenticación con el servidor. Esta implementación usa SMTP autenticado; si el proveedor ofrece una credencial específica de aplicación, preferirla. Si exige OAuth, incorporar ese método antes de activar. No solicitar ni compartir contraseñas por chat.
+
+El asistente `scripts/configure-prospect-email.py` pide el remitente (también primer destinatario), el correo de escuela, el servidor SMTP y la clave en la terminal sin mostrarla, verifica TLS y autenticación sin enviar mensajes, y guarda la configuración en Secret Manager. El usuario SMTP predeterminado es la dirección completa; permite corregirlo si el proveedor utiliza otro identificador. El secreto y los diagnósticos temporales de la CLI se guardan fuera del repositorio y se eliminan al terminar. La clave no se pasa como argumento ni se imprime.
+
+Desde el checkout actualizado en Cloud Shell, con la sesión autorizada del propietario:
+
+```bash
+npm --prefix functions install
+npx -y firebase-tools@latest login --no-localhost
+python3 scripts/configure-prospect-email.py
+```
+
+Si la sesión ya está iniciada, el comando de login lo indica. El asistente solo confirma el acceso SMTP y almacena la configuración; no despliega ni envía pruebas. Si la validación falla, no actualiza el secreto. Una verificación correcta no confirma todavía que los mensajes lleguen a las dos bandejas; la prueba de entrega se hace después del despliegue.
 
 Crear el secreto **HP_PROSPECT_EMAIL_CONFIG** en Google Secret Manager/Firebase con un JSON que contenga:
 
@@ -32,6 +44,7 @@ Crear el secreto **HP_PROSPECT_EMAIL_CONFIG** en Google Secret Manager/Firebase 
 | user | Usuario SMTP autorizado |
 | password | Credencial de envío, guardada solo en el secreto |
 | from | Dirección remitente verificada y autorizada por ese proveedor |
+| recipients | Array con las dos direcciones internas autorizadas por el propietario |
 
 No guardar el JSON en el repositorio, en el navegador ni en capturas. La configuración no acepta servidores sin cifrado ni desactiva la validación de certificados. El secreto solo se vincula a esta función; no se reutiliza ni cambia `HP_WIX_INTERESTS_CONFIG`.
 
@@ -39,7 +52,7 @@ Una vez configurado el secreto, desde el checkout actualizado y con la sesión d
 
 ```bash
 npm --prefix functions install
-firebase deploy --only functions:accounts --project helicopteros-personales
+npx -y firebase-tools@latest deploy --only functions:accounts --project helicopteros-personales
 ```
 
 Ese despliegue actualiza el productor de consultas y añade el disparador. Comprobar en una consulta de prueba claramente identificada que ambas bandejas reciben un único correo, que «Responder» usa la dirección correcta y que reenviar el mismo evento no duplica avisos. No generar consultas ficticias en producción antes de conectar el correo.
@@ -53,6 +66,7 @@ No se contrató un proveedor de mensajería ni un plan adicional. Los límites/p
 ```bash
 node --test tests/prospect-email.cjs tests/prospects.cjs tests/wix-school.cjs tests/prospect-access.cjs
 npm run test:privacy
+python3 tests/prospect-email-setup.py
 ```
 
 Las pruebas simulan correo y base de datos; no envían mensajes ni modifican producción.
