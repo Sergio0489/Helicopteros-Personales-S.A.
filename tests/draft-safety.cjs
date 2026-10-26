@@ -1,0 +1,18 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{chromium}=require('playwright');
+test('Drafts isolate users, expire, exclude secrets/files, and never auto-apply uncertain or stale saves',async()=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,headless:true,args:['--no-sandbox']});try{
+ const page=await browser.newPage();await page.route('https://draft.test/**',r=>r.fulfill({contentType:'text/html',body:'<div id="content-area"><form id="edit"><input name="name" value="Original"><input name="password" type="password"><input name="proof" type="file"><input name="locked" value="Locked" readonly></form></div>'}));await page.goto('https://draft.test/');await page.addScriptTag({content:fs.readFileSync(__dirname+'/../draft-recovery.js','utf8')});
+ await page.evaluate(()=>{window.uid='first';window.revision='one';window.firebase={auth:()=>({currentUser:{uid:window.uid}})};DraftRecovery.init({revision:()=>window.revision,read:key=>DraftRecovery.list()[key],write:DraftRecovery.store});window.binding=DraftRecovery.form('test',document.querySelector('form'),'Prueba');});
+ await page.locator('[name=name]').fill('Pendiente');await page.locator('[name=password]').fill('synthetic-secret');await page.waitForFunction(()=>DraftRecovery.list().test);let entry=await page.evaluate(()=>DraftRecovery.list().test);assert.equal(entry.data.length,1);assert.equal(entry.data[0].value,'Pendiente');assert(!JSON.stringify(entry).includes('synthetic-secret'));
+ assert.deepEqual(await page.evaluate(()=>{window.uid='second';return DraftRecovery.list();}),{});await page.evaluate(()=>window.uid='first');
+ await page.evaluate(()=>DraftRecovery.beforeSave());assert.equal(await page.evaluate(()=>DraftRecovery.list().test.state),'unconfirmed');
+ async function reopen(){await page.evaluate(()=>{document.getElementById('edit').remove();const form=document.createElement('form');form.id='edit';form.innerHTML='<input name="name" value="Server">';document.getElementById('content-area').append(form);DraftRecovery.form('test',form,'Prueba');});}
+ await reopen();assert.equal(await page.getByRole('button',{name:'Recuperar borrador',exact:true}).count(),0);assert.equal(await page.locator('[name=name]').inputValue(),'Server');assert.equal(await page.getByRole('button',{name:'Ver borrador'}).count(),1);
+ await page.evaluate(()=>{const d=DraftRecovery.list().test;d.state='draft';DraftRecovery.store('test',d);window.revision='newer';});await reopen();assert.equal(await page.getByRole('button',{name:'Recuperar borrador',exact:true}).count(),0);
+ await page.evaluate(()=>{const d=DraftRecovery.list().test;d.at=Date.now()-25*60*60*1000;DraftRecovery.store('expired',d);});assert.equal(await page.evaluate(()=>DraftRecovery.list().expired),undefined);
+ await page.evaluate(()=>DraftRecovery.clearUser());assert.deepEqual(await page.evaluate(()=>DraftRecovery.list()),{});
+ // Quota/storage denial must never claim that a draft was retained.
+ await page.evaluate(()=>{DraftRecovery.init({revision:()=>'',read:()=>null,write:()=>Promise.reject(Error('quota'))});const form=document.createElement('form');form.id='failure';form.innerHTML='<input name="note">';document.body.append(form);DraftRecovery.form('failure',form,'Fallido');});await page.locator('#failure input').fill('No perder');await page.waitForFunction(()=>document.querySelector('#failure').textContent.includes('No se pudo conservar'));assert(!await page.locator('#failure').textContent().then(t=>t.includes('Borrador local (24 h)')));
+ }finally{await browser.close();}
+});

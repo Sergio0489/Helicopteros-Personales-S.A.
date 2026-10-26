@@ -1,0 +1,25 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {chromium}=require('playwright');
+test('Director can configure CRM page for Administrative without granting access by default',async t=>{
+ const browser=await chromium.launch({headless:true,...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{}),args:['--no-sandbox','--disable-dev-shm-usage']});t.after(()=>browser.close());
+ const page=await browser.newPage();
+ await page.route('**/*',r=>r.abort());
+ await page.setContent('<div id="profile-menu"></div><button id="profile-roles">Roles</button>');
+ await page.evaluate(()=>{window.STAFF_ROLES=['Director','Administrativo','Piloto'];window.profileUser=()=>({uid:'fictional-director'});window.previewData={school:{accessConfiguration:{roles:{Administrativo:{}}}}};window.fleet=[];window.suggestedRolePolicy=()=>({});window.cloudWrite=async next=>{window.saved=next;};window.AccountRegistration={api:async()=>({version:7,prospectRolePermissions:true,outputPermissions:true,boxEditing:true,aircraftSchedule:true})};});
+ for(const file of ['functions/boxes.js','box-permissions-ui.js'])await page.addScriptTag({content:fs.readFileSync(path.join(__dirname,'..',file),'utf8')});
+ await page.evaluate(()=>openBoxPermissions());await page.locator('[data-role]').selectOption('Administrativo');
+ await page.getByText('Interesados y consultas',{exact:false}).first().click();
+ assert.equal(await page.locator('[data-page="interesados"]').inputValue(),'none');
+ await page.getByRole('button',{name:'Guardar permisos',exact:true}).click();
+ assert.equal(await page.evaluate(()=>Object.hasOwn(saved.school.accessConfiguration.roles.Administrativo,'interesados')),false);
+ await page.locator('[data-page="interesados"]').selectOption('edit');
+ await page.locator('[data-page-box="interesados"]').selectOption('edit');
+ await page.locator('[data-output-page="interesados"]').check();await page.locator('[data-output-box="interesados"]').check();
+ await page.getByRole('button',{name:'Guardar permisos',exact:true}).click();
+ const saved=await page.evaluate(()=>window.saved.school.accessConfiguration.roles.Administrativo.interesados);
+ assert.deepEqual(saved.boxes.contacts,{view:true,edit:true,export:true});assert.equal(saved.actions.export,true);
+ await page.locator('[data-page="interesados"]').selectOption('none');await page.getByRole('button',{name:'Guardar permisos',exact:true}).click();
+ assert.equal(await page.evaluate(()=>saved.school.accessConfiguration.roles.Administrativo.interesados.actions.view),false);
+ await page.locator('[data-role]').selectOption('Piloto');assert.equal(await page.locator('[data-page="interesados"]').isDisabled(),true);
+});

@@ -16,7 +16,7 @@ window.getPaymentReceivers=()=>{
 };
 
 let cloudETag=null,cloudVersion=0,cloudBusy=false,cloudBlocked=false,appLoaded=false,importData=null;
-let lastCloudPayload=null;
+let lastCloudPayload=null,cloudOperation=null;
 const el=id=>document.getElementById(id);
 function accessMessage(text){el('access-message').textContent=text;}
 function setCloudStatus(text){
@@ -47,7 +47,7 @@ async function cloudRequest(method,body,etag,{silent=false,path=""}={}){
   return {value:response.status===204?null:await response.json(),etag:response.headers.get('ETag')};
  }catch(error){if(error.name==='AbortError')throw Error('No se pudo confirmar el guardado. Actualiza los datos antes de volver a guardar.');throw error;}finally{clearTimeout(timer);}
 }
-window.cloudWrite=async function(data){
+const legacyCloudWrite=async function(data){
  if(cloudBusy)throw Error('Espera a que termine el guardado actual.');
  if(cloudBlocked||!cloudETag)throw Error('Actualiza los datos antes de guardar para evitar sobrescribir cambios.');
  const payload=JSON.stringify(data);
@@ -65,11 +65,33 @@ window.cloudWrite=async function(data){
     try{const latest=await cloudRequest('GET',null,null,{silent:true});const marker=await cloudRequest('GET',null,null,{path:'/operation'});if(marker.value===operation)cloudETag=latest.etag;}catch{}
   }
   cloudBlocked=!cloudETag;
+  setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado · historial pendiente de activar');
+  return true;
+ }catch(error){window.failedCloudData=structuredClone(data);cloudBlocked=true;showCloudError(error);throw error;}
+ finally{cloudBusy=false;el('dashboard-app').inert=false;el('cloud-busy').hidden=true;}
+};
+let historyBackendReady=null;
+window.cloudWrite=async function(data){
+ if(historyBackendReady===null){const capabilities=await AccountRegistration.api('permission-capabilities');historyBackendReady=capabilities.auditHistory===true;}
+ if(!historyBackendReady)return legacyCloudWrite(data);
+ if(cloudBusy)throw Error('Espera a que termine el guardado actual.');
+ if(cloudBlocked||!cloudETag)throw Error('Actualiza los datos antes de guardar para evitar sobrescribir cambios.');
+ const payload=JSON.stringify(data);
+ if(payload===lastCloudPayload){setCloudStatus('✓ Sin cambios pendientes');return true;}
+ cloudBusy=true;el('dashboard-app').inert=true;el('cloud-busy').hidden=false;
+ setCloudStatus('Guardando en Firebase…');
+ const motive=window.ChangeHistory?.getReason()||'';
+ try{
+  const result=await AccountRegistration.api('director-save',{payload,operation:cloudOperation,reason:motive});
+  window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=payload;cloudVersion=result.revision;cloudOperation=result.operation;
+  cloudBlocked=false;
   setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado en Firebase');
   return true;
  }catch(error){window.failedCloudData=structuredClone(data);cloudBlocked=true;showCloudError(error);throw error;}
  finally{cloudBusy=false;el('dashboard-app').inert=false;el('cloud-busy').hidden=true;}
 };
+const draftCloudWrite=window.cloudWrite;
+window.cloudWrite=async data=>{await window.DraftRecovery?.beforeSave();try{const result=await draftCloudWrite(data);window.DraftRecovery?.saved();return result;}catch(error){window.DraftRecovery?.error(error.message);throw error;}};
 function validateBackup(data){
  if(!data||typeof data!=='object'||Array.isArray(data)||!data.fleet||typeof data.fleet!=='object'||Array.isArray(data.fleet))throw Error('El archivo no es un respaldo del dashboard.');
  if(data.pilotos!=null&&!Array.isArray(data.pilotos))throw Error('La lista de pilotos no es válida.');
@@ -87,28 +109,42 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261015-pilot-sort-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261021-hour-configuration-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El dashboard no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el dashboard. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
- const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261015-pilot-sort-1';
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261021-hour-configuration-1';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261012-15';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261021-hour-configuration-1';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
- const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261015-pilot-sort-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
- window.AccountRegistration?.installUsersPage();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
+ for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
+ const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
+ window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
+ window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
- const result=await cloudRequest('GET');cloudETag=result.etag;cloudVersion=result.value?.revision||0;
+ const result=await cloudRequest('GET');cloudETag=result.etag;cloudVersion=result.value?.revision||0;cloudOperation=result.value?.operation||null;
  if(!cloudETag)throw Error('No se pudo verificar la versión de los datos. Recarga la página.');
  if(result.value){if(result.value.schemaVersion!==1||typeof result.value.payload!=='string')throw Error('Formato de base de datos no reconocido.');lastCloudPayload=result.value.payload;await openDashboard(JSON.parse(result.value.payload));}
  else{el('login-form').hidden=true;el('import-panel').hidden=false;el('access-logout').hidden=false;accessMessage('Tu acceso está listo. Falta importar el respaldo inicial.');}
 }
+window.refreshAccountDossiers=async()=>{
+ if(!appLoaded||!isDirectorUser())return true;
+ if(cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.())return false;
+ const result=await cloudRequest('GET'),envelope=result.value;if(!envelope?.payload||envelope.operation===cloudOperation)return true;
+ // Do not accept a new save marker while keeping stale flight/aircraft state.
+ const data=validateBackup(JSON.parse(envelope.payload)),before=lastCloudPayload?validateBackup(JSON.parse(lastCloudPayload)):{};
+ if(cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.()||['fleet','itinerarios','undoFleet'].some(k=>JSON.stringify(data[k])!==JSON.stringify(before[k])))return false;
+ previewData=structuredClone(data);pilotosData.splice(0,pilotosData.length,...structuredClone(data.pilotos||[]));
+ cloudETag=result.etag;cloudVersion=envelope.revision||0;cloudOperation=envelope.operation;lastCloudPayload=envelope.payload;
+ renderPilotos();updatePilotDropdown();window.PilotDossiers?.refresh();window.School?.refresh();window.SchoolInformation?.refresh();window.CharterInformation?.refresh();buildResumen();return true;
+};
 function confirmLeaving(){return !cloudBusy&&(!(profileDirty||window.hasDraftChanges?.()||cloudBlocked)||confirm('Hay cambios pendientes o un guardado sin confirmar. Descarga un respaldo antes de continuar. ¿Deseas continuar?'));}
 el('cloud-reload').onclick=()=>{if(confirmLeaving())location.reload();};
-async function logout(){if(!confirmLeaving())return;await firebase.auth().signOut();location.reload();}
+async function logout(){if(!confirmLeaving())return;if(Object.keys(window.DraftRecovery?.list()||{}).length&&!confirm('Cerrar sesión eliminará los borradores locales de este usuario. ¿Continuar?'))return;window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();}
 el('cloud-logout').onclick=logout;el('access-logout').onclick=logout;
 el('backup-file').onchange=async event=>{
  importData=null;el('import-confirm').disabled=true;
@@ -126,20 +162,20 @@ try{
  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION).then(()=>{
   firebase.auth().onAuthStateChanged(async user=>{
    directorSessionUid=null;
-   if(!user){if(appLoaded){location.reload();return;}accessMessage('Ingresa con tu usuario autorizado.');return;}
+   if(!user){el('login-form').hidden=false;if(appLoaded){location.reload();return;}accessMessage('Ingresa con tu usuario autorizado.');return;}
    let director=false;try{director=await loadDirectorSession(user);}catch(error){accessMessage(error.message);return;}
    if(!director){if(window.AccountRegistration)await window.AccountRegistration.landing();else accessMessage('Recarga la página para consultar tu solicitud.');return;}
    el('login-form').hidden=true;el('access-logout').hidden=false;accessMessage('Cargando datos…');
    try{await refreshCloud();}catch(error){accessMessage(error.message);}
   });
- }).catch(()=>accessMessage('No se pudo iniciar la sesión. Revisa los permisos del navegador.'));
+ }).catch(()=>{el('login-form').hidden=false;accessMessage('No se pudo iniciar la sesión. Revisa los permisos del navegador.');});
  el('login-form').onsubmit=async event=>{
   event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;accessMessage('Verificando acceso…');
   try{await firebase.auth().signInWithEmailAndPassword(el('login-email').value.trim(),el('login-password').value);el('login-password').value='';}
   catch(error){accessMessage(error.code==='auth/too-many-requests'?'Demasiados intentos. Espera unos minutos.':'No se pudo ingresar. Revisa tu correo, contraseña y conexión.');}
   finally{button.disabled=false;}
  };
-}catch(error){accessMessage(error.code==='app/duplicate-app'?'La sesión ya está iniciada en esta página. Recarga para continuar.':error.message||'No se pudo iniciar el módulo de acceso. Recarga la página.');}
+}catch(error){el('login-form').hidden=false;accessMessage(error.code==='app/duplicate-app'?'La sesión ya está iniciada en esta página. Recarga para continuar.':error.message||'No se pudo iniciar el módulo de acceso. Recarga la página.');}
 
 document.addEventListener('click',event=>{const menu=el('cloud-menu');if(menu&&!menu.contains(event.target))menu.open=false;});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=el('cloud-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
@@ -224,11 +260,11 @@ document.addEventListener('click',event=>{const menu=el('profile-menu');if(menu&
 
 
 // Role policies are staged until Firebase supports isolated per-page access.
-const STAFF_ROLES=['Director','Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
+const STAFF_ROLES=['Director','Gerente','Administrativo','Contabilidad','Mecánico','Piloto','Estudiante'];
 const ROLE_ACTIONS={view:'Ver',create:'Crear',edit:'Modificar',delete:'Eliminar',print:'Imprimir',export:'Exportar',resolve:'Resolver / aprobar'};
 const ROLE_PAGES=[
  {id:'horario',name:'Horario del día',areas:['Vuelos y rutas','Tripulación y pasajeros'],actions:['view','print','export']},
- {id:'pendientes',name:'Pendientes',areas:['Alertas de aeronaves','Alertas de pilotos','Alertas de escuela y empresa'],actions:['view','print','export']},
+ {id:'pendientes',name:'Pendientes',areas:['Alertas de aeronaves','Alertas de pilotos','Alertas de escuela','Alertas de HP CHARTER'],actions:['view','print','export']},
  {id:'aeronaves',name:'Aeronaves',areas:['Información y estatus','Motores y hélices','Horas e inspecciones','Mantenimiento y taller','Documentos y emergencia','Pedidos','Tarifas'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'pilotos',name:'Pilotos',areas:['Datos personales','Licencias y habilitaciones','Vencimientos y documentos'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'bitacora',name:'Registro de bitácora',areas:['Vuelos e instructores','Tacómetros y horas','Cargos por servicios','Historial de registros'],actions:['view','create','edit','delete','print','export']},
@@ -236,7 +272,7 @@ const ROLE_PAGES=[
  {id:'itinerario',name:'Itinerario',areas:['Calendario','Programación de vuelos','Solicitudes de vuelos'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'estudiantes',name:'Estudiantes / Clientes',areas:['Datos personales','Cursos y licencias','Horas registradas','Estado de cuenta y abonos','Documentos'],actions:['view','create','edit','delete','print','export']},
  {id:'escuela',name:'Escuela',areas:['Información y documentos','Cursos y fechas','Tarifas de servicios'],actions:['view','create','edit','delete','print','export','resolve']},
- {id:'charter',name:'HP CHARTER',areas:['Información de la empresa','Documentos y vencimientos','Servicios'],actions:['view','create','edit','delete','print','export','resolve']},
+ {id:'charter',name:'HP CHARTER',areas:['Información de la empresa','Documentos y vencimientos','Personal de la empresa','Servicios'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'estadisticas',name:'Estadísticas',areas:['Estadísticas generales','Estadísticas para AAC','Estadísticas Helicópteros Personales'],actions:['view','print','export']},
  {id:'saldos',name:'Alerta de saldos',areas:['Estudiantes','Clientes'],actions:['view','edit','print','export']}
 ];
@@ -273,6 +309,8 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
+
 
 
 

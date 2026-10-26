@@ -90,7 +90,8 @@ function studentById(school,id){const s=list(school.students).find(s=>s.id===id)
 function courseById(student,id){const c=list(student.courses).find(c=>c.id===id);if(!c)throw Error('No se encontró el curso.');return c;}
 async function change(mutator){
  if(busy)throw Error('Espera a que termine el guardado.');busy=true;
- try{const next=structuredClone(previewData),school=structuredClone(data());mutator(school);next.school=school;
+ // data() derives stages for display. Never persist those derived values on unrelated students.
+ try{const next=structuredClone(previewData),school=structuredClone({...data(),students:list(previewData.school?.students)});mutator(school);next.school=school;
   if(!await commitPreview(next))throw Error('No se pudo guardar. Se conserva la información anterior.');
   render();decorateRates();renderPayments();window.Registro?.refresh();
  }finally{busy=false;}
@@ -119,7 +120,7 @@ function bindNationality(dialog){
  input.addEventListener('blur',()=>{const matches=matchingCountries(input.value);if(matches.length===1&&countrySearch(matches[0].name)===countrySearch(input.value))input.value=matches[0].name;close();});
 }
 
-function dateField(name,label,value='',required=false){return '<label>'+label+'<input name="'+name+'" placeholder="DD/MM/AAAA" value="'+esc(fechaVista(value))+'"'+(required?' required':'')+'></label>';}
+function dateField(name,label,value='',required=false){return '<label>'+label+'<input name="'+name+'" placeholder="DD/MM/AAAA" value="'+esc(fechaVista(value))+'"'+(required?' required':' data-preserve-empty')+'></label>';}
 function input(name,label,value='',type='text',extra=''){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+extra+'></label>';}
 function amountField(name,label,value=0){return input(name,label,numeric(value),'number','min="0" max="999999999.99" step="0.01" required');}
 function errorDate(form,names){for(const [key,required]of names)if(!validDate(form[key],required))throw Error('Revisa la fecha: usa DD/MM/AAAA.');}
@@ -127,19 +128,26 @@ function modal(title,body,onSave,afterOpen){
  if(activeDialog)return;
  const dialog=document.createElement('dialog');dialog.className='record-dialog school-dialog';
  dialog.innerHTML='<form><h3>'+esc(title)+'</h3><div class="school-form">'+body+'</div><p class="record-error" role="alert"></p><div class="record-actions"><button type="button" class="record-btn" data-close>Cancelar</button><button type="submit" class="save-btn">Guardar</button></div></form>';
- document.body.appendChild(dialog);activeDialog=dialog;let dirty=false,saving=false;
+ document.body.appendChild(dialog);activeDialog=dialog;let dirty=false,saving=false,draft=null;
  dialog.addEventListener('input',()=>{dirty=true;dialog.dataset.dirty='1';});dialog.addEventListener('change',()=>{dirty=true;dialog.dataset.dirty='1';});
  function canClose(){return !saving&&(!dirty||window.confirm('¿Descartar los cambios de este formulario?'));}
  dialog.querySelector('[data-close]').onclick=()=>{if(canClose())dialog.close();};
  dialog.addEventListener('cancel',e=>{if(!canClose())e.preventDefault();});
- dialog.addEventListener('close',()=>{dialog.remove();activeDialog=null;});
+ dialog.addEventListener('close',()=>{draft?.clear();dialog.remove();activeDialog=null;});
  dialog.querySelector('form').onsubmit=async event=>{
   event.preventDefault();if(saving)return;saving=true;dialog.querySelector('[type="submit"]').disabled=true;
   try{const fields=Object.fromEntries(new FormData(event.target));await onSave(fields,event.target);dirty=false;dialog.close();}
   catch(e){dialog.querySelector('.record-error').textContent=e.message||'No se pudo completar la operación.';}
   finally{saving=false;if(dialog.isConnected)dialog.querySelector('[type="submit"]').disabled=false;}
  };
- dialog.showModal();setupDates();if(afterOpen)afterOpen(dialog);
+ dialog.showModal();setupDates();if(afterOpen)afterOpen(dialog);draft=dialog.paymentDraft||null;
+ const personal=['Registrar personal','Editar expediente de personal','Editar estudiante','Nuevo estudiante','Agregar cliente','Crear piloto','Editar expediente de piloto','Licencias y habilitaciones','Certificado médico'];
+ if(personal.includes(title)){
+  const page=document.querySelector('.aircraft-panel.active')?.id||'';
+  const context=page==='panel-empresa'?window.personnelDraftContext?.():page.includes('piloto')?window.pilotDraftContext?.():selected||'new';
+  draft=window.DraftRecovery?.form('form:'+page+':'+context+':'+title,dialog.querySelector('form'),title);
+ }
+
 }
 const STUDENT_CREDENTIALS=['Privado','Comercial','IFR','Multi-Motor','Instructor','RPA (Drone)'];
 function studentCredentialsForm(s){return '<h4 class="school-form-section">Certificado médico</h4><label>Clase<select name="medicalClass"><option value="">Sin registrar</option>'+options(['Primera','Segunda','Tercera'],s.medicalClass||'')+'</select></label><label>Fecha de expiración · MM/AAAA<div style="display:flex;gap:6px"><input name="medicalExpiryMonth" placeholder="MM/AAAA" inputmode="numeric" pattern="(0[1-9]|1[0-2])/[0-9]{4}" value="'+esc(s.medicalExpiry?String(s.medicalExpiry).slice(5,7)+'/'+String(s.medicalExpiry).slice(0,4):'')+'"><button type="button" class="record-btn" data-student-month-toggle aria-label="Abrir calendario" aria-expanded="false">▦</button></div><div data-student-month-panel hidden style="padding:12px;border:1px solid #a9c6e2;border-radius:6px"><div class="school-row"><button type="button" data-student-month-prev aria-label="Año anterior">‹</button><b data-student-month-year></b><button type="button" data-student-month-next aria-label="Año siguiente">›</button></div><div data-student-month-options style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div></div></label><fieldset class="school-full"><legend>Licencias y habilitaciones obtenidas</legend><div class="school-checks">'+STUDENT_CREDENTIALS.map(v=>'<label class="school-check"><input type="checkbox" name="obtainedCredential" value="'+esc(v)+'" '+(list(s.obtainedCredentials).includes(v)?'checked':'')+'>'+esc(v)+'</label>').join('')+'</div></fieldset>';}
@@ -152,9 +160,10 @@ function studentPersonalValues(fields){
 function studentInfoItem(label,value){
  return '<div class="school-info-item"><strong class="school-info-label">'+esc(label)+':</strong> <span class="school-info-value">'+esc(value??'')+'</span></div>';
 }
+const STUDENT_PRINT_EXCLUDED=new Set(['Etapa','Financiamiento','Cursos de interés','Culminación','Cursos culminados','Motivo del retiro','Certificado médico · clase','Certificado médico · expiración','Licencias y habilitaciones obtenidas','Observaciones','Quién lo recomienda']);
 function studentPersonalHtml(s,printing=false){
  const values=[['Nombre completo',s.name],['Cédula o pasaporte',s.identity],['Fecha de nacimiento',fechaVista(s.birthDate||'')],['Edad (años)',personAge(s.birthDate)],['Peso (lb)',s.peso],['Estatura (m)',s.estatura?Number(s.estatura).toFixed(2):''],['Nacionalidad',s.nationality],['Dirección',s.address],['Celular',s.phone],['Teléfono residencial',s.residentialPhone],['Correo electrónico',s.email],['Contacto de emergencia',s.emergencyName],['Celular de emergencia',s.emergencyPhone],['Nombre del padre',s.fatherName],['Nombre de la madre',s.motherName],['Colegio de procedencia',s.previousSchool],['Ingreso al sistema',fechaVista(s.createdDate||'')],['Fecha de matrícula',fechaVista(s.enrolledDate||'')],['Etapa',s.stage],['Financiamiento',s.funding],['Cursos de interés',list(s.interests).map(k=>COURSES[k]?.name||k).join(', ')],['Culminación',fechaVista(s.completedDate||'')],['Cursos culminados',list(s.completedCourses).map(c=>COURSES[c.type]?.name||c.name).join(', ')],['Motivo del retiro',s.withdrawalReason],['Certificado médico · clase',s.medicalClass],['Certificado médico · expiración',s.medicalExpiry?String(s.medicalExpiry).slice(5,7)+'/'+String(s.medicalExpiry).slice(0,4):''],['Licencias y habilitaciones obtenidas',list(s.obtainedCredentials).join(', ')],['Observaciones',s.notes],['Quién lo recomienda',s.referredBy]];
- const ordered=printing?[...values.filter(([label])=>label!=='Nombre completo'&&label!=='Ingreso al sistema'&&label!=='Quién lo recomienda'),['Quién lo recomienda',s.referredBy]]:values;
+ const ordered=printing?values.filter(([label])=>label!=='Nombre completo'&&label!=='Ingreso al sistema'&&!STUDENT_PRINT_EXCLUDED.has(label)):values;
  return ordered.map(([label,value])=>studentInfoItem(label,value)).join('');
 }
 function editStudent(id){
@@ -249,7 +258,7 @@ async function printSchoolHtml(html,kind=''){
  document.getElementById('school-print-sheet')?.remove();const sheet=document.createElement('section');sheet.id='school-print-sheet';sheet.className=kind;sheet.innerHTML=html;document.body.appendChild(sheet);document.body.classList.add('school-printing');
  const cleanup=()=>{document.body.classList.remove('school-printing');sheet.remove();};window.addEventListener('afterprint',cleanup,{once:true});try{await Promise.all([...sheet.querySelectorAll('img')].map(img=>img.decode().catch(()=>{})));window.print();}catch(e){cleanup();throw Error('No se pudo abrir la impresión.');}
 }
-function blankRegistrationHtml(){const labels=['Nombre completo','Cédula o pasaporte','Fecha de nacimiento','Nacionalidad','Dirección','Celular','Teléfono residencial','Correo electrónico','Contacto de emergencia · nombre','Contacto de emergencia · celular','Nombre del padre','Nombre de la madre','Colegio de procedencia','Ingreso al sistema','Fecha de matrícula','Etapa','Financiamiento','Cursos de interés','Culminación','Cursos culminados','Motivo del retiro','Observaciones','Quién lo recomienda'];return '<div class="school-print-heading"><h1>HP Flight School</h1><h2>Formulario de registro</h2></div><div class="school-blank-fields">'+labels.map(label=>'<div class="school-blank-row"><strong>'+esc(label)+':</strong><span></span></div>').join('')+'<div class="school-blank-row"><strong>Firma del estudiante:</strong><span></span></div></div>';}
+function blankRegistrationHtml(){const labels=['Nombre completo','Cédula o pasaporte','Fecha de nacimiento','Nacionalidad','Dirección','Celular','Teléfono residencial','Correo electrónico','Contacto de emergencia · nombre','Contacto de emergencia · celular','Nombre del padre','Nombre de la madre','Colegio de procedencia','Ingreso al sistema','Fecha de matrícula','Etapa','Financiamiento','Cursos de interés','Culminación','Cursos culminados','Motivo del retiro','Observaciones','Quién lo recomienda'];return '<div class="school-print-heading"><h1>HP Flight School</h1><h2>Formulario de registro</h2></div><div class="school-blank-fields">'+labels.filter(label=>!STUDENT_PRINT_EXCLUDED.has(label)).map(label=>'<div class="school-blank-row"><strong>'+esc(label)+':</strong><span></span></div>').join('')+'<div class="school-blank-row"><strong>Firma del estudiante:</strong><span></span></div></div>';}
 function showStatement(sid){showStatementRecord(()=>studentById(data(),sid));}
 function showStatementRecord(getRecord){
  const s=getRecord(),dialog=document.createElement('dialog');dialog.className='record-dialog school-statement-dialog';const actions='<div class="school-actions school-statement-actions"><button type="button" class="record-btn" data-print>Imprimir / guardar PDF</button><button type="button" class="record-btn" data-close>Cerrar</button></div>';dialog.innerHTML=actions+statementHtml(s)+actions;document.body.appendChild(dialog);dialog.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dialog.close());dialog.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printSchoolHtml(statementHtml(getRecord()),'school-statement-print'));dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();dialog.scrollTop=0;
@@ -391,7 +400,7 @@ function studentPrintHtml(student){
 async function printStudent(id){
  const student=studentById(data(),id);
  document.getElementById('school-print-sheet')?.remove();
- const sheet=document.createElement('section');sheet.id='school-print-sheet';sheet.innerHTML=studentPrintHtml(student);
+ const sheet=document.createElement('section');sheet.id='school-print-sheet';sheet.className='school-personal-print';sheet.innerHTML=studentPrintHtml(student);
  document.body.appendChild(sheet);document.body.classList.add('school-printing');
  const cleanup=()=>{document.body.classList.remove('school-printing');sheet.remove();};
  window.addEventListener('afterprint',cleanup,{once:true});
@@ -447,7 +456,7 @@ const tab=document.createElement('div');tab.className='aircraft-tab';tab.innerHT
 tab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');render();});
 function render(){
  const school=data();
- if(window.ROLE_VIEW?.ownStatement){const s=school.students[0]|| (school.registry?.clients?.[0]?clientStatement(school.registry.clients[0]):null);panel.innerHTML='<div class="aircraft-reg" style="font-size:20px;margin-bottom:16px">MI ESTADO DE CUENTA</div><section class="card" style="padding:18px" data-permission-page="estudiantes" data-permission-box="account" data-box-name="Estado de cuenta y abonos">'+(s?statementHtml(s):'<p>No hay un expediente vinculado a tu correo verificado. Solicita al Director revisar el correo del expediente.</p>')+'</section>';return;}
+ if(window.ROLE_VIEW?.ownStatement){const s=school.students[0]|| (school.registry?.clients?.[0]?clientStatement(school.registry.clients[0]):null);panel.innerHTML='<div class="aircraft-reg" style="font-size:20px;margin-bottom:16px">MI ESTADO DE CUENTA</div><section class="card" style="padding:18px" data-permission-page="estudiantes" data-permission-box="account" data-box-name="Estado de cuenta y abonos">'+(s?'<div class="school-actions"><button type="button" class="record-btn" data-own-statement-print>Imprimir / guardar PDF</button></div>'+statementHtml(s):'<p>No hay un expediente vinculado a tu correo verificado. Solicita al Director revisar el correo del expediente.</p>')+'</section>';const print=panel.querySelector('[data-own-statement-print]');if(print)print.onclick=()=>printSchoolHtml(statementHtml(s),'school-statement-print');return;}
  panel.innerHTML='<div class="school-header"><div><div class="aircraft-reg" style="font-size:20px">ESTUDIANTES / CLIENTES</div><p class="school-muted">HP Flight School · Seguimiento académico y financiero</p></div>'+'<div class="school-actions">'+button('Imprimir formulario en blanco','blank-registration')+button('+ Nuevo estudiante','new-student')+'</div></div><div class="school-nav">'+[['students','Estudiantes'],['clients','Clientes'],['rates','Tarifas de aeronaves'],['course-rates','Tarifas de servicios'],['intakes','Próximos cursos y correos']].map(([key,label])=>'<button class="record-btn" data-action="view" data-view="'+key+'" aria-pressed="'+(view===key)+'">'+label+'</button>').join('')+'</div><div id="school-content"></div>';
  const body=panel.querySelector('#school-content');
  if(view==='clients'){body.innerHTML=clientsHtml();return;}
@@ -456,11 +465,11 @@ function render(){
  if(view==='intakes'){renderIntakes(body,school);return;}
  body.innerHTML='<div class="school-workspace"><aside class="card school-directory"><label>Buscar estudiante<input id="school-search" type="search" value="'+esc(query)+'" placeholder="Nombre, cédula, correo o celular"></label><label>Etapa<select id="school-stage"><option value="">Todas</option>'+options(STAGES,stageFilter)+'</select></label><div id="school-student-list"></div></aside><div id="school-student-profile"></div></div>';
  body.querySelector('#school-search').oninput=e=>{query=e.target.value;renderDirectory();};body.querySelector('#school-stage').onchange=e=>{stageFilter=e.target.value;renderDirectory();};renderDirectory();
- const s=school.students.find(s=>s.id===selected);body.querySelector('#school-student-profile').innerHTML=s?profileHtml(s):'<div class="card school-empty"><h3>Expediente del estudiante</h3><p>Selecciona un estudiante o registra al primer interesado.</p><p>Cursos, pagos, horas y licencias se guardan en su expediente.</p></div>';
+ const s=school.students.find(s=>s.id===selected&&(!s.directoryKind||s.directoryKind==='student'));body.querySelector('#school-student-profile').innerHTML=s?profileHtml(s):'<div class="card school-empty"><h3>Expediente del estudiante</h3><p>Selecciona un estudiante o registra al primer interesado.</p><p>Cursos, pagos, horas y licencias se guardan en su expediente.</p></div>';
 }
 function renderDirectory(){
  const element=panel.querySelector('#school-student-list');if(!element)return;
- const students=data().students.filter(s=>(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
+ const students=data().students.filter(s=>(!s.directoryKind||s.directoryKind==='student')&&(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
  element.innerHTML='<p class="school-muted">'+students.length+' estudiantes / clientes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('');
 }
 function renderIntakes(body,school){
@@ -606,7 +615,7 @@ function showReceipt(id){
  document.body.appendChild(dialog);dialog.querySelector('[data-receipt-close]').onclick=()=>dialog.close();dialog.querySelector('[data-receipt-print]').onclick=()=>printSchoolHtml(receiptHtml(r,receiptStatus(r)),'school-receipt-print');dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();dialog.scrollTop=0;
 }
 function openPayment(key,defaultFee='',defaultCourse=''){
- const person=receiptPerson(data(),key),id=uid(),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
+ let id=uid();const person=receiptPerson(data(),key),names=[...Object.values(PAYMENT_CONCEPTS),...list(data().services).map(s=>s.name)];
  modal('Crear abono · '+person.record.name,'<div class="school-full" data-payment-lines></div><button type="button" class="record-btn" data-add-payment-line>+ Agregar servicio / curso</button><p class="school-full"><b>Total del abono: <span data-payment-total>$0.00</span></b></p><datalist id="payment-services">'+[...new Set(names)].map(name=>'<option value="'+esc(name)+'"></option>').join('')+'</datalist>'+dateField('date','Fecha del pago',today(),true)+'<label>Método de pago<select name="method" required>'+options(PAYMENT_METHODS,'Efectivo')+'</select></label><label>Origen de fondos<select name="source">'+options(SOURCES,'Propio')+'</select></label>'+input('reference','Número de transferencia / referencia','','text','maxlength="120"')+input('bank','Banco / entidad','','text','list="payment-banks" maxlength="120" placeholder="Seleccionar o escribir"')+'<datalist id="payment-banks">'+PAYMENT_BANKS.map(bank=>'<option value="'+esc(bank)+'"></option>').join('')+'</datalist>'+input('payer','Pagado por',person.record.name,'text','maxlength="160"')+'<label>Recibido por<select name="receivedByUid" required>'+paymentReceivers().map(user=>'<option value="'+esc(user.uid)+'">'+esc(user.label||'Usuario autorizado · registrar nombre')+'</option>').join('')+'</select></label>'+(paymentReceivers().some(user=>!user.label)?input('receiverName','Nombre del usuario que recibe','','text','required maxlength="160"'): '')+'<label class="school-full">Foto del comprobante (opcional)<input type="file" name="proof" accept="image/jpeg,image/png,image/webp"></label><label class="school-full">Observaciones<textarea name="note" maxlength="1000"></textarea></label>',async(f,form)=>{
   f.allocations=[...form.querySelectorAll('[data-payment-line]')].map(row=>({serviceName:row.querySelector('[name="serviceName"]').value,amount:row.querySelector('[name="amount"]').value,targetCourse:row.querySelector('[name="targetCourse"]').value}));
   const attachment=await paymentPhoto(form.querySelector('[name="proof"]').files[0]);
@@ -628,6 +637,12 @@ function openPayment(key,defaultFee='',defaultCourse=''){
   };
   dialog.querySelector('[data-add-payment-line]').onclick=()=>addLine();addLine(true);
   const refresh=()=>{dialog.querySelector('[name="reference"]').required=['ACH','Yappy'].includes(dialog.querySelector('[name="method"]').value);};dialog.querySelector('[name="method"]').onchange=refresh;refresh();
+  dialog.paymentDraft=window.DraftRecovery?.bind('payment:'+key+':'+defaultFee+':'+defaultCourse,dialog.querySelector('form'),()=>({fields:DraftRecovery.fields(dialog),id,count:container.children.length}),draft=>{
+   container.replaceChildren();for(let i=0;i<Math.min(draft.count,100);i++)addLine();
+   DraftRecovery.applyFields(dialog,draft.fields);id=draft.id;total();refresh();
+   const note=document.createElement('p');note.textContent='Revisa el abono y vuelve a adjuntar la foto del comprobante si corresponde. Aún no se ha registrado ningún pago.';dialog.querySelector('form').append(note);
+  },'Abono de '+person.record.name);
+
  });
 }
 
@@ -695,13 +710,19 @@ function renderPayments(){
 }
 
 renderPayments();
-window.School={modal,money,verifyDeletionKey:correctDeletionKey,courseName:type=>COURSES[type]?.name||type,refresh:()=>{render();decorateRates();renderPayments();},decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
+function openSearchTarget(target){
+ if(target.kind==='student'){if(!data().students.some(s=>s.id===target.id))return;view='students';query='';stageFilter='';selected=target.id;render();document.getElementById('school-student-profile')?.scrollIntoView({block:'start'});}
+ if(target.kind==='client'){if(!list(data().registry?.clients).some(c=>c.id===target.id))return;view='clients';render();const b=[...panel.querySelectorAll('[data-client]')].find(e=>e.dataset.client===target.id);b?.closest('.card')?.scrollIntoView({block:'center'});}
+ if(target.kind==='receipt'){const receipt=list(data().paymentReceipts).find(r=>r.id===target.id);if(!receipt)return;paymentSelection=receipt.personKey;renderPayments();const details=paymentPanel.querySelector('.payment-history');if(details)details.open=true;[...paymentPanel.querySelectorAll('[data-receipt]')].find(e=>e.dataset.receipt===target.id)?.click();}
+}
+window.School={openSearchTarget,modal,money,verifyDeletionKey:correctDeletionKey,courseName:type=>COURSES[type]?.name||type,refresh:()=>{render();decorateRates();renderPayments();},decorateAircraftPanel,hasDraft:()=>!!activeDialog?.dataset.dirty};
 const oldDraft=window.hasDraftChanges;window.hasDraftChanges=()=>!!oldDraft?.()||window.School.hasDraft();
 window.addEventListener('beforeunload',event=>{if(busy||window.School.hasDraft()){event.preventDefault();event.returnValue='';}});
 render();decorateRates();window.STUDENTS_READY=true;
 // Pure functions exposed for deterministic local verification; no student data is exported.
 window.School.math={lowBalanceStudents,resolvePaymentService,recordReceipt,receiptHtml,paymentService,cents,courseSummary,paymentTotal,flightTotal,hoursTotal,twoMonthsBefore,noticeRows};
 })();
+
 
 
 

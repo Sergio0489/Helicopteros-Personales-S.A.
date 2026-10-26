@@ -82,7 +82,7 @@ function updateUndoButtons(){
   fleet.forEach((ac,idx)=>{const b=document.getElementById('undo-btn-'+idx);if(b)b.disabled=!aircraftDirty.has(idx)&&!(previewData.undoFleet[aircraftKey(ac.reg)]||[]).length;});
 }
 async function commitPreview(next){
- try{PilotValidity.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
+ try{window.HPCompany?.validateChanges(previewData,arguments[0]);window.HPSchoolInformation?.validateChanges(previewData,arguments[0]);PilotValidity.validateChanges(previewData,arguments[0]);window.HPSchoolCertificates?.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
 
  try{await window.cloudWrite(next);previewData=structuredClone(next);return true;}
  catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
@@ -131,7 +131,17 @@ async function loadAllFromFirebase() {
 }
 
 async function savePilotos() {
-  if (db) {const ok=await db.ref('pilotos').set(pilotosData);if(ok)window.PilotDossiers?.refresh();return ok;}
+  if (db) {
+    const ok=await db.ref('pilotos').set(pilotosData);
+    if(ok){
+      renderPilotos();
+      updatePilotDropdown();
+      buildResumen();
+      window.PilotDossiers?.refresh();
+      window.Registro?.refresh();
+    }
+    return ok;
+  }
 }
 
 const fleet = [
@@ -156,11 +166,11 @@ function loadData(reg) { return null; }
 function defaultAc(ac) {
   return {
     status: "",
-    serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "2000", limite_helice: "2000", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
+    serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "", limite_helice: "", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
     horas_totales: "", horas_limite: "", fecha_50: "", fecha_100: "",
     ciclos_totales: "", ciclos_limite: "",
-    helice1_ciclos: "", helice1_limite: "2000", fecha_helice1: "",
-    helice2_ciclos: "", helice2_limite: "2000", fecha_helice2: "",
+    helice1_ciclos: "", helice1_limite: "", fecha_helice1: "",
+    helice2_ciclos: "", helice2_limite: "", fecha_helice2: "",
     horas_desde_revision: "", horas_hasta_revision: "", estatus_nota: "",
     mantenimiento: [
       { nombre: "", fecha: "", resuelto: false, piezas: [] },
@@ -192,7 +202,7 @@ function pct(v, l) {
   if (!n || !lim) return null;
   return Math.min(100, Math.round(n / lim * 100));
 }
-// Vencimiento bar helpers (shows remaining hours, green < 70% used, red >= 70%)
+// Hour indicators use the configured component limit.
 function updateHorasWarning(input,limit) {
   if(!input)return;
   const value=Number(input.value||0);
@@ -206,28 +216,37 @@ function setFechaHoy(elemId) {
   if (el) el.textContent = fechaVista(panamaISO());
 }
 
+// Shared by aircraft bars, Pendientes and itinerary warnings. Never invent a limit.
+function vencHoursLevel(hv, limit) {
+  if(hv==='' || hv==null || !Number.isFinite(Number(hv)) || !(Number(limit)>0) || !Number.isFinite(Number(limit)))return 'empty';
+  const used=Number(hv),max=Number(limit);
+  return used>=max?'danger':used>=max*.8?'warn':'ok';
+}
 function vencBarPct(hv, limit) {
-  if(!parseFloat(limit)) return 0;
-  const v = parseFloat(hv), l = parseFloat(limit) || 2000;
-  if (!v) return 0; // empty bar if no data
-  return Math.min(100, Math.round(v / l * 100)); // shows USED %
+  if(vencHoursLevel(hv,limit)==='empty')return 0;
+  return Math.max(0,Math.min(100,Math.round(Number(hv)/Number(limit)*100)));
 }
 function vencBarCls(hv, limit) {
-  const v = parseFloat(hv), l = parseFloat(limit) || 2000;
-  if (!v) return 'fill-ok';
-  const remaining = (l - v) / l * 100; // % remaining
-  return remaining <= 20 ? 'fill-danger' : 'fill-ok';
+  return 'fill-'+vencHoursLevel(hv,limit);
 }
 function vencBarLabel(hv, limit) {
-  if(!parseFloat(limit)) return 'Límite pendiente de confirmar';
-  const v = parseFloat(hv), l = parseFloat(limit) || 2000;
-  if (!v) return '—';
-  const rem = (l - v).toFixed(2);
-  const used = Math.round(v / l * 100);
-  return parseFloat(rem) > 0 ? `Quedan ${rem} HV (${100-used}%)` : 'VENCIDO';
+  if(!(Number(limit)>0)||!Number.isFinite(Number(limit)))return 'Límite pendiente de confirmar';
+  if(vencHoursLevel(hv,limit)==='empty')return '—';
+  const rem=Number(limit)-Number(hv),used=Math.round(Number(hv)/Number(limit)*100);
+  return rem>0?`Quedan ${rem.toFixed(2)} HV (${100-used}%)`:'VENCIDO';
+}
+function aircraftHourAlerts(reg,d) {
+  return vencimientoSnapshot(reg,d).map(c=>({...c,level:vencHoursLevel(c.total,c.limite)}))
+    .filter(c=>c.level==='warn'||c.level==='danger');
+}
+// Configuration notices belong in Pendientes, not in expiration calculations.
+function aircraftHourConfigurationAlerts(reg,d) {
+  return vencimientoSnapshot(reg,d)
+    .filter(c=>c.total!==null && (!(c.limite>0) || !Number.isFinite(c.limite)))
+    .map(c=>({...c,level:'info'}));
 }
 function updateVencBar(tipo, idx, val, limit) {
-  if(isMultimotor(fleet[idx].reg)) limit=state[idx][VENC_FIELD_MAP[tipo].limiteField];
+  limit=state[idx][VENC_FIELD_MAP[tipo].limiteField];
   const tipoId = tipo === 'motor' ? 'motor' : (tipo === 'helices' ? 'helices' : tipo);
   const pb = document.getElementById('pb-' + tipoId + '-' + idx);
   const pct = document.getElementById('pct-' + tipoId + '-' + idx);
@@ -1145,8 +1164,8 @@ function getLimite(tipo, idx) {
 function updateLimiteVenc(tipo, idx, val) {
   const d = state[idx];
   const map = VENC_FIELD_MAP[tipo];
-  const l = parseFloat(val) || 2000;
-  d[map.limiteField] = l.toString();
+  const l = Number(val);
+  d[map.limiteField] = Number.isFinite(l)&&l>0 ? String(l) : '';
   updateVencBar(tipo, idx, d[map.dataField], l);
 }
 
@@ -2000,37 +2019,12 @@ function buildResumen() {
       if(days!==null&&days<=DAYS_WARN)addAlert('🚨 Equipos de Emergencia',reg,name,days<0?'VENCIDO':`Vence en ${days} días`,dateAlertLevel(days),days);
     });
 
-    // Motor (horas) - warn when <= 20% remaining (>= 80% used of 2000)
-    if (d.ciclos_totales) {
-      const pctUsed = parseFloat(d.ciclos_totales) / 2000 * 100;
-      if (pctUsed >= 80) {
-        const rem = (2000 - parseFloat(d.ciclos_totales)).toFixed(2);
-        addAlert('⚙️ Vencimientos en Horas', reg, reg === 'HP-880BL' ? 'Motor izquierdo' : 'Motor', `Quedan ${rem} HV (${Math.round(100-pctUsed)}%)`, 'danger');
-      }
+    for(const c of aircraftHourAlerts(reg,d)){
+      addAlert('⚙️ Vencimientos en Horas',reg,c.label,vencBarLabel(c.total,c.limite),c.level);
     }
 
-    // Helices / Motor 2 (horas)
-    if (d.ciclos_limite) {
-      const pctUsed = parseFloat(d.ciclos_limite) / 2000 * 100;
-      if (pctUsed >= 80) {
-        const rem = (2000 - parseFloat(d.ciclos_limite)).toFixed(2);
-        addAlert('⚙️ Vencimientos en Horas', reg, reg === 'HP-880BL' ? 'Motor derecho' : 'Hélices', `Quedan ${rem} HV (${Math.round(100-pctUsed)}%)`, 'danger');
-      }
-    }
-
-    // Helice 1 / Helice 2 (HP-880BL)
-    if (reg === 'HP-880BL') {
-      ['helice1','helice2'].forEach((tipo, i) => {
-        const val = d[tipo + '_ciclos'];
-        const limite = parseFloat(d[tipo + '_limite'] || 2000);
-        if (val) {
-          const pctUsed = parseFloat(val) / limite * 100;
-          if (pctUsed >= 80) {
-            const rem = (limite - parseFloat(val)).toFixed(2);
-            addAlert('⚙️ Vencimientos en Horas', reg, 'Hélice ' + (i+1), `Quedan ${rem} HV (${Math.round(100-pctUsed)}%)`, 'danger');
-          }
-        }
-      });
+    for(const c of aircraftHourConfigurationAlerts(reg,d)){
+      addAlert('ℹ️ Configuración de mantenimiento',reg,c.label,'Límite pendiente de configurar','info');
     }
 
     // Include every applicable inspection warning, including the yellow threshold.
@@ -2062,6 +2056,9 @@ function buildResumen() {
 
   pilotosData.forEach(p=>PilotValidity.alerts(p).filter(a=>a.level!=='ok').forEach(a=>addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,a.label,a.expired?'VENCIDO':`Vence en ${a.days} días`,a.level,a.days)));
 
+  for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.charter?.certificates,undefined,window.HPCompany?.value(previewData.school))||[])addAlert('🚁 Certificados de HP CHARTER','HP CHARTER',certificate.name,certificate.label,certificate.level,certificate.days);
+  for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.certificates,undefined,previewData.school?.information)||[])addAlert('🎓 Certificados de escuela','HP FLIGHT SCHOOL',certificate.name,certificate.label,certificate.level,certificate.days);
+
   // Render - grouped by aircraft registration
   if (Object.keys(sections).length === 0) {
     container.innerHTML = `<div style="text-align:center;padding:40px 0;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ok)">Sin tareas registradas. Los datos faltantes requieren revisión.</div>`;
@@ -2083,20 +2080,21 @@ function buildResumen() {
   });
   const allItems=Object.values(byReg).flat();
   const urgent=allItems.filter(item=>item.type==='danger').length;
-  let html=`<div class="pending-overview"><div><strong>${allItems.length}</strong><span>Alertas totales</span></div><div class="pending-urgent"><strong>${urgent}</strong><span>Prioridad alta</span></div><div class="pending-upcoming"><strong>${allItems.length-urgent}</strong><span>Avisos próximos</span></div></div><div class="pendientes-grid">`;
+  const configuration=allItems.filter(item=>item.type==='info').length;
+  let html=`<div class="pending-overview"><div><strong>${allItems.length}</strong><span>Alertas totales</span></div><div class="pending-urgent"><strong>${urgent}</strong><span>Prioridad alta</span></div><div class="pending-upcoming"><strong>${allItems.length-urgent-configuration}</strong><span>Avisos próximos</span></div>${configuration?`<div class="pending-configuration"><strong>${configuration}</strong><span>Configuración pendiente</span></div>`:''}</div><div class="pendientes-grid">`;
   sortedRegs.forEach(reg=>{
-    const items=byReg[reg],total=items.length,isPilotoGroup=reg.includes('VIGENCIA');
+    const items=byReg[reg],total=items.length,isPilotoGroup=reg.includes('VIGENCIA'),isSchoolGroup=reg==='HP FLIGHT SCHOOL';
     const regLabel=isPilotoGroup
       ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent2)">${escapeRecord(reg)}</span>`
       : `<span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent)">${escapeRecord(reg)}</span>`;
-    html+=`<div class="pending-uniform-card" data-alert-kind="${isPilotoGroup?'pilots':'aircraft'}"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
+    html+=`<div class="pending-uniform-card" data-alert-kind="${isPilotoGroup?'pilots':isSchoolGroup?'school':reg==='HP CHARTER'?'charter':'aircraft'}"><div class="divider-label pending-card-heading">${regLabel}<span style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(204,17,34,0.1);color:var(--danger);padding:2px 6px;border-radius:8px">${total} pendiente${total>1?'s':''}</span></div><div class="card pending-card-scroll" tabindex="0" role="region" aria-label="Alertas de ${escapeRecord(reg)}">`;
     items.forEach(item=>{
-      const color=item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
-      const bg=item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';
+      const color=item.type==='info'?'var(--accent)':item.type==='danger'?'var(--danger)':item.type==='orange'?'var(--orange)':'var(--warn)';
+      const bg=item.type==='info'?'rgba(0,89,179,.08)':item.type==='danger'?'rgba(255,0,40,.13)':item.type==='orange'?'#ffb268':'var(--signal-yellow)';
       const rowLabel=isPilotoGroup
         ? `<div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${escapeRecord(item.reg)}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px">${escapeRecord(item.item)}</div>`
         : `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${escapeRecord(item.cat)}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text);margin-top:2px">${escapeRecord(item.item)}</div>`;
-      html+=`<div class="alert-row" style="background:${bg}"><div>${rowLabel}</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:${color};font-weight:700;white-space:nowrap">${escapeRecord(item.detail)}</span></div>`;
+      html+=`<div class="alert-row" data-alert-level="${item.type}" style="background:${bg}"><div>${rowLabel}</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:${color};font-weight:700;white-space:nowrap">${escapeRecord(item.detail)}</span></div>`;
     });
     html+='</div></div>';
   });
@@ -2515,11 +2513,8 @@ function getAircraftWarnings(reg, flightDate=panamaISO()) {
   if (acum100 >= 100) warnings.push({ level: 'danger', msg: `🔧 INSP. 100 HRS VENCIDA (${acum100.toFixed(2)} HV)` });
   else if (acum100 >= 90) warnings.push({ level: 'warn', msg: `⚠️ Insp. 100 hrs próxima (${acum100.toFixed(2)}/100 HV)` });
 
-  for(const [key,label] of vencimientoComponents(reg)){
-    const map=VENC_FIELD_MAP[key],hours=Number(d[map.dataField]||0),limit=Number(d[map.limiteField]);
-    if(!(limit>0))continue;
-    if(hours>=limit)warnings.push({level:'danger',msg:label+' VENCIDO ('+hours.toFixed(2)+' / '+limit+' HV)'});
-    else if(hours>=limit*.8)warnings.push({level:'warn',msg:label+' próximo ('+hours.toFixed(2)+' / '+limit+' HV)'});
+  for(const c of aircraftHourAlerts(reg,d)){
+    warnings.push({level:c.level,msg:c.label+(c.level==='danger'?' VENCIDO':' próximo')+' ('+c.total.toFixed(2)+' / '+c.limite+' HV)'});
   }
   emergencyAlerts(d).forEach(([label,date])=>{
     const days=daysUntil(date);
@@ -3014,7 +3009,11 @@ document.addEventListener('click',async event=>{
   if(!active)return;const idx=Number(active.id.slice(6));
   if(tab.dataset.idx===String(idx))return;
   const key=aircraftKey(fleet[idx].reg);
-  const changed=aircraftDirty.has(idx)||JSON.stringify(decodeAircraft(state[idx]))!==JSON.stringify({...defaultAc(fleet[idx]),...decodeAircraft(previewData.fleet[key])});
+  // Restricted views normalize/redact previewData after building the panels.
+  // Those differences are not user edits and must never trigger a write on navigation.
+  const changed=window.ROLE_VIEW
+    ? window.ROLE_VIEW.editable&&aircraftDirty.has(idx)
+    : aircraftDirty.has(idx)||JSON.stringify(decodeAircraft(state[idx]))!==JSON.stringify({...defaultAc(fleet[idx]),...decodeAircraft(previewData.fleet[key])});
   if(changed){event.preventDefault();event.stopImmediatePropagation();if(await savePanel(idx)){confirmedNavigation=true;try{tab.click();}finally{confirmedNavigation=false;}}}
 },true);
 updateUndoButtons();
@@ -3025,8 +3024,17 @@ let panelSavePending=false;
 async function savePanel(idx){
  if(panelSavePending)return false;
  panelSavePending=true;
- try{return await savePanelInternal(idx);}catch(e){showCloudError(e);return false;}finally{panelSavePending=false;}
+ try{window.DraftRecovery?.capture('aircraft:'+fleet[idx].reg);const ok=await savePanelInternal(idx);if(ok)await window.DraftRecovery?.clear('aircraft:'+fleet[idx].reg);return ok;}catch(e){showCloudError(e);return false;}finally{panelSavePending=false;}
 }
+window.installAircraftDrafts=()=>{
+ const install=()=>fleet.forEach((ac,idx)=>{
+  const root=document.getElementById('panel-'+idx);if(!root)return;
+  window.DraftRecovery?.bind('aircraft:'+ac.reg,root,()=>({state:structuredClone(state[idx]),fields:DraftRecovery.fields(root)}),draft=>{
+   state[idx]=structuredClone(draft.state);const replacement=buildPanel(ac,state[idx],idx);replacement.className=root.className;root.replaceWith(replacement);refreshPanel(idx);setupDates();
+   DraftRecovery.applyFields(replacement,draft.fields);aircraftDirty.add(idx);updateTAC(idx);updateSummary();buildResumen();updateUndoButtons();
+  },ac.reg);
+ });install();new MutationObserver(install).observe(contentEl,{childList:true,subtree:true});
+};
 window.hasDraftChanges=()=>aircraftDirty.size>0;
 window.exportCurrentData=()=>exportPreview();
 
@@ -3426,3 +3434,4 @@ document.getElementById('flight-student')?.addEventListener('keydown',event=>{co
 setInterval(()=>{if(!document.hidden){buildResumen();updatePilotDropdown();window.PilotDossiers?.refresh();}},30000);
 
 function personAge(birthDate,at=panamaISO()){const born=isoFecha(birthDate);if(!Number.isFinite(dayNumber(born))||born>at)return '';const years=Number(at.slice(0,4))-Number(born.slice(0,4))-(at.slice(5)<born.slice(5)?1:0);return years;}
+

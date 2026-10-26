@@ -6,13 +6,14 @@ const pick=(v,keys)=>Object.fromEntries(keys.split(' ').filter(k=>v?.[k]!==undef
 // Only domain fields enter the view. Accounts, user profiles, roles and backups never do.
 function nativeView(data,account,policy,page){
  if(!visiblePages(policy).some(p=>p.id===page))throw Error('No tienes permiso para consultar esta página.');
+ data=require('./company').project(data);
  const areas=policy[page].areas,has=a=>areas[a]===true,s=data.school||{};
  const out={fleet:{},pilotos:[],itinerarios:[],undoFleet:{},school:{version:1,students:[],rates:{},intakes:[],registry:{clients:[],entries:[]}}};
  const students=list(s.students).filter(p=>account.role!=='Estudiante'||(account.syncStatus==='matched'&&account.recordKind==='student'&&p.id===account.recordId));
  const clients=list(s.registry?.clients).filter(p=>account.role!=='Estudiante'||(account.syncStatus==='matched'&&account.recordKind==='client'&&p.id===account.recordId));
  const ids=new Set([...students.map(p=>'student:'+p.id),...clients.map(p=>'client:'+p.id)]);
  const entries=list(s.registry?.entries).filter(e=>account.role!=='Estudiante'||ids.has(e.personKind+':'+e.personId));
- const personKeys='peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
+ const personKeys='directoryKind peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
  const moneyKeys='expenses extraPayments registryFlights deletedCourses';
  const courseKeys='id type status state startDate endDate licenseDate licenseNumber createdAt';
  const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 voidedAt deletedAt createdAt';
@@ -38,7 +39,7 @@ function nativeView(data,account,policy,page){
   const personal=page==='estudiantes'&&has('Datos personales'),finance=page==='saldos'||has('Estado de cuenta y abonos'),courses=page==='estudiantes'&&has('Cursos y licencias'),hours=page==='estudiantes'&&has('Horas registradas');
   if(page==='saldos')out.school.balanceAlertDismissals=Object.fromEntries(Object.entries(s.balanceAlertDismissals||{}).filter(([key])=>ids.has(key)));
   const project=p=>{
-   const q=pick(p,personal?personKeys:finance?'id name identity':'id name stage phone');q.courses=[];
+   const q=pick(p,personal?personKeys:finance?'id name identity directoryKind':'id name stage phone directoryKind');q.courses=[];
    if(finance)Object.assign(q,pick(p,moneyKeys));
    if(hours&&!finance)q.registryFlights=list(p.registryFlights).map(f=>pick(f,'id date aircraft equipment hours100 kind fee note voidedAt'));
    if(finance||courses||hours)q.courses=list(p.courses).map(c=>({...pick(c,courseKeys),payments:finance?copy(list(c.payments)):[],flights:finance?copy(list(c.flights)):hours?list(c.flights).map(f=>pick(f,'id date aircraft equipment hours100 kind fee note voidedAt')):[],...(finance?pick(c,'budgets tutoriaEnabled'): {})}));
@@ -58,9 +59,12 @@ function nativeView(data,account,policy,page){
   out.school.paymentReceipts=receipts.map(r=>({...pick(r,'id personKey date number'),...(has('Abonos y recibos')?pick(r,'personName identity totalCents method bank reference receivedBy source voidedAt'):{}),...(has('Movimientos de pago')?pick(r,'lines'):{}),...(has('Comprobantes de transferencia')?pick(r,'attachment'): {})}));
   out.school.students=students.map(p=>({...pick(p,'id name'),courses:has('Movimientos de pago')?list(p.courses).map(c=>({...pick(c,'id type'),payments:copy(list(c.payments)),flights:[]})):[],...(has('Movimientos de pago')?pick(p,'extraPayments'): {})}));out.school.registry.clients=clients.map(p=>pick(p,has('Movimientos de pago')?'id name extraPayments':'id name'));
  }
- if(page==='escuela'){if(has('Cursos y fechas'))out.school.intakes=copy(list(s.intakes));if(has('Tarifas de servicios'))out.school.courseRates=copy(s.courseRates||{});}
+ if(page==='charter'){out.school.charter={};if(has('Información de la empresa')&&s.charter?.information)out.school.charter.information=copy(s.charter.information);if(has('Documentos y vencimientos')){out.school.charter.certificates=copy(s.charter?.certificates||{});out.school.charter.information ||= {};const info=require('./company').value(s);out.school.charter.information.certificates=info.certificates;out.school.charter.information.certificatesEmpty=info.certificatesEmpty||false;}if(has('Personal de la empresa'))out.school.personnel=copy(list(s.personnel));}
+ if(page==='escuela'){if(has('Información y documentos')&&s.information)out.school.information=copy(s.information);if(has('Información y documentos'))out.school.certificates=copy(s.certificates||{});if(has('Cursos y fechas'))out.school.intakes=copy(list(s.intakes));if(has('Tarifas de servicios'))out.school.courseRates=copy(s.courseRates||{});}
 
  if(page==='pendientes'){
+  if(has('Alertas de HP CHARTER')){const c=s.charter||{},info=require('./company').value(s);out.school.charter={certificates:copy(c.certificates||{}),information:{certificates:info.certificates,certificatesEmpty:info.certificatesEmpty||false}};}
+  if(has('Alertas de escuela')){out.school.certificates=copy(s.certificates||{});if(s.information)out.school.information={certificates:copy(s.information.certificates||[]),certificatesEmpty:s.information.certificatesEmpty||false};}
   if(has('Alertas de aeronaves')){
    const records=v=>Array.isArray(v)?v:v&&typeof v==='object'?Object.keys(v).sort().map(k=>v[k]):[];
    const hourFields='ciclos_totales ciclos_limite limite_motor limite_helice helice1_ciclos helice2_ciclos helice1_limite helice2_limite proxima_inspeccion horas_acum_50 horas_acum_100 horas_totales horas_limite';
@@ -79,8 +83,9 @@ function nativeView(data,account,policy,page){
    out.pilotos=list(data.pilotos).map(p=>({...pick(p,'nombre licencia instructorExpiry rpaInstructorExpiry medico charter escuela'),verificaciones:list(p.verificaciones).map(v=>pick(v,'nombre fecha'))}));
  }
 
- return {data:out,areas,notice:page==='pendientes'&&!has('Alertas de aeronaves')&&(!has('Alertas de pilotos')||account.role==='Estudiante')?'No hay una fuente de alertas disponible para las categorías autorizadas en este cargo.':null};
+ return {data:out,areas,schoolCertificates:true,notice:page==='pendientes'&&!has('Alertas de aeronaves')&&(!has('Alertas de pilotos')||account.role==='Estudiante')&&!has('Alertas de escuela')&&!has('Alertas de HP CHARTER')?'No hay una fuente de alertas disponible para las categorías autorizadas en este cargo.':null};
 }
 module.exports={nativeView};
+
 
 
