@@ -327,10 +327,10 @@ function componentInfoMultimotor(kind, data, idx) {
       return `<div style="margin-top:8px">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:6px">${kind === 'motor' ? 'MOTOR' : 'HÉLICE'} ${side === 'izq' && kind === 'helice' ? 'IZQUIERDA' : side === 'der' && kind === 'helice' ? 'DERECHA' : name}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-        ${[['fabricante','FABRICANTE'],['modelo','MODELO'],['serie','NO. SERIE']].map(([field,label]) => {
+        ${[['fabricante','FABRICANTE'],['modelo','MODELO'],['serie','N.º DE SERIE']].map(([field,label]) => {
           const key = kind + '_' + field + (side === 'der' ? '_der' : '');
           const initial = field === 'serie' ? data[kind + '_serie_' + side] : data[key];
-          return `<div><div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">${label}</div><input type="text" class="field-input" id="${key}-${idx}" aria-label="${kind === 'motor' ? 'Motor' : 'Hélice'} ${side === 'izq' ? 'izquierdo' : 'derecho'} ${label.toLowerCase()}" value="${escapeAttr(initial)}" placeholder="${label === 'NO. SERIE' ? 'No. Serie' : label}" style="width:100%;font-size:11px"></div>`;
+          return `<div><div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">${label}</div><input type="text" class="field-input" id="${key}-${idx}" aria-label="${kind === 'motor' ? 'Motor' : 'Hélice'} ${side === 'izq' ? 'izquierdo' : 'derecho'} ${label.toLowerCase()}" value="${escapeAttr(initial)}" placeholder="${label === 'N.º DE SERIE' ? 'N.º de serie' : label}" style="width:100%;font-size:11px"></div>`;
         }).join('')}
         </div>
       </div>`;
@@ -353,7 +353,7 @@ function buildPanel(ac, data, idx) {
           <button class="save-btn" id="undo-btn-${idx}" style="padding:8px 12px;background:var(--panel2);color:var(--accent);box-shadow:none;border:1px solid var(--border)" onclick="undoAircraft(${idx})" title="Deshacer últimos cambios" aria-label="Deshacer últimos cambios" disabled>↶</button>
           <span class="save-msg" style="margin-left:0" id="save-msg-${idx}" aria-live="polite">✓ Guardado</span>
         </div>
-        <div class="aircraft-model-line">${ac.model} ${ac.type === 'rotor' ? '· Helicóptero' : '· Ala Fija'}</div>
+        <div class="aircraft-model-line">${ac.model} ${ac.type === 'rotor' ? '· Helicóptero' : '· Ala fija'}</div>
       </div>
       <div class="status-select-wrap">
         <select class="status-select" id="status-${idx}" onchange="onStatusChange(${idx},this.value)">
@@ -365,7 +365,7 @@ function buildPanel(ac, data, idx) {
         <!-- Aeronave info grid -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
           <div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">NO. SERIE</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">N.º DE SERIE</div>
             <input type="text" class="field-input" id="serial-${idx}" value="${data.serial||''}" placeholder="Ej: 12345" style="width:100%;font-size:11px">
           </div>
           <div>
@@ -391,8 +391,8 @@ function buildPanel(ac, data, idx) {
               <input type="text" class="field-input" id="motor_modelo-${idx}" value="${data.motor_modelo||''}" placeholder="Ej: O-360" style="width:100%;font-size:11px">
             </div>
             <div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">NO. SERIE</div>
-              <input type="text" class="field-input" id="motor_serie-${idx}" value="${data.motor_serie||''}" placeholder="No. Serie" style="width:100%;font-size:11px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">N.º DE SERIE</div>
+              <input type="text" class="field-input" id="motor_serie-${idx}" value="${data.motor_serie||''}" placeholder="N.º de serie" style="width:100%;font-size:11px">
             </div>
           </div>
         </div>
@@ -411,8 +411,8 @@ function buildPanel(ac, data, idx) {
               <input type="text" class="field-input" id="helice_modelo-${idx}" value="${data.helice_modelo||''}" placeholder="Ej: HC-C2YK" style="width:100%;font-size:11px">
             </div>
             <div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">NO. SERIE</div>
-              <input type="text" class="field-input" id="helice_serie-${idx}" value="${data.helice_serie||''}" placeholder="No. Serie" style="width:100%;font-size:11px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">N.º DE SERIE</div>
+              <input type="text" class="field-input" id="helice_serie-${idx}" value="${data.helice_serie||''}" placeholder="N.º de serie" style="width:100%;font-size:11px">
             </div>
           </div>
         </div>
@@ -420,10 +420,10 @@ function buildPanel(ac, data, idx) {
       </div>
     </div>
 
-    <div class="divider-label">⏱ Horas de Vuelo & Ciclos</div>
+    <div class="divider-label">⏱ Horas de vuelo y ciclos</div>
     <div class="section-grid">
       <div class="card">
-        <div class="card-title">✈ Inspección 50 / 100 Horas</div>
+        <div class="card-title">✈ Inspección de 50 / 100 horas</div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
@@ -444,14 +444,14 @@ function buildPanel(ac, data, idx) {
         </div>
         <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px">
           <div class="field-row" style="margin-bottom:2px">
-            <span class="field-label">Acum. 50 hrs</span>
+            <span class="field-label">Acum. 50 h</span>
             <div><input type="number" class="field-input" id="edit-acum50-${idx}" min="0" max="99999.99" step="0.01" aria-label="Horas acumuladas de 50 horas" value="${parseFloat(data.horas_acum_50||0).toFixed(2)}" oninput="editInspectionHours(${idx},this)" style="width:100px"><span class="field-unit"> HV</span><span id="acum50-${idx}" hidden>${parseFloat(data.horas_acum_50||0).toFixed(2)} HV</span></div>
           </div>
           <div class="progress-bar" style="margin-bottom:8px">
             <div id="pb-50-${idx}" class="progress-fill ${inspectionFill(data.horas_acum_50, 50)}" style="width:${Math.min(100,parseFloat(data.horas_acum_50||0)/50*100)}%"></div>
           </div>
           <div class="field-row" style="margin-bottom:2px">
-            <span class="field-label">Acum. 100 hrs</span>
+            <span class="field-label">Acum. 100 h</span>
             <span style="font-family:'Orbitron',sans-serif;font-size:13px;color:var(--text)" id="acum100-${idx}">${parseFloat(data.horas_acum_100||0).toFixed(2)} HV</span>
           </div>
           <div class="progress-bar">
@@ -551,8 +551,8 @@ function buildPanel(ac, data, idx) {
         <div class="card-title">🔧 Pendientes de Taller</div>
         <div style="display:grid;grid-template-columns:1fr 150px 60px auto auto;gap:8px;border-bottom:1px solid var(--dim);padding-bottom:6px;margin-bottom:4px">
           <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">TAREA</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">FECHA INICIO</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">INSTRUCTOR RPA</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">FECHA DE INICIO</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">DÍAS</span>
           <span></span>
           <span></span>
         </div>
@@ -645,7 +645,7 @@ function arrangeAircraftHeader(panel){
 
 function arrangeAircraftCards(panel) {
   const sections = [
-    ['inspection', 'Inspección 50 / 100 Horas'],
+    ['inspection', 'Inspección de 50 / 100 horas'],
     ['flight', 'Bitácora de Horas de Vuelo'],
     ['venc', 'Vencimientos en Horas'],
     ['status', 'Estatus'],
@@ -793,7 +793,7 @@ function renderMaintList(idx, items) {
       const pedidaExtra = isPedida ? `
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;padding-left:8px;margin-top:4px">
           <div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:2px">FECHA PEDIDO</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:2px">FECHA DE PEDIDO</div>
             <input type="date" class="maint-input" value="${p.fecha_pedido||''}" style="font-size:10px;width:100%" onchange="updatePieza(${idx},${mi},${pi},'fecha_pedido',this.value);renderSeguimiento(${idx})">
           </div>
           <div>
@@ -1623,7 +1623,7 @@ fleet.forEach((ac, idx) => {
   renderTACLogs(idx);
 });
 
-// Build Vigencia Pilotos panel
+// Build Vigencia de pilotos panel
 const pilotosPanel = document.createElement('div');
 pilotosPanel.className = 'aircraft-panel';
 pilotosPanel.id = 'panel-pilotos';
@@ -1644,7 +1644,7 @@ pilotosPanel.innerHTML = `
       <span style="font-size:9px;color:var(--muted)">INSTRUCTOR RPA</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">CERT. MÉDICO</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE ESCUELA</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE CHARTERS</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE CHÁRTER</span>
       <span></span>
     </div>
     <div id="pilotos-list"></div>
@@ -1696,7 +1696,7 @@ function renderPilotos(){
   const name='<input type="text" class="maint-input" placeholder="Nombre del piloto" value="'+escapeRecord(p.nombre||'')+'" onchange="pilotosData['+i+'].nombre=this.value;savePilotos()">';
   const remove='<button onclick="eliminarPiloto('+i+')" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:0">✕</button>';
   const row=document.createElement('div');
-  const sections=[['Instructor de vuelo',direct('instructorExpiry')],['Instructor RPA',direct('rpaInstructorExpiry')],['Certificado médico',direct('medico')],['Verificaciones de escuela',verificationColumn('instruction')],['Verificaciones de Charters',verificationColumn('charter')+legacy+pending]];
+  const sections=[['Instructor de vuelo',direct('instructorExpiry')],['Instructor de RPA',direct('rpaInstructorExpiry')],['Certificado médico',direct('medico')],['Verificaciones de escuela',verificationColumn('instruction')],['Verificaciones de chárter',verificationColumn('charter')+legacy+pending]];
   if(mobile){row.className='pilot-vigency-card';row.innerHTML='<div class="school-row">'+name+remove+'</div>'+sections.map(([label,html])=>'<section><small>'+label+'</small>'+html+'</section>').join('');}
   else{row.className='pilot-vigency-row';row.style='display:grid;grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,1.2fr)) repeat(2,minmax(0,1.45fr)) 18px;gap:4px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border);min-width:0;width:100%';row.innerHTML=name+sections.map(([label,html],j)=>'<div class="'+(j===3?'pilot-school-verifications':j===4?'pilot-charter-verifications':'')+'">'+html+'</div>').join('')+remove;}
   container.appendChild(row);
@@ -2054,7 +2054,7 @@ function buildResumen() {
     });
   });
 
-  pilotosData.forEach(p=>PilotValidity.alerts(p).filter(a=>a.level!=='ok').forEach(a=>addAlert('👨‍✈️ Vigencia Pilotos',p.nombre,a.label,a.expired?'VENCIDO':`Vence en ${a.days} días`,a.level,a.days)));
+  pilotosData.forEach(p=>PilotValidity.alerts(p).filter(a=>a.level!=='ok').forEach(a=>addAlert('👨‍✈️ Vigencia de pilotos',p.nombre,a.label,a.expired?'VENCIDO':`Vence en ${a.days} días`,a.level,a.days)));
 
   for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.charter?.certificates,undefined,window.HPCompany?.value(previewData.school))||[])addAlert('🚁 Certificados de HP CHARTER','HP CHARTER',certificate.name,certificate.label,certificate.level,certificate.days);
   for(const certificate of window.HPSchoolCertificates?.alerts(previewData.school?.certificates,undefined,previewData.school?.information)||[])addAlert('🎓 Certificados de escuela','HP FLIGHT SCHOOL',certificate.name,certificate.label,certificate.level,certificate.days);
@@ -2067,7 +2067,7 @@ function buildResumen() {
 
   const byReg={};
   Object.entries(sections).forEach(([cat,items])=>items.forEach(item=>{
-    const key=cat.includes('Pilotos')?'👨‍✈️ VIGENCIA PILOTOS':item.reg;
+    const key=cat.toLocaleLowerCase('es').includes('pilotos')?'👨‍✈️ VIGENCIA DE PILOTOS':item.reg;
     (byReg[key]||=[]).push({...item,cat});
   }));
   const regOrder=fleet.map(ac=>ac.reg);
@@ -2172,7 +2172,7 @@ function resolverHoras(reg, item) {
 
 // Resolver doc — actualiza fecha y guarda
 function resolverDoc(reg, item, cat, newDate) {
-  if (!newDate) { alert('Por favor ingresa la nueva fecha de vencimiento.'); return; }
+  if (!newDate) { alert('Por favor, ingresa la nueva fecha de vencimiento.'); return; }
   const idx = fleet.findIndex(a => a.reg === reg);
 
   if (idx !== -1) {
@@ -2237,7 +2237,7 @@ adminHdr.className = 'sidebar-group-title';
 adminHdr.textContent = 'ADMINISTRATIVOS';
 sidebarEl.appendChild(adminHdr);
 
-// Vigencia Pilotos tab
+// Vigencia de pilotos tab
 const pilotosTab = document.createElement('div');
 pilotosTab.className = 'aircraft-tab';
 pilotosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">👨‍✈️ PILOTOS</div>';
@@ -2334,11 +2334,11 @@ itinerariosPanel.innerHTML = `
             <input type="date" id="flight-date" class="maint-input" style="font-size:11px">
           </div>
           <div class="form-field">
-            <label class="form-label">Hora Inicio</label>
+            <label class="form-label">Hora de inicio</label>
             <input type="time" id="flight-time-start" class="maint-input" style="font-size:11px">
           </div>
           <div class="form-field">
-            <label class="form-label">Hora Fin</label>
+            <label class="form-label">Hora de finalización</label>
             <input type="time" id="flight-time-end" class="maint-input" style="font-size:11px">
           </div>
           <div class="form-field">
@@ -2676,7 +2676,7 @@ function addFlight() {
   const estudiante = document.getElementById('flight-student').value.trim();
 
   if (!fecha || !Number.isFinite(dayNumber(fecha))) { alert('Ingresa una fecha válida.'); return; }
-  if (!horaInicio || !horaFin || timesToMinutes(horaFin)<=timesToMinutes(horaInicio)) { alert('Ingresa hora de inicio y fin. La hora de fin debe ser posterior, dentro del mismo día.'); return; }
+  if (!horaInicio || !horaFin || timesToMinutes(horaFin)<=timesToMinutes(horaInicio)) { alert('Ingresa las horas de inicio y finalización. La hora de fin debe ser posterior, dentro del mismo día.'); return; }
 
   // Validar conflicto de horario si hay aeronave asignada
   if (aeronave && horaInicio && horaFin) {

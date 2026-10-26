@@ -981,7 +981,7 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 </style><style>.permission-aircraft{margin:12px;padding:12px;border:1px solid #cbd5e1;border-radius:8px;min-width:0}.permission-aircraft legend{font-size:12px;font-weight:700}.permission-aircraft label{font-size:12px;display:flex;align-items:center;gap:6px}.permission-aircraft input{width:16px;height:16px;flex:none}.permission-aircraft small{display:block;margin-top:10px;line-height:1.4}</style>
 </head>
 <body>
-<section id="access-screen"><div class="access-card"><img class="login-company-logo" src="receipt-logo.svg" width="360" height="115" alt="Helicópteros Personales S.A."><form id="login-form" hidden><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button><button type="button" id="forgot-password">Olvidé mi contraseña</button><button type="button" id="create-account">Crear usuario</button></form><p id="access-message" role="status">Cargando tu sesión…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir dashboard</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
+<section id="access-screen"><div class="access-card"><img class="login-company-logo" src="receipt-logo.svg" width="360" height="115" alt="Helicópteros Personales S.A."><form id="login-form" hidden><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button><button type="button" id="forgot-password">Olvidé mi contraseña</button><button type="button" id="create-account">Crear usuario</button></form><p id="access-message" role="status">Cargando tu sesión…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir el panel</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
 <div id="cloud-busy" hidden role="status">Guardando en Firebase…</div>
 <div id="dashboard-app" hidden><div class="cloud-toolbar compact-cloud-toolbar"><div class="cloud-connection" id="cloud-connection" data-state="online"><span class="connection-dot" aria-hidden="true"></span><span id="preview-save" role="status">Conectado</span></div><details class="cloud-menu" id="cloud-menu"><summary aria-label="Opciones de conexión y cuenta" title="Opciones">⋮</summary><div class="cloud-menu-options"><button type="button" onclick="exportPreview();document.getElementById('cloud-menu').open=false">Descargar respaldo</button><button type="button" id="cloud-reload">Actualizar datos</button><button type="button" id="cloud-logout">Cerrar sesión</button></div></details><details class="cloud-menu profile-menu" id="profile-menu"><summary aria-label="Perfil de usuario"><img id="profile-avatar" alt="" hidden>👤 Perfil</summary><div class="cloud-menu-options"><button type="button" id="profile-edit">Mi perfil / Contraseña</button><button type="button" id="profile-roles">Roles y permisos</button><button type="button" id="profile-requests">Usuarios</button><button type="button" id="profile-logout">Cerrar sesión</button></div></details><div id="cloud-status-detail" role="alert" hidden></div></div>
 <header>
@@ -1004,7 +1004,7 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <div class="summary-bar">
   <div class="summary-item">
     <span class="summary-icon">✈</span>
-    <div><span class="summary-label">Flota Total</span><span class="summary-value c-accent" id="sum-total">10</span></div>
+    <div><span class="summary-label">Flota total</span><span class="summary-value c-accent" id="sum-total">10</span></div>
   </div>
   <div class="summary-item">
     <span class="summary-icon">🟢</span>
@@ -1012,7 +1012,7 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
   </div>
   <div class="summary-item">
     <span class="summary-icon">🔧</span>
-    <div><span class="summary-label">En Mantenimiento</span><span class="summary-value c-warn" id="sum-maint">—</span></div>
+    <div><span class="summary-label">En mantenimiento</span><span class="summary-value c-warn" id="sum-maint">—</span></div>
   </div>
   <div class="summary-item">
     <span class="summary-icon">🔴</span>
@@ -1045,11 +1045,11 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="home-search-model.js?v=20261021-hour-configuration-1"></script>
 <script src="home-ui.js?v=20261021-hour-configuration-1"></script>
 <script src="navigation-state.js?v=20261021-hour-configuration-1"></script>
-<script src="cloud.js?v=20261022-interesados-1"></script>
-<script src="role-main-view.js?v=20261021-hour-configuration-1"></script>
+<script src="cloud.js?v=20261026-ortografia-1"></script>
+<script src="role-main-view.js?v=20261026-ortografia-1"></script>
 <script src="role-portal.js?v=20261022-crm-browser-2"></script>
 <script src="registration.js?v=20261021-hour-configuration-1"></script>
-<script src="prospects-ui.js?v=20261023-crm-integration-1"></script>
+<script src="prospects-ui.js?v=20261026-ortografia-1"></script>
 <script src="audit-ui.js?v=20261020-audit-1"></script>
 <script src="account-profile.js?v=20261020-profile-output-1"></script>
 <script src="box-permissions-ui.js?v=20261020-profile-output-1"></script>
