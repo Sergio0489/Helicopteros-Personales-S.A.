@@ -291,14 +291,14 @@ function vencItemHtml(idx, label, fieldMapKey, manualInputId, value, limite, fec
             <span class="field-label">${label}</span>
             <div style="display:flex;align-items:center;gap:6px">
               <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">Total manual:</span>
-              <input type="number" class="field-input" id="${manualInputId}-${idx}" value="${v}" placeholder="0.0" step="0.1" style="width:75px;font-size:10px" oninput="establecerTotalVenc('${fieldMapKey}',${idx},this.value)">
+              <input type="number" class="field-input" id="${manualInputId}-${idx}" value="${v}" placeholder="0.00" min="0" step="0.01" inputmode="decimal" style="width:75px;font-size:10px" oninput="establecerTotalVenc('${fieldMapKey}',${idx},this.value)">
               <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">HV</span>
             </div>
           </div>
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-bottom:2px">
             <span style="font-family:'Orbitron',sans-serif;font-size:13px;color:var(--text)" id="acum-${fieldMapKey}-${idx}">${value!=='' && value!=null ? parseFloat(value).toFixed(2) : '—'}</span>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">/</span>
-            <input type="number" id="limite-${fieldMapKey}-${idx}" value="${limite??''}" placeholder="Pendiente" step="100" style="width:65px;font-family:'IBM Plex Mono',monospace;font-size:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--accent);text-align:center;padding:1px 4px" oninput="updateLimiteVenc('${fieldMapKey}',${idx},this.value)">
+            <input type="number" id="limite-${fieldMapKey}-${idx}" value="${limite??''}" placeholder="Pendiente" min="0" step="0.01" inputmode="decimal" style="width:65px;font-family:'IBM Plex Mono',monospace;font-size:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--accent);text-align:center;padding:1px 4px" oninput="updateLimiteVenc('${fieldMapKey}',${idx},this.value)">
             <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--accent)">HV</span>
           </div>
           <div class="progress-bar" style="margin-bottom:2px">
@@ -426,8 +426,8 @@ function buildPanel(ac, data, idx) {
         <div class="card-title">✈ Inspección de 50 / 100 horas</div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
-          <label class="field-label">TAC actual<input type="number" class="field-input" id="tac-actual-${idx}" aria-label="TAC actual" min="0" max="99999.99" step="0.01" placeholder="00000.00" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
+          <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
+          <label class="field-label">TAC actual<input type="number" class="field-input" id="tac-actual-${idx}" aria-label="TAC actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
         </div>
         <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">Ingresa ambos TAC para calcular las horas.</div>
         <div class="inspection-controls"><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,50)">✓ Resuelto · 50 horas</button><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,100)">✓ Resuelto · 100 horas</button></div>
@@ -435,7 +435,7 @@ function buildPanel(ac, data, idx) {
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
           <div style="display:flex;align-items:center;gap:6px">
-            <input type="number" class="field-input" id="horas_diarias-${idx}" value="${data.horas_diarias||''}" placeholder="0.0" step="0.1" style="width:80px">
+            <input type="number" class="field-input" id="horas_diarias-${idx}" value="${data.horas_diarias||''}" placeholder="0.00" min="0" step="0.01" inputmode="decimal" style="width:80px">
             <span class="field-unit">HV</span>
           </div>
         </div>
@@ -445,7 +445,7 @@ function buildPanel(ac, data, idx) {
         <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px">
           <div class="field-row" style="margin-bottom:2px">
             <span class="field-label">Acum. 50 h</span>
-            <div><input type="number" class="field-input" id="edit-acum50-${idx}" min="0" max="99999.99" step="0.01" aria-label="Horas acumuladas de 50 horas" value="${parseFloat(data.horas_acum_50||0).toFixed(2)}" oninput="editInspectionHours(${idx},this)" style="width:100px"><span class="field-unit"> HV</span><span id="acum50-${idx}" hidden>${parseFloat(data.horas_acum_50||0).toFixed(2)} HV</span></div>
+            <div><input type="number" class="field-input" id="edit-acum50-${idx}" min="0" max="99999.99" step="0.01" inputmode="decimal" aria-label="Horas acumuladas de 50 horas" value="${parseFloat(data.horas_acum_50||0).toFixed(2)}" oninput="editInspectionHours(${idx},this)" style="width:100px"><span class="field-unit"> HV</span><span id="acum50-${idx}" hidden>${parseFloat(data.horas_acum_50||0).toFixed(2)} HV</span></div>
           </div>
           <div class="progress-bar" style="margin-bottom:8px">
             <div id="pb-50-${idx}" class="progress-fill ${inspectionFill(data.horas_acum_50, 50)}" style="width:${Math.min(100,parseFloat(data.horas_acum_50||0)/50*100)}%"></div>
@@ -488,7 +488,7 @@ function buildPanel(ac, data, idx) {
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
           <div style="display:flex;align-items:center;gap:6px">
-            <input type="number" class="field-input" id="horas-venc-dia-${idx}" placeholder="0.0" step="0.1" style="width:80px">
+            <input type="number" class="field-input" id="horas-venc-dia-${idx}" placeholder="0.00" min="0" step="0.01" inputmode="decimal" style="width:80px">
             <span class="field-unit">HV</span>
           </div>
         </div>
@@ -724,7 +724,7 @@ function equipmentDates(d,key,min){
 function emergencyFieldsHtml(idx,d){
  return '<div class="emergency-equipment-grid">'+EMERGENCY_TYPES.map(([key,label,min])=>{
  const dates=equipmentDates(d,key,min),canAdd=true;
- return `<div class="equipment-column"><div class="field-label">${label}</div><div class="equipment-dates">${dates.map((value,j)=>`<div class="equipment-date"><label for="emerg-${key}-${idx}-${j}">${key==='botiquin'?'Vencimiento':'Unidad '+(j+1)}</label><input type="date" class="doc-date-input" data-equipment="${key}" id="emerg-${key}-${idx}-${j}" value="${value}" onchange="changeEmergencyDate(${idx},'${key}',${j},this)"><span class="emerg-badge">${docStatusBadge(value)}</span></div>`).join('')}</div>${canAdd?`<button type="button" class="add-row-btn" onclick="addEmergencyDate(${idx},'${key}')">+ Agregar fecha</button>`:''}</div>`;
+ return `<div class="equipment-column"><div class="field-label">${label}</div><div class="equipment-dates">${dates.map((value,j)=>`<div class="equipment-date"><label for="emerg-${key}-${idx}-${j}">${key==='botiquin'?'Vencimiento':'Unidad '+(j+1)}</label><input type="date" class="doc-date-input" data-equipment="${key}" data-preserve-empty data-default-today-on-open id="emerg-${key}-${idx}-${j}" value="${value}" onchange="changeEmergencyDate(${idx},'${key}',${j},this)"><span class="emerg-badge">${docStatusBadge(value)}</span></div>`).join('')}</div>${canAdd?`<button type="button" class="add-row-btn" onclick="addEmergencyDate(${idx},'${key}')">+ Agregar fecha</button>`:''}</div>`;
  }).join('')+'</div>';
 }
 function changeEmergencyDate(idx,key,j,input){
@@ -1290,7 +1290,7 @@ async function openRecordEditor(kind,idx,ri=-1,tipo=50){
  const d=state[idx],newInspection=kind==='inspection'&&ri===-1;
  const r=newInspection?{fecha:getFechaPanama(),tipo,tac:d.tac_anterior||'',proxima:tipo===50?100:50}:kind==='tac'?d.bitacora_tac[ri]:d.bitacora_inspecciones[ri];
  const dialog=document.createElement('dialog');dialog.className='record-dialog';
- dialog.innerHTML=`<form><h3>${newInspection?'Registrar inspección resuelta':kind==='tac'?'Modificar registro de TAC':'Modificar inspección'}</h3><div class="record-form"><label>Fecha<input name="fecha" value="${escapeRecord(r.fecha)}" placeholder="DD/MM/AAAA" required></label>${kind==='tac'?`<label>TAC anterior<input name="anterior" type="number" min="0" max="99999.99" step="0.01" value="${escapeRecord(r.anterior)}" required></label><label>TAC actual<input name="actual" type="number" min="0" max="99999.99" step="0.01" value="${escapeRecord(r.actual)}" required></label>`:`<label>Inspección realizada<select name="tipo"><option value="50" ${Number(r.tipo)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.tipo)===100?'selected':''}>100 horas</option></select></label><label>Tacómetro<input name="tac" type="number" min="0" max="99999.99" step="0.01" value="${escapeRecord(r.tac)}" required></label><label>Próxima inspección<select name="proxima"><option value="50" ${Number(r.proxima)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.proxima)===100?'selected':''}>100 horas</option></select></label>`}${!newInspection?'<label class="full-field">Motivo de la modificación<textarea name="razon" required placeholder="Explica por qué corriges este registro"></textarea></label>':''}</div><div class="record-error" role="alert"></div><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button class="save-btn" type="submit">Guardar registro</button></div></form>`;
+ dialog.innerHTML=`<form><h3>${newInspection?'Registrar inspección resuelta':kind==='tac'?'Modificar registro de TAC':'Modificar inspección'}</h3><div class="record-form"><label>Fecha<input name="fecha" value="${escapeRecord(r.fecha)}" placeholder="DD/MM/AAAA" required></label>${kind==='tac'?`<label>TAC anterior<input name="anterior" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.anterior)}" required></label><label>TAC actual<input name="actual" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.actual)}" required></label>`:`<label>Inspección realizada<select name="tipo"><option value="50" ${Number(r.tipo)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.tipo)===100?'selected':''}>100 horas</option></select></label><label>Tacómetro<input name="tac" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.tac)}" required></label><label>Próxima inspección<select name="proxima"><option value="50" ${Number(r.proxima)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.proxima)===100?'selected':''}>100 horas</option></select></label>`}${!newInspection?'<label class="full-field">Motivo de la modificación<textarea name="razon" required placeholder="Explica por qué corriges este registro"></textarea></label>':''}</div><div class="record-error" role="alert"></div><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button class="save-btn" type="submit">Guardar registro</button></div></form>`;
  document.body.appendChild(dialog);dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());
  dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const f=Object.fromEntries(new FormData(event.target));const error=await applyRecordChange(kind,idx,ri,f);if(error){dialog.querySelector('.record-error').textContent=error;return;}dialog.close();};dialog.showModal();
 }
@@ -2971,7 +2971,13 @@ function drawDatePicker(){
  datePicker.querySelector('input').onchange=update;datePicker.querySelector('select').onchange=update;positionDatePicker();
 }
 function openDatePicker(input){
- if(input.disabled||input.readOnly)return;closeDatePicker();dateInput=input;
+ if(input.disabled||input.readOnly)return;closeDatePicker();
+ if(input.hasAttribute('data-default-today-on-open')&&!valueDescriptor.get.call(input)){
+  input.value=panamaISO();
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+  input.dispatchEvent(new Event('change',{bubbles:true}));
+ }
+ dateInput=input;
  const raw=valueDescriptor.get.call(input);dateView=(Number.isFinite(dayNumber(raw))?isoFecha(raw):panamaISO()).slice(0,7);
  datePicker=document.createElement('div');datePicker.className='app-calendar';datePicker.id='app-date-calendar';datePicker.setAttribute('role','dialog');datePicker.setAttribute('aria-label','Elegir fecha');
  input.setAttribute('aria-expanded','true');input.setAttribute('aria-controls',datePicker.id);(input.closest('dialog')||document.body).appendChild(datePicker);
