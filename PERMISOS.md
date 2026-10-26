@@ -2,7 +2,7 @@
 
 El Director abre **Perfil → Roles y permisos**, selecciona el cargo y configura cada página y sus cuadros con nombre: Sin acceso, Solo ver, Ver y editar. Editar incluye ver y las operaciones de modificación del cuadro, conservando las confirmaciones existentes. La página limita el permiso de sus cuadros. Usuarios y asignación de cargos siguen reservados a Directores.
 
-El catálogo compartido (`functions/boxes.js`) identifica 56 tipos de cuadro en 13 páginas. Se aplica a todas las aeronaves y expedientes del cargo; Estudiante conserva acceso exclusivamente a su propio expediente vinculado. Los informes calculados son de consulta: se modifican sus registros de origen. Los permisos anteriores conservan la consulta, pero no conceden edición automáticamente.
+El catálogo compartido (`functions/boxes.js`) identifica 64 tipos de cuadro en 14 páginas. Se aplica a todas las aeronaves y expedientes del cargo; Estudiante conserva acceso exclusivamente a su propio expediente vinculado. Los informes calculados son de consulta: se modifican sus registros de origen. Los permisos anteriores conservan la consulta, pero no conceden edición automáticamente.
 
 Un guardado que afecta varios cuadros requiere permiso para todos los datos modificados. Ejemplos:
 
@@ -12,15 +12,17 @@ Un guardado que afecta varios cuadros requiere permiso para todos los datos modi
 
 ## Activación
 
+El código implementa estos permisos; su disponibilidad en producción debe comprobarse por separado. Una publicación de GitHub Pages no despliega Firebase. La guía de [registro de usuarios](REGISTRO-USUARIOS.md) detalla la asignación de cargos, las restricciones de seguridad y las pruebas pendientes con cuentas de ensayo.
+
 Primero publicar los archivos web en GitHub Pages y actualizar la función existente:
 
 ```sh
-cd ~/hp-registro
 git pull --ff-only origin main
-firebase deploy --only functions:accounts --project helicopteros-personales
+npm --prefix functions install
+firebase deploy --only functions:accounts:accountRegistration --project helicopteros-personales
 ```
 
-No hay cambios en las reglas de la base de datos. La nueva pantalla comprueba la capacidad del servidor antes de permitir guardar permisos. Si aún no se ha desplegado la función, muestra el aviso de actualización y conserva la configuración actual. Después del despliegue, actualizar la página, guardar los permisos deseados y actualizar la sesión de prueba.
+Ejecutar desde la raíz de una copia actualizada del repositorio. Este comando actualiza únicamente `accountRegistration`; no despliega las demás funciones del codebase ni las reglas de la base de datos. La pantalla comprueba la capacidad del servidor antes de permitir guardar permisos. Si aún no se ha desplegado la función compatible, muestra el aviso de actualización y conserva la configuración actual. Después del despliegue, actualizar la página, guardar los permisos deseados y actualizar la sesión de prueba.
 
 ## Implementación
 
