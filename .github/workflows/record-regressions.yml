@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   records:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm run test:privacy
+      - run: python3 tests/prospect-email-setup.py
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Use the runner's installed Chrome
+        shell: bash
+        run: |
+          hp_test_chrome="$(command -v google-chrome)"
+          test -x "$hp_test_chrome"
+          "$hp_test_chrome" --version
+          echo "CHROME_BIN=$hp_test_chrome" >> "$GITHUB_ENV"
       - run: npm run test:all
 
