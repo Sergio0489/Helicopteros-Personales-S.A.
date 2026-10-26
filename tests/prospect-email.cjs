@@ -10,6 +10,65 @@ const config={recipients:RECIPIENTS,host:'smtp.example.test',port:587,user:'test
 function memory(){const values=new Map();let fail=false;return {values,failReceipt(){fail=true;},ref(path){return {get:async()=>({val:()=>values.get(path)||null}),transaction:async fn=>{const next=fn(structuredClone(values.get(path)||null));if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(values.get(path)||null)}};if(fail&&next.status==='sent'){fail=false;throw Error('Database unavailable');}values.set(path,structuredClone(next));return {committed:true,snapshot:{val:()=>structuredClone(next)}};},set:async v=>{values.set(path,structuredClone(v));},update:async v=>{values.set(path,{...values.get(path),...v});}};}};}
 const options=(db,send,extra={})=>({db,event,from:config.from,recipients:RECIPIENTS,send,now:()=>now,...extra});
 
+// Realtime Database can invoke a transaction with null before its remote value
+// is cached. Returning undefined aborts locally without consulting the server.
+function coldMemory(){
+ const db=memory(),ref=db.ref;
+ db.ref=path=>{
+  const target=ref(path),transaction=target.transaction;
+  target.transaction=async(fn,...args)=>fn(null)===undefined
+   ?{committed:false,snapshot:{val:()=>null}}
+   :transaction(fn,...args);
+  return target;
+ };
+ return db;
+}
+
+test('cold transaction caches still persist both SMTP receipts and prevent duplicate sends',async()=>{
+ const db=coldMemory(),sent=[];
+ const send=async msg=>{sent.push(msg.to);return {accepted:[msg.to]};};
+ await mail.deliver(options(db,send));
+ assert.deepEqual([...db.values.values()].map(v=>v.status),['sent','sent']);
+ await mail.deliver(options(db,send));
+ assert.deepEqual(sent,RECIPIENTS);
+});
+test('cold transaction caches persist SMTP rejection and retry only temporary failures',async()=>{
+ const db=coldMemory(),sent=[];let temporary=true;
+ const send=async msg=>{
+  sent.push(msg.to);
+  if(msg.to===RECIPIENTS[0])throw {responseCode:550};
+  if(temporary){temporary=false;throw {responseCode:451};}
+  return {accepted:[msg.to]};
+ };
+ await assert.rejects(mail.deliver(options(db,send)),/reintento/);
+ assert.deepEqual([...db.values.values()].map(v=>v.status),['failed','retry']);
+ await mail.deliver(options(db,send));
+ assert.deepEqual([...db.values.values()].map(v=>v.status),['failed','sent']);
+ assert.deepEqual(sent,[...RECIPIENTS,RECIPIENTS[1]]);
+});
+test('receipt conflicts preserve another owner and are reported instead of silently succeeding',async()=>{
+ const db=coldMemory(),reports=[];
+ const send=async msg=>{
+  for(const [path,value] of db.values)db.values.set(path,{...value,token:'another-owner',status:'review',code:'delivery-interrupted'});
+  return {accepted:[msg.to]};
+ };
+ await assert.rejects(mail.deliver(options(db,send,{report:code=>reports.push(code)})),/registro de entrega/);
+ assert(reports.includes('delivery-receipt-conflict'));
+ assert([...db.values.values()].every(v=>v.token==='another-owner'&&v.status==='review'));
+});
+test('previously interrupted receipts remain for review without resending after a cold restart',async()=>{
+ const db=coldMemory(),sent=[];
+ const send=async msg=>{sent.push(msg.to);return {accepted:[msg.to]};};
+ await mail.deliver(options(db,send));
+ for(const [path,value] of db.values){
+  const {acceptedAt,code,...claim}=value;
+  db.values.set(path,{...claim,status:'sending'});
+ }
+ await mail.deliver(options(db,send,{now:()=>now+240001}));
+ assert.deepEqual(sent,RECIPIENTS);
+ assert([...db.values.values()].every(v=>v.status==='review'&&v.code==='delivery-interrupted'));
+});
+
 test('SMTP configuration requires encryption and never copies arbitrary transport options',()=>{
  const cfg=mail.configuration(JSON.stringify({...config,to:'outsider@example.test',ignoreTLS:true,tls:{rejectUnauthorized:false}}));
  assert.equal(cfg.transport.requireTLS,true);assert.equal(cfg.transport.secure,false);assert.equal(cfg.transport.tls.minVersion,'TLSv1.2');assert.equal(cfg.transport.tls.rejectUnauthorized,undefined);assert.equal(cfg.transport.to,undefined);assert.equal(cfg.transport.ignoreTLS,undefined);assert.equal(cfg.transport.debug,false);

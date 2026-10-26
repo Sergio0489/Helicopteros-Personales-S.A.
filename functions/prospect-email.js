@@ -86,7 +86,20 @@ async function deliver({db,event,from,recipients,send,now=()=>Date.now(),report=
    report(outcome.code,deliveryId);
   }
   // Keep DB errors outside the SMTP catch: a lost receipt must not cause a resend.
-  await ref.transaction(old=>old?.token===token?{...old,...outcome,updatedAt:now()}:undefined,undefined,false);
+  const finishedAt=now();
+  const finalized=await ref.transaction(old=>{
+   // A cold RTDB cache may supply null even though the claim exists remotely.
+   // Propose the receipt from our confirmed claim so RTDB reconciles with the
+   // server. Returning undefined here would abort before that reconciliation.
+   if(old===null)return {...state,...outcome,updatedAt:finishedAt};
+   if(old.token!==token||old.status!=='sending')return old;
+   return {...old,...outcome,updatedAt:finishedAt};
+  },undefined,false);
+  const saved=finalized.snapshot.val();
+  if(!finalized.committed||saved?.token!==token||saved.status!==outcome.status||saved.code!==outcome.code){
+   report('delivery-receipt-conflict',deliveryId);
+   throw Error('No se confirmó el registro de entrega del correo.');
+  }
  }
  if(retry)throw Error('Entrega de correo pendiente de reintento.');
 }
