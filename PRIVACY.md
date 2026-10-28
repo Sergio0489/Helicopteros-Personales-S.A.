@@ -17,7 +17,7 @@ El detector no acredita ausencia universal de datos personales: imágenes, PDFs,
 ## Historial y cachés: revisión del 19 de octubre de 2026
 
 - Introducción localizada: commit `2d9aaec58fc93e61fd5b97e2bb1533f3f4b3aa24`, archivo `school-info.js`, incorporado a `main` por el PR #7 y el merge `226da3cff89d09e68b0d24d7f5cf9941aa5a939d`.
-- Antes de la reescritura descrita abajo, la rama `feat/school-information-certificates` también conservaba el contenido anterior. Los commits y referencias/diffs antiguos de los PR requieren purga adicional de GitHub; un commit correctivo por sí solo no los borra.
+- Antes de la reescritura descrita abajo, la rama `feat/school-information-certificates` también conservaba el contenido anterior. En la revisión del 19 de octubre, los commits y referencias/diffs antiguos de los PR requerían purga adicional de GitHub; un commit correctivo por sí solo no los borra. El resultado de la comprobación posterior se registra abajo.
 - La API informó cero forks al revisar. Esto no permite saber si existen clones, descargas, capturas o copias externas.
 - El despliegue de Pages `39317283766` generó el artefacto `github-pages`, ID `12218587154`, asociado al commit anterior. La API lo indicó disponible, con vencimiento el 20/10/2026 a las 20:11:57 UTC. Posteriormente se eliminó con autorización específica del propietario; GitHub confirmó el borrado y la API del workflow devolvió una lista de artefactos vacía. No se descargó ni republicó su contenido.
 - La respuesta pública observada para el script anterior usa `Cache-Control: max-age=600`. Las nuevas URLs de carga de Director y de las vistas por cargo cambian de versión. El archivo en su ruta original también se reemplaza para que las URLs antiguas reciban el contenido corregido al revalidar.
@@ -35,16 +35,42 @@ El propietario autorizó la limpieza histórica. Se validó una reescritura limi
 
 La actualización de este documento agrega posteriormente un commit de seguimiento en main. Se inspeccionaron 1.219 objetos alcanzables desde las ramas remotas, sin coincidencias con los diez datos retirados; la prueba aislada que incluyó las referencias de los PR inspeccionó 1.220 objetos.
 
-**Pendiente en GitHub:** las referencias internas refs/pull/7/head y refs/pull/8/head todavía apuntan a los commits anteriores. El artefacto github-pages ID 12218587154 fue eliminado; la interfaz confirmó el borrado y la API devolvió cero artefactos para ese workflow. La verificación de GitHub Mobile se completó y la solicitud de purga se envió a GitHub Support. El portal confirmó el envío correcto; todavía no mostró un número de ticket en la lista de solicitudes. Se pidió retirar referencias y vistas de los PR #7 y #8, recolectar los objetos sensibles y revisar las cachés y el artefacto antiguo, sin reproducir los datos personales. El propietario confirmó específicamente el borrado irreversible y la eliminación directa del artefacto se completó. No se declara completada la eliminación de esas copias ni de las cachés internas.
+## Verificación histórica: 28 de octubre de 2026
+
+Se realizaron consultas de lectura a la API de GitHub del repositorio, usando únicamente identificadores y metadatos. No se descargaron archivos históricos, diffs, parches ni artefactos, ni se reprodujeron los datos personales retirados. El repositorio y las ramas saneadas fueron accesibles en la misma revisión; los 404 siguientes no corresponden a una indisponibilidad general del repositorio.
+
+Los endpoints de esta tabla son relativos a `https://api.github.com/repos/Sergio0489/Helicopteros-Personales-S.A.`.
+
+| Comprobación | Endpoint GET | Resultado verificado |
+| --- | --- | --- |
+| Referencia del PR #7 | `/git/ref/pull/7/head` | HTTP 404, Not Found. |
+| Referencia del PR #8 | `/git/ref/pull/8/head` | HTTP 404, Not Found. |
+| Lista de referencias de PR | `/git/matching-refs/pull/` | La respuesta contiene 18 referencias; no incluye referencias de los PR #7 ni #8. |
+| PR #7 | `/pulls/7` | HTTP 404, Not Found. |
+| PR #8 | `/pulls/8` | HTTP 404, Not Found. |
+| Objeto histórico de introducción | `/git/commits/2d9aaec58fc93e61fd5b97e2bb1533f3f4b3aa24` | HTTP 404; no recuperable mediante esta consulta. |
+| Objeto histórico del merge | `/git/commits/226da3cff89d09e68b0d24d7f5cf9941aa5a939d` | HTTP 404; no recuperable mediante esta consulta. |
+| Rama saneada de privacidad | `/git/ref/heads/fix/school-public-privacy` | Disponible; SHA `358665dbc7aa86972abc3e1fa88bc6dfab53f695`, coincide con el documentado. |
+| Rama saneada de información escolar | `/git/ref/heads/feat/school-information-certificates` | Disponible; SHA `7ed621289a28bbd187cad431c6104b6ca86d611f`, coincide con el documentado. |
+| Rama principal antes de esta actualización documental | `/git/ref/heads/main` | Disponible; SHA `489f7ae61d36550dff9b26cba5ac18177f162cc8`. El SHA de main del 19 de octubre es un registro histórico, no su punta actual. |
+| Artefactos del workflow antiguo | `/actions/runs/39317283766/artifacts` | `total_count: 0`, `artifacts: []`; confirma nuevamente la ausencia del artefacto en la lista de ese workflow. |
+
+**Comprobaciones completas:** la ausencia observable de las referencias y de los PR #7 y #8 en los endpoints consultados, la no recuperabilidad de los dos objetos identificados por la API Git, la coincidencia de las dos ramas saneadas y la lista vacía de artefactos del workflow antiguo. Las referencias de PR y el borrado directo del artefacto ya no se presentan como tareas pendientes. Los recuentos de objetos y las pruebas descritos en la sección del 19 de octubre corresponden a aquella revisión; no se repitió aquí un escaneo de todos los objetos.
+
+**Alcance de la conclusión:** estos resultados son compatibles con una limpieza posterior por GitHub, pero no identifican quién la ejecutó ni prueban una purga física completa. Un HTTP 404 acredita únicamente que el recurso no fue recuperable mediante la consulta realizada. No acredita la eliminación de todos los objetos derivados, referencias internas no expuestas, vistas en caché, réplicas, copias externas o cachés de dispositivos.
+
+**Sin confirmación de GitHub Support:** el registro del 19 de octubre indica que la solicitud de purga se envió correctamente después de completar la verificación de GitHub Mobile; entonces no se mostró un número de ticket. Esta revisión no accedió al portal de soporte ni a una respuesta del caso. Por tanto, no confirma su número, estado, resolución ni cierre, y tampoco supone que el caso siga abierto.
+
+Para cerrar la parte que depende de Support falta obtener o revisar su respuesta y confirmar el alcance de las acciones sobre referencias internas y vistas/diffs de los PR #7 y #8, recolección de los objetos sensibles y cachés internas asociadas al contenido y despliegue antiguos. Debe distinguirse esa confirmación del estado observable ya verificado: no se solicita de nuevo el borrado directo del artefacto ni se afirma que las referencias consultadas sigan presentes. Las copias de terceros y cachés de dispositivos ajenos no pueden darse por eliminadas mediante esa respuesta.
 
 Los colaboradores deben volver a clonar el repositorio o trasladar únicamente sus cambios revisados a una copia limpia. No deben fusionar ni volver a publicar ramas basadas en el historial anterior.
 
-Procedimiento aplicado y pasos de purga pendientes:
+Procedimiento de la limpieza del 19 de octubre (registro histórico; no es una lista de tareas aún pendientes):
 
 1. Coordinar una pausa de escrituras y revisar todas las ramas, tags y referencias de PR, incluido el PR de esta corrección, cuyo diff de eliminación también referencia la versión anterior.
 2. Preparar una copia de trabajo aislada y un reemplazo del contenido afectado con `git-filter-repo --sensitive-data-removal`, conservando el organigrama corregido en la versión vigente. Validar alcance, referencias cambiadas y regresiones antes de publicar. No guardar listas de valores sensibles en el repositorio.
 3. Obtener autorización explícita para reescribir las referencias afectadas con comprobación de sus SHA actuales. Los commits cambiarán de identificador y los clones/PR pueden requerir reparación. No desactivar protecciones de rama ni forzar cambios concurrentes sin autorización.
 4. Revisar y retirar los artefactos afectados que sigan disponibles. Coordinar la limpieza de clones. Solicitar a GitHub Support la eliminación de vistas en caché y referencias internas de PR que no se pueden purgar mediante un push normal.
-5. Verificar de nuevo el despliegue, las rutas públicas antiguas y nuevas, y el estado de la solicitud a soporte. No declarar borradas las copias de terceros ni las cachés de dispositivos ajenos.
+5. Verificar de nuevo el despliegue, las rutas públicas antiguas y nuevas, y el estado de la solicitud a soporte. La revisión del 28 de octubre se limita a los endpoints de la tabla: no repite la validación de Pages, las rutas públicas ni CI, y no confirma el estado del caso de soporte. No declarar borradas las copias de terceros ni las cachés de dispositivos ajenos.
 
 Referencia oficial: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository
