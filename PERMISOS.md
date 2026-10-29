@@ -62,3 +62,57 @@ La matriz incluye **Interesados y consultas → Contactos y consultas de Charter
 Antes de configurar por primera vez esta página se conservan las concesiones individuales por área. Una configuración explícita de la página sustituye esas concesiones: «Sin acceso» revoca también el acceso anterior. Guardar otra página sin modificar Interesados no migra ni revoca concesiones individuales. La interfaz no habilita este ajuste hasta que `accountRegistration` anuncie `prospectRolePermissions`.
 
 Publicar la web y desplegar `functions:accounts:accountRegistration`. Después, el Director configura el cargo Administrativo; los usuarios actualizan su página. No se concede acceso de producción automáticamente. El servidor consulta los permisos vigentes en cada solicitud y rechaza escrituras o exportaciones no autorizadas.
+
+### Revisión del CRM — 28/10/2026
+
+Se reprodujeron y corrigieron dos problemas de la interfaz con cuentas y datos
+ficticios, sin escribir en Firebase:
+
+- Cuando el servidor no anunciaba `prospectRolePermissions`, guardar otra página
+  eliminaba una configuración CRM existente. Eliminar un «Sin acceso» explícito
+  podía reactivar la concesión individual anterior. Ahora se conserva exactamente
+  la configuración CRM que no se está editando, también con un servidor anterior.
+- Exportar comprobaba el permiso actual, pero construía el CSV con los contactos
+  cargados anteriormente. Un contacto retirado del área podía aparecer todavía en
+  ese archivo. Ahora se consultan nuevamente todas las páginas con `export:true`
+  y se comprueba el alcance antes y después; un cambio de permisos cancela la
+  exportación y descarta los datos en pantalla. Actualizar o cargar otra página de
+  contactos también comprueba el alcance y descarta la vista anterior si falla.
+
+Las concesiones individuales siguen permitiendo consultar, editar y exportar su
+área. No ofrecen selectores independientes de edición/exportación; estos corresponden
+a la matriz por cargo. La política explícita de Administrativo abarca ambas áreas
+para todos los usuarios de ese cargo que cumplan los requisitos. No se deben usar
+cuentas ficticias en producción para probar una modificación global de esa política,
+pues también afectaría a administrativos reales.
+
+Las pruebas de navegador usan el manejador HTTP real y Auth/Database simulados.
+Comprueban Director, Administrativo general, concesiones de Charters y Escuela,
+Administrativo sin concesión, Piloto sin autorización y correo sin verificar;
+incluyen descargas CSV, guardados, revocaciones en sesiones abiertas y conservación
+de expedientes y cuentas. La matriz cubre además las 64 combinaciones de ver,
+editar y exportar en página/cuadro.
+
+Resultado local: **135 pruebas JavaScript aprobadas, 0 fallos y 0 omitidas**, con
+Node.js 22.23.4, Playwright 1.62.1 y Chromium 153; también pasaron las 3 pruebas
+Python de configuración del correo. `git diff --check` y la validación de sintaxis
+de los archivos web modificados pasaron. Esta ejecución es local; no constituye
+una nueva ejecución de GitHub Actions ni una validación de Firebase real.
+
+**Estado del despliegue:** se obtuvo `200 {"ready":true}` del endpoint publicado
+`accountregistration-wwcyznuvsa-uc.a.run.app`; la consulta anónima de capacidades
+respondió `401 {"error":"Inicia sesión."}`. Esto no acredita la capacidad CRM.
+Falta consultar `permission-capabilities` con una sesión vigente de Director y
+comprobar `version >= 7`, `prospectRolePermissions === true`, `outputPermissions`,
+`boxEditing` y `aircraftSchedule`. La consola de Google Cloud no estuvo accesible
+en el entorno de esta revisión; no se efectuó ningún despliegue ni se alteraron
+permisos o contactos reales.
+
+Estos arreglos solo cambian archivos web. Si la consulta autenticada confirma que
+Firebase ya es compatible, basta publicar la web. Si falta la capacidad, comprobar
+primero el proyecto activo `helicopteros-personales`, acceso de despliegue vigente,
+Node.js 22, dependencias de `functions/package.json` y una copia actualizada de
+`main`; después actualizar únicamente `functions:accounts:accountRegistration`
+con el comando de Activación. No desplegar reglas ni otras funciones para esta
+corrección. Las pruebas con cambios globales de roles deben realizarse en un
+proyecto aislado; no modificar la matriz real sin confirmar su alcance con el Director.

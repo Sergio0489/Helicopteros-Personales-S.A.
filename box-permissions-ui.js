@@ -19,16 +19,24 @@ function open(){
   const allAircraft=matrix.querySelector('[data-all-aircraft]');if(allAircraft)allAircraft.onchange=()=>{draft.horario.aircraft=allAircraft.checked?{mode:'all'}:{mode:'selected',registrations:[]};dirty=true;draw();};
   matrix.querySelectorAll('[data-aircraft]').forEach(e=>e.onchange=()=>{draft.horario.aircraft={mode:'selected',registrations:[...matrix.querySelectorAll('[data-aircraft]:checked')].map(c=>c.dataset.aircraft)};dirty=true;draw();});
   matrix.querySelectorAll('[data-page]').forEach(e=>e.onchange=()=>{if(e.dataset.page==='interesados')crmTouched=true;const p=draft[e.dataset.page],v=e.value;p.actions.view=v!=='none';p.actions.edit=v==='edit';if(v!=='edit')for(const b of Object.values(p.boxes))b.edit=false;if(v==='none')for(const b of Object.values(p.boxes))b.view=false;dirty=true;draw();});
-  matrix.querySelectorAll('[data-box]').forEach(e=>e.onchange=()=>{draft[e.dataset.pageBox].boxes[e.dataset.box]={...draft[e.dataset.pageBox].boxes[e.dataset.box],view:e.value!=='none',edit:e.value==='edit'};dirty=true;draw();});
-  matrix.querySelectorAll('[data-output-page]').forEach(e=>e.onchange=()=>{draft[e.dataset.outputPage].actions[e.dataset.outputKind]=e.checked;dirty=true;draw();});
-  matrix.querySelectorAll('[data-output-box]').forEach(e=>e.onchange=()=>{draft[e.dataset.outputBox].boxes[e.dataset.outputId][e.dataset.outputKind]=e.checked;dirty=true;});
+  matrix.querySelectorAll('[data-box]').forEach(e=>e.onchange=()=>{if(e.dataset.pageBox==='interesados')crmTouched=true;draft[e.dataset.pageBox].boxes[e.dataset.box]={...draft[e.dataset.pageBox].boxes[e.dataset.box],view:e.value!=='none',edit:e.value==='edit'};dirty=true;draw();});
+  matrix.querySelectorAll('[data-output-page]').forEach(e=>e.onchange=()=>{if(e.dataset.outputPage==='interesados')crmTouched=true;draft[e.dataset.outputPage].actions[e.dataset.outputKind]=e.checked;dirty=true;draw();});
+  matrix.querySelectorAll('[data-output-box]').forEach(e=>e.onchange=()=>{if(e.dataset.outputBox==='interesados')crmTouched=true;draft[e.dataset.outputBox].boxes[e.dataset.outputId][e.dataset.outputKind]=e.checked;dirty=true;});
  };
  dialog.querySelector('[data-own-account]').onclick=()=>{draft.estudiantes.actions.view=true;draft.estudiantes.boxes.account={view:true,edit:false};dirty=true;draw();};
  select.onchange=()=>{if(dirty&&!confirm('¿Descartar los cambios sin guardar?')){select.value=role;return;}role=select.value;status.textContent='';load();};
  dialog.querySelector('[data-save]').onclick=async()=>{if(saving||!ready)return;saving=true;select.disabled=true;matrix.inert=true;dialog.querySelector('[data-save]').disabled=true;try{
   const next=structuredClone(previewData);next.school ||= {};next.school.accessConfiguration ||= {};next.school.accessConfiguration.roles ||= {};
-  next.school.accessConfiguration.roles[role]=HPBoxes.normalize(draft);if(!crmReady||(!crmTouched&&!Object.hasOwn(previewData.school?.accessConfiguration?.roles?.[role]||{},'interesados')))delete next.school.accessConfiguration.roles[role].interesados;Object.assign(next.school.accessConfiguration,{version:2,status:'box-permissions',updatedAt:new Date().toISOString(),updatedBy:profileUser().uid});
-  await window.cloudWrite(next);previewData=next;dirty=false;status.textContent='Permisos guardados. Se aplican cuando el usuario actualice su página.';
+  const previous=previewData.school?.accessConfiguration?.roles?.[role]||{};
+  next.school.accessConfiguration.roles[role]=HPBoxes.normalize(draft);
+  // An unavailable capability or an unrelated edit must never remove an explicit
+  // CRM denial (which would reactivate legacy individual grants).
+  if(!crmReady||!crmTouched){
+   if(Object.hasOwn(previous,'interesados'))next.school.accessConfiguration.roles[role].interesados=structuredClone(previous.interesados);
+   else delete next.school.accessConfiguration.roles[role].interesados;
+  }
+  Object.assign(next.school.accessConfiguration,{version:2,status:'box-permissions',updatedAt:new Date().toISOString(),updatedBy:profileUser().uid});
+  await window.cloudWrite(next);previewData=next;dirty=false;crmTouched=false;status.textContent='Permisos guardados. Se aplican cuando el usuario actualice su página.';
  }catch(e){status.textContent=e.message;}finally{saving=false;select.disabled=false;matrix.inert=false;draw();}};
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());document.body.appendChild(dialog);load();dialog.showModal();status.textContent='Comprobando la conexión de permisos…';AccountRegistration.api('permission-capabilities').then(r=>{crmReady=r.prospectRolePermissions===true;ready=r.version>=7&&r.outputPermissions===true&&r.boxEditing===true&&r.aircraftSchedule===true;status.textContent=ready?(crmReady?'Selecciona las páginas y cuadros autorizados.':'Interesados requiere actualizar Firebase; los demás permisos están disponibles.'):'Falta actualizar la función de Firebase para activar estos permisos.';draw();}).catch(()=>{status.textContent='Falta publicar la actualización de permisos en Firebase. No se cambiará la configuración actual.';});
 }
