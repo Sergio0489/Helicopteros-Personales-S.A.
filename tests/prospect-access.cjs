@@ -45,3 +45,13 @@ test('role page grants require confirmed Administrative identity and honor expli
  assert.equal(a.scope(user,account,false,{interesados:{}}),null);
  assert.equal(a.scope(user,account,true,{interesados:{}}).director,true);
 });
+test('CRM page and contact permissions independently cap viewing, editing and export',()=>{
+ for(const pageView of [false,true])for(const boxView of [false,true])
+ for(const pageEdit of [false,true])for(const boxEdit of [false,true])
+ for(const pageExport of [false,true])for(const boxExport of [false,true]){
+  const policy={interesados:{actions:{view:pageView,edit:pageEdit,export:pageExport},boxes:{contacts:{view:boxView,edit:boxEdit,export:boxExport}}}};
+  const result=a.scope(user,account,false,policy);
+  if(!pageView||!boxView)assert.equal(result,null);
+  else{assert.equal(result.full,true);assert.equal(result.edit,pageEdit&&boxEdit);assert.equal(result.export,pageExport&&boxExport);}
+ }
+});

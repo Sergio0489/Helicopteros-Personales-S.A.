@@ -83,3 +83,13 @@ expedientes de estudiantes protegidos y ausencia de cambios en los otros módulo
 El acceso al CRM se comprueba sin conceder páginas adicionales al administrativo.
 La suite completa incluye esta prueba automáticamente mediante `tests/*.cjs` en CI.
 Esto valida la aplicación con servicios simulados, no un despliegue de Firebase.
+
+La revisión del 28/10/2026 añade un Administrativo general y un Piloto sin
+autorización. Descarga y lee CSV reales desde Chromium: separación de áreas,
+contactos retirados desde la carga inicial, exportación sin edición, revocación y
+cambio de área con la pantalla abierta. Comprueba guardado por el administrativo
+general y rechazo de usuarios no autorizados incluso con la matriz activa.
+`prospect-access.cjs` cubre las 64 combinaciones de los tres derechos en página y
+cuadro. `prospect-role-matrix.cjs` conserva tanto la ausencia de configuración como
+concesiones y denegaciones explícitas al guardar otra página, con o sin capacidad
+CRM del backend; también prueba cambios independientes en cuadro y exportación.

@@ -62,3 +62,79 @@ La matriz incluye **Interesados y consultas → Contactos y consultas de Charter
 Antes de configurar por primera vez esta página se conservan las concesiones individuales por área. Una configuración explícita de la página sustituye esas concesiones: «Sin acceso» revoca también el acceso anterior. Guardar otra página sin modificar Interesados no migra ni revoca concesiones individuales. La interfaz no habilita este ajuste hasta que `accountRegistration` anuncie `prospectRolePermissions`.
 
 Publicar la web y desplegar `functions:accounts:accountRegistration`. Después, el Director configura el cargo Administrativo; los usuarios actualizan su página. No se concede acceso de producción automáticamente. El servidor consulta los permisos vigentes en cada solicitud y rechaza escrituras o exportaciones no autorizadas.
+
+### Revisión del CRM — 28/10/2026
+
+Se reprodujeron y corrigieron dos problemas de la interfaz con cuentas y datos
+ficticios, sin escribir en Firebase:
+
+- Cuando el servidor no anunciaba `prospectRolePermissions`, guardar otra página
+  eliminaba una configuración CRM existente. Eliminar un «Sin acceso» explícito
+  podía reactivar la concesión individual anterior. Ahora se conserva exactamente
+  la configuración CRM que no se está editando, también con un servidor anterior.
+- Exportar comprobaba el permiso actual, pero construía el CSV con los contactos
+  cargados anteriormente. Un contacto retirado del área podía aparecer todavía en
+  ese archivo. Ahora se consultan nuevamente todas las páginas con `export:true`
+  y se comprueba el alcance antes y después; un cambio de permisos cancela la
+  exportación y descarta los datos en pantalla. Actualizar o cargar otra página de
+  contactos también comprueba el alcance y descarta la vista anterior si falla.
+
+Las concesiones individuales siguen permitiendo consultar, editar y exportar su
+área. No ofrecen selectores independientes de edición/exportación; estos corresponden
+a la matriz por cargo. La política explícita de Administrativo abarca ambas áreas
+para todos los usuarios de ese cargo que cumplan los requisitos. No se deben usar
+cuentas ficticias en producción para probar una modificación global de esa política,
+pues también afectaría a administrativos reales.
+
+Las pruebas de navegador usan el manejador HTTP real y Auth/Database simulados.
+Comprueban Director, Administrativo general, concesiones de Charters y Escuela,
+Administrativo sin concesión, Piloto sin autorización y correo sin verificar;
+incluyen descargas CSV, guardados, revocaciones en sesiones abiertas y conservación
+de expedientes y cuentas. La matriz cubre además las 64 combinaciones de ver,
+editar y exportar en página/cuadro.
+
+Resultado local: **135 pruebas JavaScript aprobadas, 0 fallos y 0 omitidas**, con
+Node.js 22.23.4, Playwright 1.62.1 y Chromium 153; también pasaron las 3 pruebas
+Python de configuración del correo. `git diff --check` y la validación de sintaxis
+de los archivos web modificados pasaron. Esta ejecución es local; no constituye
+una nueva ejecución de GitHub Actions ni una validación de Firebase real.
+
+### Compatibilidad del despliegue confirmada por código — 29/10/2026
+
+Sergio ejecutó las consultas de solo lectura en su sesión de Cloud Shell y
+compartió su salida. `accountRegistration` está `ACTIVE`, usa `nodejs22`, tiene
+revisión `accountregistration-00036-dih` y fecha de actualización
+`2026-10-26T19:34:22.272210317Z`. Su URI es
+`https://accountregistration-wwcyznuvsa-uc.a.run.app`.
+
+Se descargó exactamente la generación `1793043244513197` de
+`gs://gcf-v2-sources-264872896947-us-central1/accountRegistration/function-source.zip`,
+indicada por `buildConfig.sourceProvenance.resolvedStorageSource`. Los SHA-256 de
+estos cinco archivos coinciden con los del commit probado
+`503ece6de315ee8c0e679a6876528c2d9694ae5c` del PR #21:
+
+| Archivo desplegado | SHA-256 |
+| --- | --- |
+| `main.js` | `96c0359a25d35e539b382272dada078b6909434cea410fe52d23cab8d96231a9` |
+| `index.js` | `d98cf5fbaf52858d89b96c6395df04bfdc74ba75c7369e25b70488180fd77bdb` |
+| `prospect-access.js` | `77c821ffaabbaeb190e6acf64315fa50a181b6bc32e32625c847a0d4b12c205a` |
+| `prospects.js` | `4ac60449540eb0944549bedbb11db007b254abc8383aa677a0b8e4a33146280f` |
+| `boxes.js` | `f2ab9977bca1b7e8b04fa67acd9201f2d22ac2737fc6f2e3eb373f1ba3cd2201` |
+
+El manejador desplegado de `permission-capabilities` contiene `version:7`,
+`prospectRolePermissions:true`, `outputPermissions:true`, `boxEditing:true` y
+`aircraftSchedule:true`. Queda confirmada la compatibilidad del código desplegado;
+este PR solo requiere integrar y publicar los archivos web, sin redesplegar
+`accountRegistration` ni las reglas de la base de datos.
+
+GitHub Actions confirmó las 135 pruebas del commit anterior el 29/10/2026
+(ejecución `40866462770`), además de privacidad y configuración del correo.
+Auth y Database se simulan en las pruebas. La comparación del código fuente no
+sustituye una consulta autenticada con Director ni pruebas de cuentas en Firebase
+real: esas comprobaciones siguen sin ejecutarse. Las consultas HTTP realizadas
+sin sesión devolvieron `200 {"ready":true}` y `401 {"error":"Inicia sesión."}`,
+respectivamente para disponibilidad y capacidades.
+
+Durante esta revisión no se efectuaron despliegues ni cambios de permisos o
+contactos reales. Las pruebas con cambios globales de roles deben realizarse en
+un proyecto aislado; no modificar la matriz real sin confirmar su alcance con el Director.

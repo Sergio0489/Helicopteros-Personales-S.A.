@@ -70,6 +70,8 @@ function fixture() {
     ["director", "Director", null, true],
     ["charters", "Administrativo", "charters", true],
     ["school", "Administrativo", "school", true],
+    ["general", "Administrativo", null, true],
+    ["outsider", "Piloto", null, true],
     ["denied", "Administrativo", null, true],
     ["unverified", "Administrativo", "school", false],
   ]) {
@@ -580,7 +582,7 @@ test(
         false,
       );
     }
-    for (const uid of ["denied", "unverified"]) {
+    for (const uid of ["denied", "unverified", "outsider"]) {
       const page = await login(uid);
       assert.equal(
         await page
@@ -610,10 +612,35 @@ test(
       assert.deepEqual(db.root(), before);
     }
     // Role page grants work without an individual grant and remain enforced by HTTP.
+    // Export must use the current authorized records, never the table's stale copy.
+    async function exportedCsv(page) {
+      const downloadPromise=page.waitForEvent('download');
+      await page.getByRole('button',{name:'Exportar CSV filtrado',exact:true}).click();
+      const download=await downloadPromise;
+      return fs.readFileSync(await download.path(),'utf8');
+    }
+    for(const [page,area,other] of [[charters,'charters','school'],[school,'school','charters']]) {
+      const csv=await exportedCsv(page);
+      assert(csv.includes('only-'+area+'@example.test'));
+      assert(!csv.includes('only-'+other+'@example.test'));
+      assert(!csv.includes(other+' UPDATED OWNER'));
+    }
+    const movedId=p.hash('only-charters@example.test'),moved=structuredClone(db.root().prospects.contacts[movedId]);
+    db.root().prospects.contacts[movedId].areas=['school'];
+    const currentCsv=await exportedCsv(charters);
+    assert(!currentCsv.includes('only-charters@example.test'),'export leaked a contact removed from the authorized area');
+    db.root().prospects.contacts[movedId]=moved;
+    const downloads=[];charters.on('download',d=>downloads.push(d));
+    db.root().accountRequests.charters.prospectAccess.area='school';
+    await charters.getByRole('button',{name:'Exportar CSV filtrado',exact:true}).click();
+    await charters.locator('[data-message]').filter({hasText:/permisos cambiaron/}).waitFor();
+    assert.equal(downloads.length,0,'scope changes must stop an export from an open CRM');
+    assert.equal(await charters.locator('[data-edit]').count(),0);
+    db.root().accountRequests.charters=structuredClone(initialAccounts.charters);
     const rolePayload=JSON.parse(db.root().dashboard.payload);
     rolePayload.school.accessConfiguration.roles.Administrativo={interesados:{actions:{view:true,edit:false,export:false},boxes:{contacts:{view:true,edit:false,export:false}}}};
     db.root().dashboard.payload=JSON.stringify(rolePayload);
-    const rolePage=await staff("denied");
+    const rolePage=await staff("general");
     assert.equal(await rolePage.getByRole('button',{name:'Registrar consulta',exact:true}).isVisible(),false);
     assert.equal(await rolePage.getByRole('button',{name:'Exportar CSV filtrado',exact:true}).isVisible(),false);
     assert.equal(await rolePage.getByRole('button',{name:'Accesos de Antonio y Fernando',exact:true}).count(),0);
@@ -622,12 +649,40 @@ test(
     assert.equal((await call(rolePage,'prospect-save',{record:{}})).ok,false);
     assert.equal((await call(rolePage,'prospect-list',{export:true})).ok,false);
     const rights=rolePayload.school.accessConfiguration.roles.Administrativo.interesados;
+    // Export can be granted without edit, and both levels are required.
+    const recordBefore=structuredClone(db.root().prospects.contacts[shared]);
+    for(const pageExport of [false,true])for(const boxExport of [false,true]){
+      rights.actions.export=pageExport;rights.boxes.contacts.export=boxExport;
+      db.root().dashboard.payload=JSON.stringify(rolePayload);
+      assert.equal((await call(rolePage,'prospect-list',{export:true})).ok,pageExport&&boxExport);
+      assert.equal((await call(rolePage,'prospect-save',{record:{...recordBefore,notes:'UNAUTHORIZED'}})).ok,false);
+      assert.deepEqual(db.root().prospects.contacts[shared],recordBefore);
+    }
+    const exportOnly=await staff('general');
+    const fullCsv=await exportedCsv(exportOnly);
+    assert(fullCsv.includes('only-charters@example.test'));assert(fullCsv.includes('only-school@example.test'));
+    assert.equal(await exportOnly.getByRole('button',{name:'Registrar consulta',exact:true}).isVisible(),false);
+    assert.equal((await call(await login('outsider'),'prospect-list')).ok,false);
+    assert.equal((await call(await login('unverified'),'prospect-list')).ok,false);
     rights.actions.edit=true;rights.actions.export=true;rights.boxes.contacts.edit=true;rights.boxes.contacts.export=true;
     db.root().dashboard.payload=JSON.stringify(rolePayload);
-    const roleEditor=await staff('denied');
+    const roleEditor=await staff('general');
     assert.equal(await roleEditor.getByRole('button',{name:'Registrar consulta',exact:true}).isVisible(),true);
     assert.equal((await call(roleEditor,'prospect-list',{export:true})).ok,true);
     assert.equal((await call(roleEditor,'prospect-configure',{confirm:true})).ok,false);
+    await roleEditor.locator(`[data-edit="${shared}"]`).click();
+    await roleEditor.locator('dialog [name=notes]').fill('GENERAL ADMIN UPDATED NOTE');
+    await roleEditor.locator('dialog [type=submit]').click();
+    await roleEditor.locator('dialog').waitFor({state:'detached'});
+    assert.equal(db.root().prospects.contacts[shared].notes,'GENERAL ADMIN UPDATED NOTE');
+    db.root().prospects.contacts[shared]=recordBefore;
+    const revokedDownloads=[];roleEditor.on('download',d=>revokedDownloads.push(d));
+    rights.boxes.contacts.export=false;db.root().dashboard.payload=JSON.stringify(rolePayload);
+    assert.equal((await call(roleEditor,'prospect-list',{export:true})).ok,false);
+    await roleEditor.getByRole('button',{name:'Exportar CSV filtrado',exact:true}).click();
+    await roleEditor.locator('[data-message]').filter({hasText:/permisos cambiaron/}).waitFor();
+    assert.equal(revokedDownloads.length,0);
+    assert.equal(await roleEditor.locator('[data-edit]').count(),0);
     rights.actions.view=false;db.root().dashboard.payload=JSON.stringify(rolePayload);
     assert.equal((await call(roleEditor,'prospect-list')).ok,false);
     assert.equal((await call(charters,'prospect-list')).ok,false);
