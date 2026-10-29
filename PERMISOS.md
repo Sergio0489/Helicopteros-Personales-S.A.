@@ -99,20 +99,42 @@ Python de configuración del correo. `git diff --check` y la validación de sint
 de los archivos web modificados pasaron. Esta ejecución es local; no constituye
 una nueva ejecución de GitHub Actions ni una validación de Firebase real.
 
-**Estado del despliegue:** se obtuvo `200 {"ready":true}` del endpoint publicado
-`accountregistration-wwcyznuvsa-uc.a.run.app`; la consulta anónima de capacidades
-respondió `401 {"error":"Inicia sesión."}`. Esto no acredita la capacidad CRM.
-Falta consultar `permission-capabilities` con una sesión vigente de Director y
-comprobar `version >= 7`, `prospectRolePermissions === true`, `outputPermissions`,
-`boxEditing` y `aircraftSchedule`. La consola de Google Cloud no estuvo accesible
-en el entorno de esta revisión; no se efectuó ningún despliegue ni se alteraron
-permisos o contactos reales.
+### Compatibilidad del despliegue confirmada por código — 29/10/2026
 
-Estos arreglos solo cambian archivos web. Si la consulta autenticada confirma que
-Firebase ya es compatible, basta publicar la web. Si falta la capacidad, comprobar
-primero el proyecto activo `helicopteros-personales`, acceso de despliegue vigente,
-Node.js 22, dependencias de `functions/package.json` y una copia actualizada de
-`main`; después actualizar únicamente `functions:accounts:accountRegistration`
-con el comando de Activación. No desplegar reglas ni otras funciones para esta
-corrección. Las pruebas con cambios globales de roles deben realizarse en un
-proyecto aislado; no modificar la matriz real sin confirmar su alcance con el Director.
+Sergio ejecutó las consultas de solo lectura en su sesión de Cloud Shell y
+compartió su salida. `accountRegistration` está `ACTIVE`, usa `nodejs22`, tiene
+revisión `accountregistration-00036-dih` y fecha de actualización
+`2026-10-26T19:34:22.272210317Z`. Su URI es
+`https://accountregistration-wwcyznuvsa-uc.a.run.app`.
+
+Se descargó exactamente la generación `1793043244513197` de
+`gs://gcf-v2-sources-264872896947-us-central1/accountRegistration/function-source.zip`,
+indicada por `buildConfig.sourceProvenance.resolvedStorageSource`. Los SHA-256 de
+estos cinco archivos coinciden con los del commit probado
+`503ece6de315ee8c0e679a6876528c2d9694ae5c` del PR #21:
+
+| Archivo desplegado | SHA-256 |
+| --- | --- |
+| `main.js` | `96c0359a25d35e539b382272dada078b6909434cea410fe52d23cab8d96231a9` |
+| `index.js` | `d98cf5fbaf52858d89b96c6395df04bfdc74ba75c7369e25b70488180fd77bdb` |
+| `prospect-access.js` | `77c821ffaabbaeb190e6acf64315fa50a181b6bc32e32625c847a0d4b12c205a` |
+| `prospects.js` | `4ac60449540eb0944549bedbb11db007b254abc8383aa677a0b8e4a33146280f` |
+| `boxes.js` | `f2ab9977bca1b7e8b04fa67acd9201f2d22ac2737fc6f2e3eb373f1ba3cd2201` |
+
+El manejador desplegado de `permission-capabilities` contiene `version:7`,
+`prospectRolePermissions:true`, `outputPermissions:true`, `boxEditing:true` y
+`aircraftSchedule:true`. Queda confirmada la compatibilidad del código desplegado;
+este PR solo requiere integrar y publicar los archivos web, sin redesplegar
+`accountRegistration` ni las reglas de la base de datos.
+
+GitHub Actions confirmó las 135 pruebas del commit anterior el 29/10/2026
+(ejecución `40866462770`), además de privacidad y configuración del correo.
+Auth y Database se simulan en las pruebas. La comparación del código fuente no
+sustituye una consulta autenticada con Director ni pruebas de cuentas en Firebase
+real: esas comprobaciones siguen sin ejecutarse. Las consultas HTTP realizadas
+sin sesión devolvieron `200 {"ready":true}` y `401 {"error":"Inicia sesión."}`,
+respectivamente para disponibilidad y capacidades.
+
+Durante esta revisión no se efectuaron despliegues ni cambios de permisos o
+contactos reales. Las pruebas con cambios globales de roles deben realizarse en
+un proyecto aislado; no modificar la matriz real sin confirmar su alcance con el Director.
