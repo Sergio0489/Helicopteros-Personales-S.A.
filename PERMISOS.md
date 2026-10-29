@@ -14,7 +14,17 @@ Un guardado que afecta varios cuadros requiere permiso para todos los datos modi
 
 El código implementa estos permisos; su disponibilidad en producción debe comprobarse por separado. Una publicación de GitHub Pages no despliega Firebase. La guía de [registro de usuarios](REGISTRO-USUARIOS.md) detalla la asignación de cargos, las restricciones de seguridad y las pruebas pendientes con cuentas de ensayo.
 
-Primero publicar los archivos web en GitHub Pages y actualizar la función existente:
+**Estado verificado al 29/10/2026:** el backend activo ya contiene las capacidades necesarias para el CRM. El [PR #21](https://github.com/Sergio0489/Helicopteros-Personales-S.A./pull/21) solo necesitaba publicar los archivos web; quedó fusionado y GitHub Pages confirmó la publicación en la [ejecución 40883904819](https://github.com/Sergio0489/Helicopteros-Personales-S.A./actions/runs/40883904819). No corresponde redesplegar `accountRegistration` ni las reglas para aplicar esas correcciones. La evidencia y sus límites se detallan al final de este documento.
+
+### Comprobación previa y cambios futuros
+
+Antes de decidir un despliegue, comprobar las capacidades de la función activa:
+
+1. Con una sesión de Director, abrir **Perfil → Roles y permisos** y revisar la respuesta de solo lectura de `permission-capabilities`, sin guardar cambios. La interfaz exige `version >= 7`, `outputPermissions:true`, `boxEditing:true` y `aircraftSchedule:true`; para editar la matriz del CRM también exige `prospectRolePermissions:true`. Comparar estos requisitos con los de la versión web que se vaya a publicar. No compartir tokens de sesión.
+2. Si no se dispone de esa comprobación autenticada, identificar mediante consultas de solo lectura la revisión activa de `accountRegistration` y su `buildConfig.sourceProvenance.resolvedStorageSource`. Descargar la generación exacta allí indicada y comparar los archivos relevantes y sus SHA-256 con el commit probado, como en la revisión del 29/10/2026. Esto acredita compatibilidad del código, pero no valida permisos efectivos con cuentas reales. Un `200 {"ready":true}` o un `401` sin sesión no confirma las capacidades.
+3. Actualizar Firebase únicamente si un cambio futuro requiere capacidades ausentes en la versión activa o modifica lógica, validadores o dependencias del backend que todavía no están desplegados. Las capacidades anunciadas no bastan para descartar una actualización cuando cambia la implementación del servidor: también se debe comparar el código. Si el cambio solo afecta la web o la documentación y el backend ya es compatible, basta el procedimiento habitual de PR, comprobaciones y publicación web.
+
+**Solo cuando esa revisión determine que es necesario actualizar `accountRegistration`**, usar desde la raíz de una copia actualizada del repositorio:
 
 ```sh
 git pull --ff-only origin main
@@ -22,7 +32,7 @@ npm --prefix functions install
 firebase deploy --only functions:accounts:accountRegistration --project helicopteros-personales
 ```
 
-Ejecutar desde la raíz de una copia actualizada del repositorio. Este comando actualiza únicamente `accountRegistration`; no despliega las demás funciones del codebase ni las reglas de la base de datos. La pantalla comprueba la capacidad del servidor antes de permitir guardar permisos. Si aún no se ha desplegado la función compatible, muestra el aviso de actualización y conserva la configuración actual. Después del despliegue, actualizar la página, guardar los permisos deseados y actualizar la sesión de prueba.
+Este comando condicional actualiza únicamente `accountRegistration`; no despliega las demás funciones del codebase ni las reglas de la base de datos. La pantalla comprueba la capacidad del servidor antes de permitir guardar permisos. Si aún no se ha desplegado la función compatible, muestra el aviso de actualización y conserva la configuración actual. Después de una publicación web o de un despliegue necesario, actualizar la página y la sesión de prueba. Guardar permisos es una operación independiente que requiere confirmar su alcance; no es un paso obligatorio para publicar ni para comprobar capacidades.
 
 ## Implementación
 
@@ -53,7 +63,7 @@ node tests/permissions-browser-writes.cjs
 node tests/permissions-editor-mobile.cjs
 ```
 
-Puede indicarse `CHROME_BIN` para usar Chromium instalado. Se comprobaron también el guardado de una aeronave con un único cuadro editable, controles de solo lectura, el selector de aeronave y calendario en móvil, y registros vinculados con TAC de aeronave física. La validación contra Firebase real requiere desplegar la función e iniciar sesión con una cuenta de prueba.
+Puede indicarse `CHROME_BIN` para usar Chromium instalado. Se comprobaron también el guardado de una aeronave con un único cuadro editable, controles de solo lectura, el selector de aeronave y calendario en móvil, y registros vinculados con TAC de aeronave física. La validación contra Firebase real requiere una función compatible e iniciar sesión con una cuenta de prueba; no exige redesplegar una función ya compatible. Sigue pendiente la validación autenticada indicada en la revisión del 29/10/2026. Las pruebas que cambien permisos globales deben realizarse en un proyecto aislado.
 
 ## Interesados y consultas por cargo
 
@@ -61,7 +71,7 @@ La matriz incluye **Interesados y consultas → Contactos y consultas de Charter
 
 Antes de configurar por primera vez esta página se conservan las concesiones individuales por área. Una configuración explícita de la página sustituye esas concesiones: «Sin acceso» revoca también el acceso anterior. Guardar otra página sin modificar Interesados no migra ni revoca concesiones individuales. La interfaz no habilita este ajuste hasta que `accountRegistration` anuncie `prospectRolePermissions`.
 
-Publicar la web y desplegar `functions:accounts:accountRegistration`. Después, el Director configura el cargo Administrativo; los usuarios actualizan su página. No se concede acceso de producción automáticamente. El servidor consulta los permisos vigentes en cada solicitud y rechaza escrituras o exportaciones no autorizadas.
+Para los cambios del PR #21 bastaba publicar la web, ya publicada el 29/10/2026; no se requiere desplegar `functions:accounts:accountRegistration`. Para futuras modificaciones, seguir la comprobación previa de «Activación». Los usuarios actualizan su página. Si se desea cambiar la política del cargo Administrativo, el Director debe confirmar primero su alcance global; no es necesario reconfigurar el cargo para aplicar el PR #21. No se concede acceso de producción automáticamente. El servidor consulta los permisos vigentes en cada solicitud y rechaza escrituras o exportaciones no autorizadas.
 
 ### Revisión del CRM — 28/10/2026
 
@@ -124,8 +134,10 @@ estos cinco archivos coinciden con los del commit probado
 El manejador desplegado de `permission-capabilities` contiene `version:7`,
 `prospectRolePermissions:true`, `outputPermissions:true`, `boxEditing:true` y
 `aircraftSchedule:true`. Queda confirmada la compatibilidad del código desplegado;
-este PR solo requiere integrar y publicar los archivos web, sin redesplegar
-`accountRegistration` ni las reglas de la base de datos.
+el PR #21 solo requería integrar y publicar los archivos web, sin redesplegar
+`accountRegistration` ni las reglas de la base de datos. Se fusionó el 29/10/2026
+y GitHub Pages publicó el commit `bf70d5c60b0bc7920f7b58def8549ded198d4515`
+correctamente mediante la [ejecución 40883904819](https://github.com/Sergio0489/Helicopteros-Personales-S.A./actions/runs/40883904819).
 
 GitHub Actions confirmó las 135 pruebas del commit anterior el 29/10/2026
 (ejecución `40866462770`), además de privacidad y configuración del correo.
@@ -135,6 +147,6 @@ real: esas comprobaciones siguen sin ejecutarse. Las consultas HTTP realizadas
 sin sesión devolvieron `200 {"ready":true}` y `401 {"error":"Inicia sesión."}`,
 respectivamente para disponibilidad y capacidades.
 
-Durante esta revisión no se efectuaron despliegues ni cambios de permisos o
-contactos reales. Las pruebas con cambios globales de roles deben realizarse en
+Durante la revisión de compatibilidad no se efectuaron despliegues de Firebase ni cambios de permisos o
+contactos reales. Publicar estas correcciones no requiere migrar, borrar ni modificar contactos existentes, usuarios o expedientes. Las pruebas con cambios globales de roles deben realizarse en
 un proyecto aislado; no modificar la matriz real sin confirmar su alcance con el Director.
