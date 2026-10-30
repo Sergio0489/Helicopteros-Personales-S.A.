@@ -23,8 +23,9 @@ async function app(t,width=1440){
   window.CLOUD_INITIAL={fleet:{},pilotos:[],itinerarios:[{id:'historic',fecha:'2026-10-30',horaInicio:'08:00',horaFin:'09:00',piloto:'Piloto histórico',aeronave:'HP-1784'}],school:{students:[],rates:{},intakes:[],registry:{clients:[],entries:[]}}};
   window.cloudWrite=()=>{throw Error('Unexpected write');};
   window.showCloudError=e=>{throw e;};
-  window.itineraryReads=[];
+  window.itineraryReads=[];window.itineraryCommands=[];
   window.readItinerary=(action,payload)=>{
+   if(action==='itinerary-command'){window.itineraryCommands.push(payload);return Promise.resolve(window.commandResult);}
    if(action==='itinerary-notices')return Promise.resolve({notices:[],alerts:[]});
    if(action==='itinerary-calendar')return Promise.resolve({version:1,year:payload.year,days:[{date:payload.year+'-02-28',count:3}]});
    if(action!=='itinerary-read')throw Error('Unexpected mutation');
@@ -116,5 +117,9 @@ test('Director sees detailed confirmed flights and cannot submit without route o
  await page.locator('[name=route]').fill('MPMG – Chitré');await page.locator('[name=note]').fill('Sin observaciones');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false);
- await page.getByRole('button',{name:'Cancelar',exact:true}).click();
+ await page.locator('[name=socioName]').fill('Socio de prueba');
+ await page.evaluate(result=>{window.commandResult=result;},result);
+ await page.getByRole('button',{name:'Guardar',exact:true}).click();
+ await page.locator('dialog').waitFor({state:'detached'});
+ const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG – Chitré');assert.equal(saved[0].flight.studentId,'');
 });

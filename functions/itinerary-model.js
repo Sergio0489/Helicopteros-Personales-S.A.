@@ -177,7 +177,7 @@ function calendar(data,actor,year,now){
  const days=[];
  for(const d of [...dates].filter(d=>d.startsWith(year+'-')).sort()){
   try{date(d);}catch{continue;}
-  const count=view(data,actor,d,now).state.confirmed.length;
+  const count=stateFor(data,d,now).confirmed.length;
   if(count)days.push({date:d,count});
  }
  return {version:1,year,days};
