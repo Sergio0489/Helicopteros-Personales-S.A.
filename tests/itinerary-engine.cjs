@@ -2,6 +2,23 @@ const test=require('node:test'),assert=require('node:assert/strict'),H={...requi
 const base=()=>{const s=H.initial();s.requests=[];s.confirmed=[];return s;};
 const request=(id,pilot,type='general',aircraft='HP1907',slot='b1')=>({id,pilot,flightType:type,aircraft,slot,start:'06:30',end:'09:30',created:Number(id.slice(1))||1});
 const assigned=r=>r.results.filter(q=>q.status==='assigned');
+test('HP1907 restrictions and forecast boundaries are respected with solo priorities',()=>{
+ for(const status of ['grounded','mantenimiento'])for(const row of [
+  {release:undefined,tail:'HP1784'},
+  {release:{enabled:false,date:'2026-10-30',from:'06:30'},tail:'HP1784'},
+  {release:{enabled:true,date:'2026-10-31',from:'06:30'},tail:'HP1784'},
+  {release:{enabled:true,date:'2026-10-30',from:'25:00'},tail:'HP1784'},
+  {release:{enabled:true,date:'2026-10-30',from:'06:31'},tail:'HP1784'},
+  {release:{enabled:true,date:'2026-10-30',from:'06:30'},tail:'HP1907'},
+  {release:{enabled:true,date:'2026-10-30',from:'06:29'},tail:'HP1907'}
+ ]){
+  const s=base();s.aircraft.find(a=>a.id==='HP1819').status='grounded';
+  const a=s.aircraft.find(a=>a.id==='HP1907');a.status=status;a.release=structuredClone(row.release);
+  s.requests=[request('q1','a','solo')];const before=structuredClone(s),r=H.simulate(s);
+  assert.equal(assigned(r)[0].assignedAircraft,row.tail,JSON.stringify({status,...row}));
+  assert.equal(assigned(r)[0].conditional,row.tail==='HP1907');assert.deepEqual(s,before);
+ }
+});
 test('predetermined hours remain editable; overlaps rejected',()=>{
  const a=H.initial().aircraft[0];
  assert.deepEqual(a.slots.map(x=>x.start+'-'+x.end),['06:30-09:30','09:30-12:30','12:30-15:30','15:30-18:30','18:30-20:00']);
