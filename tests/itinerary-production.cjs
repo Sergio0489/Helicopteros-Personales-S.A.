@@ -7,6 +7,46 @@ function fixture(){return {fleet:Object.fromEntries(M.E.fleet.map(([id])=>[id===
 let sequence=0;
 function apply(d,actor,command,fields={},at=now){return M.apply(d,actor,{date,command,actionId:'test-action-'+(++sequence),revision:M.day(d,fields.date||date).revision,configurationRevision:d.itinerary.config.revision||0,...fields},at);}
 const flight=(pilot='p1',aircraft='HP1907',extra={})=>({pilot,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG – Chitré – MPMG',note:'Sin observaciones',...extra});
+test('a new maintenance restriction invalidates older forecasts before automatic closure',()=>{
+ for(const previous of ['operativo','mantenimiento']){
+  const d=fixture();d.fleet.HP_1907.status=previous;
+  apply(d,director,'settings',{aircraft:'HP1907',release:{enabled:true,from:'06:30'}});
+  apply(d,pilot('p1'),'request',{flight:flight('p1','HP1907',{flightType:'solo'})});
+  // Force the next preferred solo aircraft, without changing the request.
+  d.fleet.HP_1819.status='grounded';
+  const old=structuredClone(d),oldFlights=structuredClone(d.itinerarios),revision=M.day(d,date).revision;
+  d.fleet.HP_1907.status='grounded';
+  assert.equal(M.reconcile(old,d,now),true);
+  assert.equal(M.day(d,date).releases.HP1907.enabled,false);
+  assert.equal(M.day(d,date).revision,revision+1);
+  assert.deepEqual(d.itinerarios,oldFlights);
+  M.publish(d,date,now);
+  assert.equal(d.itinerarios[0].aeronave,'HP-1784');
+  assert.equal(d.fleet.HP_1907.status,'grounded');
+  const snapshot=structuredClone(d);assert.equal(M.reconcile(snapshot,d,now),false);assert.deepEqual(d,snapshot);
+ }
+});
+test('an unchanged restriction preserves an explicit forecast; a fresh forecast remains conditional',()=>{
+ const d=fixture();d.fleet.HP_1907.status='grounded';d.fleet.HP_1819.status='grounded';
+ apply(d,director,'settings',{aircraft:'HP1907',release:{enabled:true,from:'06:30'}});
+ const old=structuredClone(d);assert.equal(M.reconcile(old,d,now),false);
+ apply(d,pilot('p1'),'request',{flight:flight('p1','HP1907',{flightType:'solo'})});M.publish(d,date,now);
+ assert.equal(d.itinerarios[0].aeronave,'HP-1907');assert.equal(d.itinerarios[0].schedule.conditional,true);
+ assert.equal(d.fleet.HP_1907.status,'grounded');assert.equal(M.operational(d,now).length,1);
+});
+test('forecast invalidation covers future days, preserves history and other aircraft',()=>{
+ const d=fixture(),past='2026-10-29',future='2026-11-02';
+ for(const dt of [past,date,future])M.day(d,dt).releases={HP1907:{enabled:true,date:dt,from:'11:00'},HP1784:{enabled:true,date:dt,from:'12:00'}};
+ M.day(d,date).published=true;
+ const old=structuredClone(d);d.fleet.HP_1907.status='mantenimiento';M.reconcile(old,d,now);
+ assert.deepEqual(M.day(d,past),M.day(old,past));
+ for(const dt of [date,future]){
+  assert.equal(M.day(d,dt).releases.HP1907.enabled,false);
+  assert.deepEqual(M.day(d,dt).releases.HP1784,M.day(old,dt).releases.HP1784);
+  assert.equal(M.day(d,dt).revision,M.day(old,dt).revision+1);
+ }
+ assert.deepEqual(d.itinerarios,old.itinerarios);
+});
 test('all scheduling fields except student are required, including route and observations',()=>{
  for(const field of ['aircraft','pilot','start','end','flightType','route','note'])for(const value of ['', '   ',null]){
   const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);

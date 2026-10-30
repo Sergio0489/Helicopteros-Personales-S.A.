@@ -141,6 +141,17 @@ function protect(before,after){
 function reconcile(before,data,now){
  if(!data.itinerary?.version)return false;let changed=false;
  const today=E.panamaClock(now).date;
+ // A forecast belongs to the restriction under which it was entered. A new
+ // non-operational status requires a fresh forecast, including unpublished days.
+ for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today)){
+  const state=stateFor(data,dt,now),old=stateFor(before,dt,now),stored=day(data,dt);let invalidated=false;
+  for(const ac of state.aircraft){
+   const previous=old.aircraft.find(a=>a.id===ac.id)?.status;
+   if(ac.status===previous||ac.status==='operativo'||!stored.releases?.[ac.id]?.enabled)continue;
+   stored.releases[ac.id]={...stored.releases[ac.id],enabled:false};invalidated=true;
+  }
+  if(invalidated){if(!stored.published)stored.revision++;changed=true;}
+ }
  for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today&&data.itinerary.days[d].published)){
   const state=stateFor(data,dt,now),old=stateFor(before,dt,now);
   for(const ac of state.aircraft){const previous=old.aircraft.find(a=>a.id===ac.id)?.status;if(previous===ac.status)continue;

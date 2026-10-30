@@ -18,6 +18,14 @@ Ruta o destino es una referencia de planificación. Se conserva al aprobar, publ
 - Al guardar un cambio de operativo a mantenimiento/grounded, el servidor reubica vuelos futuros de monomotores ya publicados cuando puede. Respeta horas, restricciones, piloto y estudiante; los casos sin solución y vuelos iniciados quedan señalados para revisión. El piloto puede cancelar su vuelo reubicado antes de su inicio.
 - Las fechas vencidas del piloto se validan en el servidor. Esto es un control administrativo de los vencimientos registrados, no una certificación de habilitación operacional o autorización de despacho.
 
+### Disponibilidad prevista y nuevas restricciones
+
+Una previsión habilitada permite una asignación **condicional** únicamente en su fecha y desde la hora indicada; no cambia el estado de mantenimiento/grounded ni autoriza el retorno al servicio. Para vuelos solos se intenta HP1819, HP1907 y HP1784, salvo configuración explícita del director.
+
+Cuando se guarda un cambio de estado hacia una nueva condición no operativa (por ejemplo, operativo → grounded o mantenimiento → grounded), se deshabilitan las previsiones anteriores de esa aeronave para hoy y fechas futuras, incluso en días todavía sin publicar. Los días históricos y las previsiones de otras aeronaves se conservan. Una nueva previsión debe registrarse expresamente con base en la confirmación del responsable de mantenimiento autorizado. Una restricción sin cambio de estado conserva su previsión: el sistema no detecta por sí solo nuevas discrepancias mecánicas.
+
+Antes del cierre, revisar el estado real en `fleet` y las previsiones en `itinerary.days[YYYY-MM-DD].releases.HP1907`. Una previsión válida puede seguir publicando un vuelo condicional; la alerta de aeronave no operativa permanece activa.
+
 ## Acceso y avisos
 
 `itinerary-read`, `itinerary-command` e `itinerary-notices` usan el endpoint autenticado existente `accountRegistration`. No se abre acceso directo a Realtime Database. El servidor valida cargo, página, cuadro e identidad en cada operación.
