@@ -25,6 +25,10 @@ async function transaction(db,actor,reason,update){
 async function handle(db,context,body){
  const actor={uid:context.user.uid,name:context.account?.profile?.name||context.user.displayName||context.user.email,role:context.director?'Director':context.account?.role};
  let root;
+ if(body.action==='itinerary-calendar'){
+  root=(await db.ref('dashboard').get()).val();
+  return M.calendar(JSON.parse(root?.payload||'{}'),context,body.year,new Date().toISOString());
+ }
  if(body.action==='itinerary-notices'){
   root=(await db.ref('dashboard').get()).val();const data=JSON.parse(root?.payload||'{}');
   return {version:1,notices:M.visibleNotices(data,context,new Date().toISOString()),alerts:context.director?M.operational(data,new Date().toISOString()):[]};
@@ -37,7 +41,8 @@ async function handle(db,context,body){
   root=(await transaction(db,actor,'Itinerario: '+body.command,data=>{if(!data.itinerary?.version)throw Error('El director debe abrir primero el nuevo itinerario.');return M.apply(data,context,body,new Date().toISOString());})).root;
  }else throw Error('Operación no válida.');
  const now=new Date().toISOString(),data=JSON.parse(root?.payload||'{}');
- return {...M.view(data,context,body.date||M.E.panamaClock(now).tomorrow,now),operation:root.operation};
+ const selected=body.date||M.E.panamaClock(now).tomorrow;
+ return {...M.view(data,context,selected,now),...(context.director?{calendar:M.calendar(data,context,selected.slice(0,4),now)}:{}),operation:root.operation};
 }
 async function scheduled(db,now=new Date().toISOString()){
  const clock=M.E.panamaClock(now);

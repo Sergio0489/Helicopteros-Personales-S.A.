@@ -2430,6 +2430,7 @@ function changeMonth(dir) {
 function renderCalendar() {
   renderAircraftPlanner();
   renderDailySchedule();
+  if (!document.getElementById('cal-month-label')) return;
   const label = new Date(calYear, calMonth, 1).toLocaleDateString('es-PA', { month:'long', year:'numeric' }).toUpperCase();
   document.getElementById('cal-month-label').textContent = label;
 
@@ -2475,6 +2476,7 @@ function renderCalendar() {
 
 function selectDate(dateStr) {
   calSelectedDate = dateStr;
+  if (!document.getElementById('flight-date')) return window.HPItineraryUI?.openDate(dateStr);
   // Update date input in form
   document.getElementById('flight-date').value = dateStr;
   // Update selected cell style
@@ -2558,6 +2560,7 @@ function hasConflict(fecha, horaInicio, horaFin, aeronave, excludeIdx) {
 
 function renderDayFlights(dateStr) {
   renderAircraftPlanner();
+  if (!document.getElementById('cal-day-title')) return;
   const [y, m, d] = dateStr.split('-');
   const label = fechaVista(dateStr);
   document.getElementById('cal-day-title').textContent = label;
@@ -3440,4 +3443,3 @@ document.getElementById('flight-student')?.addEventListener('keydown',event=>{co
 setInterval(()=>{if(!document.hidden){buildResumen();updatePilotDropdown();window.PilotDossiers?.refresh();}},30000);
 
 function personAge(birthDate,at=panamaISO()){const born=isoFecha(birthDate);if(!Number.isFinite(dayNumber(born))||born>at)return '';const years=Number(at.slice(0,4))-Number(born.slice(0,4))-(at.slice(5)<born.slice(5)?1:0);return years;}
-
