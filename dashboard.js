@@ -84,7 +84,7 @@ function updateUndoButtons(){
 async function commitPreview(next){
  try{window.HPCompany?.validateChanges(previewData,arguments[0]);window.HPSchoolInformation?.validateChanges(previewData,arguments[0]);PilotValidity.validateChanges(previewData,arguments[0]);window.HPSchoolCertificates?.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
 
- try{await window.cloudWrite(next);previewData=structuredClone(next);return true;}
+ try{await window.cloudWrite(next);const flightsChanged=JSON.stringify(previewData.itinerarios)!==JSON.stringify(next.itinerarios);previewData=structuredClone(next);if(flightsChanged&&window.DASHBOARD_READY){flightsData=structuredClone(next.itinerarios||[]);renderDailySchedule();}return true;}
  catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
 }
 async function saveData(reg,data){
