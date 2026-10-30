@@ -111,15 +111,16 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  }
  if(action==='audit-list'||action==='audit-detail'){if(!isDirector){res.status(403).json({error:'Solo Directores pueden consultar el historial.'});return;}res.json(await (action==='audit-list'?audit.list(db,req.body):audit.detail(db,req.body)));return;}
  if(isDirector)actor.role='Director';
+ if(String(action||'').startsWith('itinerary-')){res.json(await require('./itinerary-service').handle(db,{user,account:actorAccount,director:isDirector},req.body));return;}
  if(action==='director-save'){
   if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}
   if(typeof req.body.payload!=='string'||Buffer.byteLength(req.body.payload)>10000000)throw Error('Datos no válidos.');
-  const data=JSON.parse(req.body.payload);if(!data||typeof data!=='object'||!data.fleet)throw Error('Respaldo no válido.');
-  let failure='';const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{};identities.syncLinked(before,data);identities.assertUnique(before,data);}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
-  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision});return;
+  let data=JSON.parse(req.body.payload);if(!data||typeof data!=='object'||!data.fleet)throw Error('Respaldo no válido.');
+  let failure='';const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';data=JSON.parse(req.body.payload);if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{};identities.syncLinked(before,data);identities.assertUnique(before,data);require('./itinerary-model').protect(before,data);require('./itinerary-model').reconcile(before,data,new Date().toISOString());}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
+  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision,...(data.itinerary?{itinerarySync:{itinerarios:data.itinerarios,itinerary:data.itinerary}}:{})});return;
  }
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
- if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:7,prospectRolePermissions:true,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
+ if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:8,itineraryBlocks:true,prospectRolePermissions:true,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
  if(action==='self-profile'||action==='self-profile-save'){
   if(user.disabled){res.status(403).json({error:'La cuenta está deshabilitada.'});return;}
   let root=(await db.ref('dashboard').get()).val();
@@ -158,7 +159,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   const result=await db.ref('dashboard').transaction(root=>{
    failure='';writes=0;if(root===null){failure='No hay datos disponibles para guardar.';return null;}if(root.operation!==req.body.operation){failure='Los datos cambiaron. Actualiza la página antes de guardar.';return;}
    try{const data=JSON.parse(root.payload),policy=policyFor(data,actorAccount);if(!visiblePages(policy).some(p=>p.id===req.body.page))throw Error('Ya no tienes acceso a esta página.');
-    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid});writes=applied.writes;
+    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid});writes=applied.writes;require('./itinerary-model').protect(data,applied.data);require('./itinerary-model').reconcile(data,applied.data,new Date().toISOString());
     return audit.attach(root,{...root,payload:JSON.stringify(applied.data),revision:(root.revision||0)+1,operation,updatedBy:user.uid,updatedAt:new Date().toISOString()},actor,'dashboard',req.body.reason);
    }catch(e){failure=e.message;return;}
   },undefined,false);

@@ -5,12 +5,12 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261026-horas-fechas-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261030-itinerary-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
  async function assets(page){
-  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js','functions/company.js','company-ui.js'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js','functions/company.js','company-ui.js','functions/itinerary-engine.js','itinerary-ui.js','itinerary.css'].map(asset)).catch(e=>{bundle=null;throw e;});
   if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
   return [...await bundle,page==='estadisticas'?await chartBundle:''];
  }
@@ -34,6 +34,9 @@
    try{const result=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(requestId);writeUncertain=true;reject(Error('No se pudo confirmar el guardado. Actualiza antes de continuar.'));},25000);pending.set(requestId,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'box-save',requestId,page:cfg.page,operation:cfg.operation,before:baseline,after},'*');});cfg.operation=result.operation;baseline=structuredClone(after);return true;}finally{writeBusy=false;}
   };
   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='box-save-result')return;const request=pending.get(e.data.requestId);if(!request)return;clearTimeout(request.timer);pending.delete(e.data.requestId);if(e.data.error)request.reject(Error(e.data.error));else request.resolve(e.data.result);});
+  const itineraryPending=new Map();
+  window.itineraryRequest=(action,payload={})=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{itineraryPending.delete(id);reject(Error('No se pudo confirmar. Actualiza el itinerario antes de repetir el guardado.'));},35000);itineraryPending.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'itinerary-api',id,method:action,payload},'*');});
+  window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='itinerary-result')return;const p=itineraryPending.get(e.data.id);if(!p)return;clearTimeout(p.timer);itineraryPending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.result);});
   window.showCloudError=e=>alert(e.message||'No se pudo guardar.');
   window.getPaymentReceivers=()=>[{uid:cfg.uid,label:cfg.name||'Usuario'}];
 
@@ -61,6 +64,7 @@
   document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>{if(!window.hasDraftChanges?.()||confirm('Hay cambios pendientes. Cerrar sesión eliminará los borradores de este usuario en este dispositivo. ¿Continuar?'))send('logout');};
   const safeAction=new Set(['select','statement','view']);
   function readonlyControl(e){
+   if(e.closest('[data-itinerary-control]'))return true;
    const output=outputFor(e);if(output)return !!mayOutput(output);
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
@@ -82,6 +86,7 @@
   }
   let dialogPermission=null;
   function canEditControl(e){
+   if(e.closest('[data-itinerary-control]'))return true;
    if(outputFor(e))return false;
    if(!cfg.policy||!cfg.editable)return false;
    const pair=window.HPBoxUI?.owner(e)||((e.closest('dialog,.app-calendar'))?dialogPermission:null);
@@ -147,9 +152,9 @@
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,companyModel,companyUI,chart]=await assets(page);
+  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,companyModel,companyUI,itineraryEngine,itineraryUI,itineraryCSS,chart]=await assets(page);
   const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
-  const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS;doc.head.appendChild(schoolStyle);
+  const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS+'\n'+itineraryCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
   const csp=document.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: "+location.origin+"; connect-src 'none'; form-action 'none';";doc.head.prepend(csp);
   const channel=crypto.randomUUID(),frame=document.createElement('iframe');frame.title='Panel principal · '+(result.home?'inicio':page);frame.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-downloads');frame.style.cssText='display:block;width:100%;height:100dvh;border:0;background:var(--bg)';
@@ -162,7 +167,7 @@
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
-  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add('window.finishRoleView();');
+  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HPItineraryUI.install({api:window.itineraryRequest});');
   let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0;
   async function searchIndex(){
    if(searchCache&&Date.now()-searchAt<60000)return searchCache;searchAt=Date.now();
@@ -194,6 +199,10 @@
    }
    if(e.data.action==='audit-reason'){if(settled)window.ChangeHistory?.setReason();return;}
    if(e.data.action==='profile'){if(settled)window.AccountProfile?.open({onSaved:result=>frame.contentWindow?.postMessage({channel,action:'profile-updated',name:result.profile.name},'*')});return;}
+   if(e.data.action==='itinerary-api'){
+    if(!settled||!['itinerary-read','itinerary-command','itinerary-notices'].includes(e.data.method))return;
+    Promise.resolve().then(()=>{if(!window.AccountRegistration?.api)throw Error('La conexión del itinerario aún no está disponible.');return window.AccountRegistration.api(e.data.method,e.data.payload);}).then(result=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,error:error.message},'*'));return;
+   }
    if(e.data.action==='box-save'){
     if(!settled)return;searchCache=null;
     AccountRegistration.api('box-save',{page,operation:e.data.operation,before:e.data.before,after:e.data.after}).then(result=>frame.contentWindow?.postMessage({channel,action:'box-save-result',requestId:e.data.requestId,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'box-save-result',requestId:e.data.requestId,error:error.message},'*'));return;

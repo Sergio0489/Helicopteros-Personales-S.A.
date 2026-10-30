@@ -83,7 +83,8 @@ window.cloudWrite=async function(data){
  const motive=window.ChangeHistory?.getReason()||'';
  try{
   const result=await AccountRegistration.api('director-save',{payload,operation:cloudOperation,reason:motive});
-  window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=payload;cloudVersion=result.revision;cloudOperation=result.operation;
+  if(result.itinerarySync)Object.assign(data,result.itinerarySync);
+  window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=JSON.stringify(data);cloudVersion=result.revision;cloudOperation=result.operation;
   cloudBlocked=false;
   setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado en Firebase');
   return true;
@@ -104,12 +105,12 @@ function validateBackup(data){
   if(!student||typeof student.id!=='string'||typeof student.name!=='string'||!Array.isArray(student.courses))throw Error('El respaldo contiene un expediente de estudiante no válido.');
   for(const course of student.courses)if(!course||!['privado','comercial','ifr','multimotor','rpa','instructor'].includes(course.type)||!Array.isArray(course.payments)||!Array.isArray(course.flights))throw Error('El respaldo contiene un curso de estudiante no válido.');
  }
- return {fleet:data.fleet,pilotos:data.pilotos||[],itinerarios:data.itinerarios||[],undoFleet:data.undoFleet||{},school};
+ return {fleet:data.fleet,pilotos:data.pilotos||[],itinerarios:data.itinerarios||[],undoFleet:data.undoFleet||{},school,...(data.itinerary?{itinerary:data.itinerary}:{})};
 }
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261026-horas-fechas-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261030-itinerary-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261026-horas-fechas-1';
@@ -122,7 +123,7 @@ async function openDashboard(data){
  for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
  const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
- window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ window.HPItineraryUI?.install({onChange:()=>window.syncItineraryCloud?.()});window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
@@ -141,6 +142,18 @@ window.refreshAccountDossiers=async()=>{
  previewData=structuredClone(data);pilotosData.splice(0,pilotosData.length,...structuredClone(data.pilotos||[]));
  cloudETag=result.etag;cloudVersion=envelope.revision||0;cloudOperation=envelope.operation;lastCloudPayload=envelope.payload;
  renderPilotos();updatePilotDropdown();window.PilotDossiers?.refresh();window.School?.refresh();window.SchoolInformation?.refresh();window.CharterInformation?.refresh();buildResumen();return true;
+};
+window.syncItineraryCloud=async()=>{
+ if(!appLoaded||!isDirectorUser()||cloudBusy||cloudBlocked||profileDirty||window.hasDraftChanges?.())return false;
+ const result=await cloudRequest('GET'),envelope=result.value;if(!envelope?.payload||envelope.operation===cloudOperation)return true;
+ const data=validateBackup(JSON.parse(envelope.payload)),before=lastCloudPayload?validateBackup(JSON.parse(lastCloudPayload)):{};
+ if(cloudBusy||profileDirty||window.hasDraftChanges?.()||['fleet','pilotos','undoFleet'].some(k=>JSON.stringify(data[k])!==JSON.stringify(before[k])))return false;
+ // Activation can add only pilot request permissions; never accept unrelated stale school data.
+ const strip=s=>{const v=structuredClone(s||{});delete v.accessConfiguration;return v;};
+ if(JSON.stringify(strip(data.school))!==JSON.stringify(strip(before.school)))return false;
+ previewData=structuredClone(data);flightsData=structuredClone(data.itinerarios||[]);
+ cloudETag=result.etag;cloudVersion=envelope.revision||0;cloudOperation=envelope.operation;lastCloudPayload=envelope.payload;
+ if(typeof renderDailySchedule==='function')renderDailySchedule();return true;
 };
 function confirmLeaving(){return !cloudBusy&&(!(profileDirty||window.hasDraftChanges?.()||cloudBlocked)||confirm('Hay cambios pendientes o un guardado sin confirmar. Descarga un respaldo antes de continuar. ¿Deseas continuar?'));}
 el('cloud-reload').onclick=()=>{if(confirmLeaving())location.reload();};
