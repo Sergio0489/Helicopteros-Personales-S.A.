@@ -141,6 +141,8 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  assert.match(await page.locator('[data-director-alerts]').textContent(),/1:07 PM – 11:59 PM/);
  assert.match(await page.locator('[data-board]').textContent(),/12:30 PM – 3:30 PM/);
  await page.locator('[data-edit-flight="fixed-2"]').click();
+ const startBox=await page.locator('[data-time-field=start]').boundingBox(),endBox=await page.locator('[data-time-field=end]').boundingBox();
+ assert.equal(startBox.y,endBox.y,'Start and end times stay on the same row on mobile');assert(endBox.x>startBox.x);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
  assert.equal(await page.locator('[data-time-field=start] [data-hour]').inputValue(),'1');assert.equal(await page.locator('[data-time-field=start] [data-minute]').inputValue(),'07');assert.equal(await page.locator('[data-time-field=start] [data-period]').inputValue(),'PM');
  await page.locator('[data-time-field=start] [data-hour]').fill('0');assert.equal(await page.locator('dialog form').evaluate(f=>f.checkValidity()),false);
  await page.getByRole('button',{name:'Cancelar',exact:true}).click();
