@@ -6,7 +6,40 @@ const pilot=id=>({user:{uid:id,email:id+'@example.test',emailVerified:true},acco
 function fixture(){return {fleet:Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo',serial:'preserve'}])),pilotos:[{id:'p1',nombre:'Piloto Uno',email:'p1@example.test',medico:'2027-12-31'},{id:'p2',nombre:'Piloto Dos',email:'p2@example.test',medico:'2027-12-31'}],itinerarios:[],school:{students:[{id:'s1',name:'Alumno Uno',email:'s1@example.test',secret:'no-leak'}],registry:{clients:[]},accessConfiguration:{roles:{Piloto:structuredClone(policy),Administrativo:structuredClone(policy),Estudiante:structuredClone(policy)}}},itinerary:{version:1,config:{},days:{},notices:[]}};}
 let sequence=0;
 function apply(d,actor,command,fields={},at=now){return M.apply(d,actor,{date,command,actionId:'test-action-'+(++sequence),revision:M.day(d,fields.date||date).revision,configurationRevision:d.itinerary.config.revision||0,...fields},at);}
-const flight=(pilot='p1',aircraft='HP1907',extra={})=>({pilot,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',...extra});
+const flight=(pilot='p1',aircraft='HP1907',extra={})=>({pilot,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG – Chitré – MPMG',note:'Sin observaciones',...extra});
+test('all scheduling fields except student are required, including route and observations',()=>{
+ for(const field of ['aircraft','pilot','start','end','flightType','route','note'])for(const value of ['', '   ',null]){
+  const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);
+ }
+ const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP1907',{route:'  Chitré  ',studentId:''})});assert.equal(d.itinerarios[0].ruta,'Chitré');assert.equal(d.itinerarios[0].personId,'');
+ assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:''})}),/Ruta o destino/);
+ assert.throws(()=>apply(fixture(),director,'flight',{flight:flight('p1','HP1907',{route:'a'.repeat(201)})}),/máximo 200/);
+});
+test('route survives publication and aircraft relocation without affecting actual flight records',()=>{
+ const d=fixture();d.registros=[{id:'actual',ruta:'Ruta real',hours:2}];d.school.registry.entries=[{id:'charge',amount:123}];
+ const records=JSON.stringify([d.registros,d.school.registry.entries]);apply(d,pilot('p1'),'request',{flight:flight()});M.publish(d,date,now);
+ const before=structuredClone(d);d.fleet.HP_1907.status='mantenimiento';M.reconcile(before,d,now);
+ assert.equal(d.itinerarios[0].ruta,flight().route);assert.equal(M.view(d,director,date,now).state.confirmed[0].route,flight().route);assert.equal(JSON.stringify([d.registros,d.school.registry.entries]),records);
+ const q=M.view(d,director,date,now).state.confirmed[0];assert.equal(M.E.publishedChange(q,{...q,route:'Otro destino'},true).action,'updated');
+});
+test('annual calendar counts scheduled dates only, honors permissions and never mutates data',()=>{
+ const d=fixture();apply(d,pilot('p1'),'request',{flight:flight()});assert.deepEqual(M.calendar(d,director,'2026',now).days,[]);
+ apply(d,director,'flight',{flight:flight('p2','HP1784',{studentId:'student:s1'})});
+ apply(d,director,'flight',{date:'2026-12-02',flight:flight()});
+ d.itinerarios.push({id:'past',fecha:'2026-01-15',aeronave:'HP-1907',piloto:'Histórico'},{id:'next-year',fecha:'2027-01-01',aeronave:'HP-1907'});
+ const before=structuredClone(d);assert.deepEqual(M.calendar(d,director,'2026',now).days,[{date:'2026-01-15',count:1},{date,count:1},{date:'2026-12-02',count:1}]);assert.deepEqual(d,before);
+ const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};
+ assert.throws(()=>M.calendar(d,student,'2026',now),/Solo el director/);
+ assert.throws(()=>M.calendar(d,pilot('p1'),'2026',now),/Solo el director/);
+ d.school.accessConfiguration.roles.Piloto.itinerario.actions.view=false;assert.throws(()=>M.calendar(d,pilot('p1'),'2026',now),/Solo el director/);
+ for(const year of ['2026-10','0000','202','invalid',2026])assert.throws(()=>M.calendar(d,director,year,now),/año válido/);
+});
+test('cancelled and rescheduled flights update the annual day counts',()=>{
+ const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;
+ apply(d,director,'flight',{id,originalDate:date,originalRevision:M.day(d,date).revision,date:'2027-01-02',flight:flight()});
+ assert.deepEqual(M.calendar(d,director,'2026',now).days,[]);assert.deepEqual(M.calendar(d,director,'2027',now).days,[{date:'2027-01-02',count:1}]);
+ apply(d,director,'cancel-flight',{date:'2027-01-02',id});assert.deepEqual(M.calendar(d,director,'2027',now).days,[]);
+});
 test('two pending requests may overlap; publication separates monos without overlaps',()=>{const d=fixture();apply(d,pilot('p1'),'request',{flight:flight()});apply(d,pilot('p2'),'request',{flight:flight('p2')});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).requests.length,2);M.publish(d,date,now);assert.equal(d.itinerarios.length,2);assert.notEqual(d.itinerarios[0].aeronave,d.itinerarios[1].aeronave);assert.equal(d.itinerary.notices.length,1);M.publish(d,date,now);assert.equal(d.itinerary.notices.length,1);});
 test('pilot identity is bound on server; role and clock cannot be forged',()=>{const d=fixture();apply(d,pilot('p1'),'request',{flight:flight('p2'),role:'Director',now:'2030'});assert.equal(M.day(d,date).requests[0].pilot,'p1');assert.throws(()=>apply(d,pilot('p1'),'publish'),/director/);assert.throws(()=>apply(d,pilot('p1'),'request',{date:'2026-11-01',flight:flight()}),/mañana/);assert.throws(()=>apply(d,pilot('p1'),'request',{flight:flight()},'2026-10-30T20:00:00-05:00'),/cerradas/);});
 test('readonly request box, missing identity and unverified accounts cannot submit',()=>{const d=fixture();d.school.accessConfiguration.roles.Piloto.itinerario.boxes.requests.edit=false;assert.throws(()=>apply(d,pilot('p1'),'request',{flight:flight()}),/habilitar/);d.school.accessConfiguration.roles.Piloto=structuredClone(policy);assert.throws(()=>apply(d,pilot('absent'),'request',{flight:flight()}),/expediente/);const a=pilot('p1');a.user.emailVerified=false;assert.throws(()=>apply(d,a,'request',{flight:flight()}),/Verifica/);});
@@ -23,3 +56,4 @@ test('repeated commands are idempotent and stale edits rejected',()=>{const d=fi
 test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
 test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
 test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
+

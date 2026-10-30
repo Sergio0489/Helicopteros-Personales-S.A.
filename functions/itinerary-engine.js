@@ -204,7 +204,7 @@ function prepareApproval(state,requestId,role='director'){
 }
 function publishedChange(before,after,isPublished){
  if(!isPublished||!before&&!after)return null;
- const fields=['date','aircraft','pilot','studentId','start','end','flightType','socioName','note'];
+ const fields=['date','aircraft','pilot','studentId','start','end','flightType','socioName','route','note'];
  const snapshot=q=>q?Object.fromEntries(fields.map(k=>[k,k==='flightType'?typeOf(q):(q[k]||'')])):null;
  const from=snapshot(before),to=snapshot(after);
  if(JSON.stringify(from)===JSON.stringify(to))return null;
@@ -316,3 +316,4 @@ function simulate(state){
 const api={slots,fleet,minutes,overlaps,active,validWindow,coversWindow,availabilityStart,bookable,bookingSlots,covers,directorWindowAvailable,flightAvailable,isNightFlight,nightPublication,sourceSnapshot,timeError,validateSlots,requestError,reservationGate,panamaClock,operationalAlerts,competingRequests,prepareApproval,publishedChange,publicationNotice,canCancelRelocated,reallocatePublished,directorFlightError,pilotCanRequest,canSchedule,allowedForType,defaultTypeRules,normalizeRequest,typeHint,typeConfigAircraft,canChooseFlightType,flightDataError,simulate,flightTypes,typeOf,aircraftOrder,compatible};
 if(typeof module==='object'&&module.exports)module.exports=api;else root.HPItinerary=api;
 })(typeof globalThis==='object'?globalThis:this);
+

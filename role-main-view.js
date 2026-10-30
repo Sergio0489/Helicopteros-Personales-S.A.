@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261030-itinerary-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261030-loading-2',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -200,7 +200,7 @@
    if(e.data.action==='audit-reason'){if(settled)window.ChangeHistory?.setReason();return;}
    if(e.data.action==='profile'){if(settled)window.AccountProfile?.open({onSaved:result=>frame.contentWindow?.postMessage({channel,action:'profile-updated',name:result.profile.name},'*')});return;}
    if(e.data.action==='itinerary-api'){
-    if(!settled||!['itinerary-read','itinerary-command','itinerary-notices'].includes(e.data.method))return;
+    if(!settled||!['itinerary-read','itinerary-calendar','itinerary-command','itinerary-notices'].includes(e.data.method))return;
     Promise.resolve().then(()=>{if(!window.AccountRegistration?.api)throw Error('La conexión del itinerario aún no está disponible.');return window.AccountRegistration.api(e.data.method,e.data.payload);}).then(result=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,error:error.message},'*'));return;
    }
    if(e.data.action==='box-save'){
@@ -224,6 +224,3 @@
  }
  window.RoleMainView={mount};
 })();
-
-
-

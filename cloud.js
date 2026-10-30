@@ -110,7 +110,7 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const script=document.createElement('script');script.src='dashboard.js?v=20261030-itinerary-1';
+  const script=document.createElement('script');script.src='dashboard.js?v=20261030-loading-2';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261026-horas-fechas-1';
@@ -322,15 +322,3 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
-
-
-
-
-
-
-
-
-
-
-
-

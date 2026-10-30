@@ -2,6 +2,12 @@
 
 La página utiliza los expedientes y estados existentes. No importa datos del borrador ni crea pilotos de ejemplo. Las reservas confirmadas siguen en `dashboard.payload.itinerarios`, de modo que Horario del día, búsquedas y consultas existentes usan el mismo horario. Las horas realizadas, bitácoras y cargos continúan registrándose en Registro de bitácora: una reserva no factura ni incrementa horas por sí sola.
 
+## Datos al agendar
+
+Aeronave, piloto, fecha, horas de inicio y culminación, tipo de vuelo, **Ruta o destino** y observaciones son obligatorios. Estudiante / Cliente es opcional; el nombre del socio se exige únicamente para ese tipo de vuelo. Si no hay comentarios, se puede escribir «Sin observaciones». El servidor valida los campos al crear o modificar vuelos y solicitudes; no exige completar reservas históricas que no se están editando.
+
+Ruta o destino es una referencia de planificación. Se conserva al aprobar, publicar, modificar o reubicar el vuelo, y no crea entradas, horas ni cargos en la bitácora real.
+
 ## Reglas
 
 - Los pilotos con cargo confirmado, correo verificado, expediente vinculado y permiso de edición de **Solicitudes de vuelos** pueden solicitar solo para mañana, de 12:01 a 20:00 de Panamá. La identidad del piloto se determina en el servidor.
@@ -43,6 +49,16 @@ El CLI crea la tarea de Cloud Scheduler `publishDailyItinerary`, con `15 20 * * 
 3. Abrir Itinerario con un director y revisar prioridades, aeronaves por tipo y listas de pilotos antes del primer cierre.
 4. Comprobar en Cloud Scheduler que la tarea está habilitada; verificar un piloto de pruebas y su permiso **Solicitudes de vuelos → Ver y editar**. Una reserva de prueba debe cancelarse desde la aplicación, manteniendo el historial.
 
-Antes de activar el backend, el frontend conserva el calendario anterior y explica el despliegue pendiente. Para desactivar el cierre temporalmente se puede pausar la tarea en Cloud Scheduler; no borrar solicitudes ni restaurar un respaldo antiguo sobre datos nuevos.
+El backend quedó activado el 29/10/2026: `accountRegistration` y `publishDailyItinerary` están activos, y Cloud Scheduler tiene habilitado el cierre a las 20:15 en `America/Panama`. La página usa únicamente Itinerario por bloques; elimina el contenido del calendario anterior al instalarse y muestra un estado de carga mientras consulta Firebase. Si falla la consulta inicial, ofrece Reintentar sin regresar al calendario anterior. Los registros de vuelos existentes se conservan.
+
+Para desactivar el cierre temporalmente se puede pausar la tarea en Cloud Scheduler; no borrar solicitudes ni restaurar un respaldo antiguo sobre datos nuevos.
 
 Pruebas: `node --test tests/itinerary-engine.cjs tests/itinerary-production.cjs tests/itinerary-service.cjs`, además de los controles existentes de permisos, historial y privacidad. Los datos de prueba están exclusivamente en `tests/fixtures`.
+
+## Calendario anual y detalle del director
+
+Solo Director dispone del calendario anual de doce meses, con navegación entre años. Los días verdes muestran el número de vuelos agendados; las solicitudes pendientes no se cuentan. Seleccionar una fecha abre su programación. Los cambios, cancelaciones y traslados de fecha actualizan el resumen. Los otros cargos conservan la vista diaria según sus permisos.
+
+`itinerary-calendar` es una consulta de solo lectura reservada al director; recibe `year` y devuelve únicamente fechas y cantidades. Las lecturas y guardados diarios del director incluyen el resumen del año.
+
+En Vuelos confirmados, Director ve aeronave, hora inicial y final, ruta o destino, cliente/estudiante, piloto, tipo y observaciones. Los vuelos anteriores sin destino muestran «Sin registrar».
