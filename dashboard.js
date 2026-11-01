@@ -2264,7 +2264,7 @@ sidebarEl.appendChild(escuelaTab);
 // Empresa tab
 const empresaTab = document.createElement('div');
 empresaTab.className = 'aircraft-tab';
-empresaTab.innerHTML = '<div class="tab-reg" style="font-size:10px">🚁 HP CHARTER</div>';
+empresaTab.innerHTML = '<div class="tab-reg" style="font-size:10px">🚁 HP CHÁRTER</div>';
 empresaTab.addEventListener('click', () => {
   document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
@@ -2276,7 +2276,7 @@ sidebarEl.appendChild(empresaTab);
 // Itinerarios tab
 const itinerariosTab = document.createElement('div');
 itinerariosTab.className = 'aircraft-tab';
-itinerariosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">🗓️ ITINERARIO</div>';
+itinerariosTab.innerHTML = '<div class="tab-reg" style="font-size:10px">🗓️ ITINERARIOS</div>';
 itinerariosTab.addEventListener('click', () => {
   document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
