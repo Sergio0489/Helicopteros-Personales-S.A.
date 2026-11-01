@@ -34,7 +34,7 @@
   function updateOperationalBadge(){let seen='';try{seen=localStorage.getItem('operational-alerts-read:'+firebase.auth().currentUser?.uid)||'';}catch{}const unread=seen?operationalRows.findIndex(n=>n.id===seen):operationalRows.length;const count=seen&&unread>=0?unread:seen?0:operationalRows.length;operationalButton.textContent='🔔 Alertas'+(count?' ('+count+')':'');}
   operationalButton.refresh=refresh;refresh();alertTimer=setInterval(refresh,45000);
  }
- installOperationalAlerts();firebase.auth().onAuthStateChanged(()=>{if(alertTimer)clearInterval(alertTimer);alertTimer=null;operationalButton?.remove();operationalButton=null;operationalRows=[];installOperationalAlerts();});window.addEventListener('focus',()=>{operationalButton?.refresh?.();const waiting=document.getElementById('account-waiting');if(waiting&&!waiting.hidden&&!document.querySelector('.signup-dialog[open]')&&!isDirectorUser()&&firebase.auth().currentUser&&!registering&&document.visibilityState!=='hidden'&&Date.now()-lastLanding>60000)landing();});
+ installOperationalAlerts();const auth=typeof firebase!=='undefined'?firebase.auth?.():null;auth?.onAuthStateChanged?.(()=>{if(alertTimer)clearInterval(alertTimer);alertTimer=null;operationalButton?.remove();operationalButton=null;operationalRows=[];installOperationalAlerts();});window.addEventListener('focus',()=>{operationalButton?.refresh?.();const waiting=document.getElementById('account-waiting');if(waiting&&!waiting.hidden&&!document.querySelector('.signup-dialog[open]')&&!isDirectorUser()&&firebase.auth().currentUser&&!registering&&document.visibilityState!=='hidden'&&Date.now()-lastLanding>60000)landing();});
 })();
 // Director-only directory. The server separately checks the assigned Director role.
 (()=>{
