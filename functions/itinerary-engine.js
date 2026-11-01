@@ -230,7 +230,7 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
  const affected=flights.filter(q=>q.aircraft===aircraftId&&(state.date>clock.date||minutes(q.end)>minutes(clock.time))).sort((x,y)=>allowedForType(state,typeOf(x)).length-allowedForType(state,typeOf(y)).length||minutes(x.start)-minutes(y.start)||x.id.localeCompare(y.id));
  for(const q of affected){
   const before=structuredClone(q),inProgress=state.date===clock.date&&minutes(q.start)<=minutes(clock.time);
-  const candidates=typeOf(q)!=='charter'&&!inProgress?allowedForType(state,typeOf(q)).map(id=>state.aircraft.find(other=>other.id===id)).filter(other=>other&&other.id!==a.id&&other.status==='operativo'&&compatible(state,q,other)&&flightAvailable(other,q,state.date)&&!flights.some(x=>x.id!==q.id&&(x.aircraft===other.id||x.pilot===q.pilot)&&overlaps(x,q))):[];
+  const candidates=a.category==='Monomotor'&&typeOf(q)!=='charter'&&!inProgress?allowedForType(state,typeOf(q)).map(id=>state.aircraft.find(other=>other.id===id)).filter(other=>other&&other.id!==a.id&&other.category==='Monomotor'&&other.status==='operativo'&&compatible(state,q,other)&&flightAvailable(other,q,state.date)&&!flights.some(x=>x.id!==q.id&&(x.aircraft===other.id||x.pilot===q.pilot)&&overlaps(x,q))):[];
   if(candidates.length){
    const target=candidates[0];q.aircraft=target.id;q.conditional=false;
    q.relocation={from:before.aircraft,to:target.id,at:now,reason:'Cambio de estado a '+a.status};
