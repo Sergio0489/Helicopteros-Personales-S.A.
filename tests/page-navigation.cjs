@@ -7,7 +7,7 @@ await page.evaluate(()=>RolePortal.open());
 for(const name of ['aeronaves','pilotos','estudiantes','bitacora','pagos','itinerario','escuela','charter','pendientes','estadisticas','saldos','horario']){
  const frame=await(await page.locator('iframe').elementHandle()).contentFrame();
  if(width<700)await frame.locator('#hamburgerBtn').click();
- const tab=frame.locator('#sidebar-tabs .aircraft-tab').filter({hasText:new RegExp(({aeronaves:'AERONAVES',bitacora:'Registro de bitácora',pagos:'Registro de pago',charter:'HP CHARTER',horario:'Horario del día',estadisticas:'Estadísticas',saldos:'Alerta de saldos'})[name]||name,'i')}).first();
+ const tab=frame.locator('#sidebar-tabs .aircraft-tab').filter({hasText:new RegExp(({aeronaves:'AERONAVES',bitacora:'Registro de bitácora',pagos:'Registro de pago',charter:'HP CH(?:A|Á)RTER',horario:'Horario del día',estadisticas:'Estadísticas',saldos:'Alerta de saldos'})[name]||name,'i')}).first();
  await tab.click();
  await page.waitForFunction(name=>document.querySelector('iframe')?.title==='Panel principal · '+name,name);
  await page.locator('iframe').waitFor({state:'visible'});
