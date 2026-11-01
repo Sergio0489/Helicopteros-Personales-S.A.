@@ -3152,9 +3152,9 @@ function scheduleAircraftColors(reg) {
 function renderDailySchedule() {
   const panel=document.getElementById('panel-horario-dia');if(!panel)return;
   const base=dailyScheduleDate().date;
-  if(panel.dataset.scheduleBase!==base){panel.dataset.scheduleBase=base;panel.dataset.dayOffset='0';}
+  if(panel.dataset.scheduleBase!==base){panel.dataset.scheduleBase=base;panel.dataset.dayOffset='0';panel.dataset.scheduleSelectedDate='';}
   const offset=Number(panel.dataset.dayOffset||0);
-  const date=scheduleOffsetDate(base,offset),groups=dailyScheduleGroups(date);
+  const date=panel.dataset.scheduleSelectedDate||scheduleOffsetDate(base,offset),groups=dailyScheduleGroups(date);
   panel.dataset.scheduleDate=date;
   const dayLabel=document.getElementById('schedule-tab-day');
   if(dayLabel)dayLabel.textContent='('+scheduleWeekday(date)+')';
@@ -3171,7 +3171,8 @@ function renderDailySchedule() {
         (flights.length?flights.map(f=>{
           const start=f.horaInicio||f.hora,end=f.horaFin;
           const time=start?fmt12h(start)+(end?' → '+fmt12h(end):''):'Hora por definir';
-          return '<article class="daily-schedule-flight"><div class="flight-time">'+escapeRecord(time)+'</div><div class="daily-schedule-person"><small>Piloto</small><span>'+escapeRecord(f.piloto||'Sin asignar')+'</span></div>'+(f.estudiante?'<div class="daily-schedule-person"><small>Estudiante</small><span>'+escapeRecord(f.estudiante)+'</span></div>':'')+'</article>';
+          const index=flightsData.indexOf(f);
+          return '<article id="schedule-flight-'+index+'" data-flight-index="'+index+'" tabindex="-1" class="daily-schedule-flight"><div class="flight-time">'+escapeRecord(time)+'</div><div class="daily-schedule-person"><small>Piloto</small><span>'+escapeRecord(f.piloto||'Sin asignar')+'</span></div>'+(f.estudiante?'<div class="daily-schedule-person"><small>Estudiante</small><span>'+escapeRecord(f.estudiante)+'</span></div>':'')+'</article>';
         }).join(''):'<div class="daily-schedule-empty">Sin vuelos programados</div>')+'</section>';
     }).join('')+'</div>';
 }
@@ -3363,6 +3364,7 @@ function selectScheduleOffset(offset){
   const panel=document.getElementById('panel-horario-dia');
   const base=dailyScheduleDate().date;
   if(panel.dataset.scheduleBase!==base)renderDailySchedule();
+  panel.dataset.scheduleSelectedDate='';
   const target=scheduleOffsetDate(base,offset);
   if(target===panel.dataset.scheduleDate)return;
   if(target!==panamaISO()&&!window.confirm('¿Estás seguro de que quieres ver una fecha diferente a la de hoy?\n\nVer: '+scheduleWeekday(target)+' '+fechaVista(target)+'\nHoy: '+fechaVista(panamaISO())))return;
@@ -3371,8 +3373,14 @@ function selectScheduleOffset(offset){
   panel.querySelector('[data-day-offset="'+offset+'"]')?.focus({preventScroll:true});
 }
 
-
-
+function selectScheduleDate(date){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||''))return;
+  const parsed=new Date(date+'T12:00:00Z');
+  if(Number.isNaN(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)return;
+  const panel=document.getElementById('panel-horario-dia');if(!panel)return;
+  panel.dataset.scheduleSelectedDate=date;
+  renderDailySchedule();
+}
 
 // Keep the existing tab nodes and their click/save handlers while grouping the fleet.
 function organizeSidebar(){
