@@ -230,7 +230,7 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
  const affected=flights.filter(q=>q.aircraft===aircraftId&&(state.date>clock.date||minutes(q.end)>minutes(clock.time))).sort((x,y)=>allowedForType(state,typeOf(x)).length-allowedForType(state,typeOf(y)).length||minutes(x.start)-minutes(y.start)||x.id.localeCompare(y.id));
  for(const q of affected){
   const before=structuredClone(q),inProgress=state.date===clock.date&&minutes(q.start)<=minutes(clock.time);
-  const candidates=a.category==='Monomotor'&&!inProgress?aircraftOrder(state,typeOf(q)).filter(other=>other.id!==a.id&&other.status==='operativo'&&compatible(state,q,other)&&flightAvailable(other,q,state.date)&&!flights.some(x=>x.id!==q.id&&(x.aircraft===other.id||x.pilot===q.pilot)&&overlaps(x,q))):[];
+  const candidates=typeOf(q)!=='charter'&&!inProgress?allowedForType(state,typeOf(q)).map(id=>state.aircraft.find(other=>other.id===id)).filter(other=>other&&other.id!==a.id&&other.status==='operativo'&&compatible(state,q,other)&&flightAvailable(other,q,state.date)&&!flights.some(x=>x.id!==q.id&&(x.aircraft===other.id||x.pilot===q.pilot)&&overlaps(x,q))):[];
   if(candidates.length){
    const target=candidates[0];q.aircraft=target.id;q.conditional=false;
    q.relocation={from:before.aircraft,to:target.id,at:now,reason:'Cambio de estado a '+a.status};
@@ -239,7 +239,7 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
    changes.push({kind:'relocated',before,after:structuredClone(q),reason:q.reason});
   }else{
    q.conditional=true;q.relocationPending=true;
-   const reason=inProgress?'Vuelo ya iniciado: requiere revisión del director.':a.category!=='Monomotor'?'Agenda multimotor o helicóptero: reubicación manual por director.':'Sin aeronave operativa compatible y libre en el mismo horario.';
+   const reason=inProgress?'Vuelo ya iniciado: requiere revisión del director.':typeOf(q)==='charter'?'Chárter: cambio de aeronave requiere revisión del director.':'Sin aeronave operativa compatible y libre en el mismo horario.';
    changes.push({kind:'review',before,after:structuredClone(q),reason});
   }
  }

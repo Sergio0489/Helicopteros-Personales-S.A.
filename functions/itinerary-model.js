@@ -139,8 +139,20 @@ function protect(before,after){
  else delete after.itinerary;
 }
 function reconcile(before,data,now){
- if(!data.itinerary?.version)return false;let changed=false;
+ let changed=false;
  const today=E.panamaClock(now).date;
+ // Keep operational alerts available even to users who do not have itinerary access.
+ data.operationalNotices ||= [];
+ for(const [registration,aircraft]of Object.entries(data.fleet||{})){
+  const previous=before.fleet?.[registration]?.status||'';
+  if(previous===aircraft?.status||!['mantenimiento','aog'].includes(aircraft?.status))continue;
+  const status=aircraft.status==='aog'?'grounded':aircraft.status;
+  const id='aircraft-status:'+hash([registration,previous,status,now]);
+  if(data.operationalNotices.some(n=>n.id===id))continue;
+  data.operationalNotices.push({id,kind:'aircraft-status',aircraft:registration.replaceAll('_','-'),status,previous,createdAt:now,recipients:[{kind:'group',id:'all'}],message:'La aeronave '+registration.replaceAll('_','-')+' cambió a '+(status==='grounded'?'GROUNDED':'MANTENIMIENTO')+'.'});
+  data.operationalNotices=data.operationalNotices.slice(-500);changed=true;
+ }
+ if(!data.itinerary?.version)return changed;
  // A forecast belongs to the restriction under which it was entered. A new
  // non-operational status requires a fresh forecast, including unpublished days.
  for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today)){

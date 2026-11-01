@@ -37,6 +37,9 @@
   const itineraryPending=new Map();
   window.itineraryRequest=(action,payload={})=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{itineraryPending.delete(id);reject(Error('No se pudo confirmar. Actualiza el itinerario antes de repetir el guardado.'));},35000);itineraryPending.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'itinerary-api',id,method:action,payload},'*');});
   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='itinerary-result')return;const p=itineraryPending.get(e.data.id);if(!p)return;clearTimeout(p.timer);itineraryPending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.result);});
+  const aircraftReports=new Map();
+  window.reportAircraft=(aircraft,description)=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{aircraftReports.delete(id);reject(Error('No se pudo confirmar el reporte. Actualiza e intenta de nuevo.'));},25000);aircraftReports.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'aircraft-report',id,aircraft,description},'*');});
+  window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='aircraft-report-result')return;const item=aircraftReports.get(e.data.id);if(!item)return;clearTimeout(item.timer);aircraftReports.delete(e.data.id);e.data.error?item.reject(Error(e.data.error)):item.resolve(e.data.result);});
   window.showCloudError=e=>alert(e.message||'No se pudo guardar.');
   window.getPaymentReceivers=()=>[{uid:cfg.uid,label:cfg.name||'Usuario'}];
 
@@ -64,7 +67,7 @@
   document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>{if(!window.hasDraftChanges?.()||confirm('Hay cambios pendientes. Cerrar sesión eliminará los borradores de este usuario en este dispositivo. ¿Continuar?'))send('logout');};
   const safeAction=new Set(['select','statement','view']);
   function readonlyControl(e){
-   if(e.closest('[data-itinerary-control]'))return true;
+   if(e.matches('[data-pilot-aircraft-report]')||e.closest('[data-itinerary-control]'))return true;
    const output=outputFor(e);if(output)return !!mayOutput(output);
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
@@ -86,7 +89,7 @@
   }
   let dialogPermission=null;
   function canEditControl(e){
-   if(e.closest('[data-itinerary-control]'))return true;
+   if(e.matches('[data-pilot-aircraft-report]')||e.closest('[data-itinerary-control]'))return true;
    if(outputFor(e))return false;
    if(!cfg.policy||!cfg.editable)return false;
    const pair=window.HPBoxUI?.owner(e)||((e.closest('dialog,.app-calendar'))?dialogPermission:null);
@@ -115,6 +118,9 @@
    if(cfg.notice){const p=document.getElementById(panels[cfg.page]);p.replaceChildren();const c=document.createElement('div');c.className='card';c.textContent=cfg.notice;p.appendChild(c);}
    function restrict(){
     HPBoxUI.annotate();
+    if(cfg.page==='aeronaves'&&cfg.role==='Piloto'&&HPBoxes.permissions(cfg.policy,'aeronaves','status').view){
+     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const idx=Number(panel.id.slice(7)),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>{const dialog=document.createElement('dialog');dialog.className='user-profile-dialog';dialog.dataset.itineraryControl='true';dialog.style.cssText='width:min(480px,92vw);border:1px solid #aac3da;border-radius:12px;padding:20px;font:inherit';dialog.innerHTML='<form method="dialog"><h2>Reporte de aeronave · '+aircraft+'</h2><label>Describe el problema<textarea name="description" required minlength="5" maxlength="1000" rows="5" style="width:100%;box-sizing:border-box"></textarea></label><p data-status role="status"></p><button type="submit" data-send>Enviar a taller</button><button type="button" data-cancel>Cancelar</button></form>';document.body.appendChild(dialog);dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const send=dialog.querySelector('[data-send]'),status=dialog.querySelector('[data-status]');send.disabled=true;status.textContent='Enviando reporte…';try{await window.reportAircraft(aircraft,dialog.querySelector('[name=description]').value);status.textContent='Reporte guardado como tarea pendiente de taller.';setTimeout(()=>dialog.close(),800);}catch(error){status.textContent=error.message;send.disabled=false;}};dialog.showModal();};const header=panel.querySelector('.aircraft-header');header?.after(button);});
+    }
     document.querySelectorAll('[data-permission-box]').forEach(e=>{
      const rights=HPBoxes.permissions(cfg.policy||{},e.dataset.permissionPage,e.dataset.permissionBox);
      e.hidden=!rights.view;
@@ -202,6 +208,10 @@
    if(e.data.action==='itinerary-api'){
     if(!settled||!['itinerary-read','itinerary-calendar','itinerary-command','itinerary-notices'].includes(e.data.method))return;
     Promise.resolve().then(()=>{if(!window.AccountRegistration?.api)throw Error('La conexión del itinerario aún no está disponible.');return window.AccountRegistration.api(e.data.method,e.data.payload);}).then(result=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,error:error.message},'*'));return;
+   }
+   if(e.data.action==='aircraft-report'){
+    if(!settled||result.role!=='Piloto')return;
+    AccountRegistration.api('aircraft-report',{aircraft:e.data.aircraft,description:e.data.description}).then(result=>frame.contentWindow?.postMessage({channel,action:'aircraft-report-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'aircraft-report-result',id:e.data.id,error:error.message},'*'));return;
    }
    if(e.data.action==='box-save'){
     if(!settled)return;searchCache=null;

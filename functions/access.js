@@ -7,7 +7,7 @@ const fields=(o,names)=>Object.fromEntries(names.split(' ').filter(k=>o?.[k]!=nu
 const personal='name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage';
 const entry='date aircraft book pilot copilot personName origin hours100 equipmentKind operationType observation paxOut paxBack voidedAt';
 const flight='fecha aeronave piloto estudiante cliente destino origen hora horaInicio horaFin tipo observaciones';
-function policyFor(data,account){if(!account?.assignedAt||!ROLES.includes(account.role))return {};return normalize(data.school?.accessConfiguration?.roles?.[account.role]||{});}
+function policyFor(data,account){if(!account?.assignedAt||!ROLES.includes(account.role))return {};const policy=normalize(data.school?.accessConfiguration?.roles?.[account.role]||{});if(account.role==='Mecánico'){const page=policy.aeronaves;page.actions.view=true;page.actions.edit=true;for(const id of ['status','pending','maintenance'])page.boxes[id]={view:true,edit:true};page.areas['Información y estatus']=true;page.areas['Mantenimiento y taller']=true;}return policy;}
 function can(policy,page,area){return policy?.[page]?.actions?.view===true&&policy[page].areas?.[area]===true;}
 function visiblePages(policy){return Object.entries(PAGES).filter(([id])=>policy[id]?.actions?.view===true&&Object.values(policy[id].areas||{}).some(v=>v===true)).map(([id,name])=>({id,name}));}
 function projectPage(data,account,policy,page){
