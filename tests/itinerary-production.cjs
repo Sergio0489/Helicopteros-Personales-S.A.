@@ -90,6 +90,27 @@ test('admin can create fixed multi but not mono or charter or modify',()=>{const
 test('legacy scheduled rows and extra fields survive first save untouched',()=>{const d=fixture();d.itinerarios=[{id:1,fecha:date,horaInicio:'21:00',horaFin:'22:00',aeronave:'HP-11BL',piloto:'Unlisted historical pilot',unknownField:{keep:true}}];const original=structuredClone(d.itinerarios[0]);apply(d,director,'settings',{nightEnabled:true});assert.deepEqual(d.itinerarios[0],original);});
 test('night needs two distinct aircraft; cancellation withdraws remaining night flight',()=>{const d=fixture();apply(d,director,'settings',{nightEnabled:true});apply(d,director,'flight',{flight:flight('p1','HP1784',{start:'18:30',end:'20:00'})});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).held.length,1);apply(d,director,'flight',{flight:flight('p2','HP1819',{start:'18:30',end:'20:00'})});assert.equal(d.itinerarios.length,2);apply(d,director,'cancel-flight',{id:d.itinerarios[0].id});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).held.length,1);});
 test('status loss reassigns approved mono, pilot may cancel only own relocated flight',()=>{const d=fixture();apply(d,pilot('p1'),'request',{flight:flight()});apply(d,director,'approve',{id:M.day(d,date).requests[0].id});M.publish(d,date,now);const old=structuredClone(d);d.fleet.HP_1907.status='mantenimiento';assert.equal(M.reconcile(old,d,now),true);assert.notEqual(d.itinerarios[0].aeronave,'HP-1907');const id=d.itinerarios[0].id;assert.throws(()=>apply(d,pilot('p2'),'cancel-flight',{id}),/propio/);apply(d,pilot('p1'),'cancel-flight',{id});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).cancelled.length,1);assert.ok(d.itinerary.notices.some(n=>n.kind==='relocated'));});
+test('published multimotor and helicopter reviews notify the Director with accurate reasons and keep assignments',()=>{
+ const d=fixture();
+ apply(d,director,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});
+ apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'socio',socioName:'Vuelo ficticio',slot:'b2',start:'10:00',end:'12:30'})});
+ M.publish(d,date,now);const original=d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin}));
+ const old=structuredClone(d);d.fleet.HP_880BL.status='grounded';d.fleet.HP_11BL.status='mantenimiento';
+ assert.equal(M.reconcile(old,d,now),true);
+ const expected=new Map([
+  ['HP880BL','Multimotor: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.'],
+  ['HP11BL','Helicóptero: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.']
+ ]);
+ const notices=d.itinerary.notices.filter(n=>n.kind==='review');assert.equal(notices.length,2);
+ for(const n of notices){
+  assert.equal(n.reason,expected.get(n.after.aircraft));assert.equal(n.before.aircraft,n.after.aircraft);
+  assert.equal(n.after.relocationPending,true);assert.deepEqual(n.recipients,[{kind:'group',id:'all'}]);
+ }
+ assert.deepEqual(M.visibleNotices(d,director,now).filter(n=>n.kind==='review').map(n=>n.reason).sort(),[...expected.values()].sort());
+ assert.deepEqual(d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin})),original);
+ const after=structuredClone(d),count=d.itinerary.notices.length;
+ assert.equal(M.reconcile(after,d,now),false);assert.equal(d.itinerary.notices.length,count);
+});
 test('expired pilot rejected on server and closed requests require director',()=>{const d=fixture();d.pilotos[0].instructorExpiry='2026-10-30';assert.throws(()=>apply(d,director,'flight',{flight:flight()}),/vencido/);});
 test('cross-date flight edit is atomic and prevents target collision',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;apply(d,director,'flight',{id,originalDate:date,originalRevision:M.day(d,date).revision,date:'2026-11-01',flight:flight('p2','HP1819')});assert.equal(d.itinerarios.length,1);assert.equal(d.itinerarios[0].fecha,'2026-11-01');assert.equal(d.itinerarios[0].piloto,'Piloto Dos');});
 test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});

@@ -481,6 +481,32 @@ test('relocation respects flight type, fixed conflicts and never moves multi or 
   r=H.reallocatePublished(s,id,'operativo','2026-10-29T20:30:00-05:00');assert.equal(r.changes[0].kind,'review');assert.equal(r.flights[0].aircraft,id);
  }
 });
+test('manual-review reasons explain category restrictions even when compatible aircraft are available',()=>{
+ const now='2026-10-29T20:30:00-05:00';
+ for(const row of [
+  {aircraft:'HP880BL',alternative:'HP18BLM',reason:'Multimotor: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.'},
+  {aircraft:'HP11BL',alternative:'HP_TEST_HELI',reason:'Helicóptero: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.'}
+ ]){
+  const s=base();s.published=true;const source=s.aircraft.find(a=>a.id===row.aircraft);source.status='grounded';
+  let alternative=s.aircraft.find(a=>a.id===row.alternative);
+  if(!alternative){alternative={...structuredClone(source),id:row.alternative,status:'operativo'};s.aircraft.push(alternative);}
+  s.typeRules.socio=[...new Set([...s.typeRules.socio,alternative.id])];
+  const flight={...request('q1','d','socio',row.aircraft),fixed:true,socioName:'Vuelo ficticio'};
+  assert.equal(H.compatible(s,flight,alternative),true);assert.equal(H.flightAvailable(alternative,flight,s.date),true);
+  s.confirmed=[flight];const original=structuredClone(flight),r=H.reallocatePublished(s,row.aircraft,'operativo',now);
+  assert.equal(r.changes[0].kind,'review');assert.equal(r.changes[0].reason,row.reason);
+  assert.deepEqual(r.changes[0].before,original);assert.equal(r.changes[0].after.aircraft,row.aircraft);
+  assert.equal(r.flights[0].aircraft,row.aircraft);assert.equal(r.flights[0].pilot,original.pilot);
+  assert.equal(r.flights[0].conditional,true);assert.equal(r.flights[0].relocationPending,true);
+  assert.equal(Object.hasOwn(r.flights[0],'relocation'),false);
+ }
+ const mono=base();mono.published=true;mono.aircraft.find(a=>a.id==='HP1579').status='grounded';mono.aircraft.find(a=>a.id==='HP1815').status='mantenimiento';
+ mono.confirmed=[{...request('q2','c','ifr','HP1579'),fixed:true}];
+ const blocked=H.reallocatePublished(mono,'HP1579','operativo',now);
+ assert.equal(blocked.changes[0].kind,'review');
+ assert.equal(blocked.changes[0].reason,'Sin aeronave operativa compatible y libre en el mismo horario.');
+ assert.equal(blocked.flights[0].aircraft,'HP1579');
+});
 test('relocation cannot alter history, begin before publication or repeat an unchanged status',()=>{
  const s=base();s.aircraft.find(a=>a.id==='HP1907').status='grounded';s.confirmed=[{...request('q1','a'),fixed:true}];
  assert.equal(H.reallocatePublished(s,'HP1907','operativo','2026-10-29T20:30:00-05:00').changes.length,0);
