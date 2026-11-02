@@ -47,6 +47,23 @@ test('forecast invalidation covers future days, preserves history and other airc
  }
  assert.deepEqual(d.itinerarios,old.itinerarios);
 });
+test('grounded, aog and maintenance transitions notify authorized groups exactly once',()=>{
+ for(const [input,expected,message]of [['grounded','grounded','GROUNDED'],['aog','grounded','GROUNDED'],['mantenimiento','mantenimiento','MANTENIMIENTO']]){
+  const d=fixture(),old=structuredClone(d);d.fleet.HP_1907.status=input;
+  assert.equal(M.reconcile(old,d,now),true);
+  assert.equal(d.operationalNotices.length,1);
+  const [notice]=d.operationalNotices;
+  assert.equal(notice.kind,'aircraft-status');assert.equal(notice.aircraft,'HP-1907');
+  assert.equal(notice.previous,'operativo');assert.equal(notice.status,expected);
+  assert.match(notice.message,new RegExp('cambió a '+message));
+  assert.deepEqual(notice.recipients,[{kind:'group',id:'all'}]);
+  assert.equal(M.reconcile(old,d,now),false);assert.equal(d.operationalNotices.length,1);
+ }
+ const d=fixture(),before=structuredClone(d);d.fleet.HP_1907.status='aog';M.reconcile(before,d,now);
+ const equivalent=structuredClone(d);d.fleet.HP_1907.status='grounded';
+ assert.equal(M.reconcile(equivalent,d,now),false,'aog and grounded describe the same restriction');
+ assert.equal(d.operationalNotices.length,1);
+});
 test('all scheduling fields except student are required, including route and observations',()=>{
  for(const field of ['aircraft','pilot','start','end','flightType','route','note'])for(const value of ['', '   ',null]){
   const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);
@@ -89,7 +106,21 @@ test('director includes helicopter and requires nonoperative warning acknowledge
 test('admin can create fixed multi but not mono or charter or modify',()=>{const d=fixture(),admin={...pilot('p2'),account:{role:'Administrativo',assignedAt:now}};apply(d,admin,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});assert.throws(()=>apply(d,admin,'flight',{flight:flight('p2','HP1784')}),/cargo/);assert.throws(()=>apply(d,admin,'flight',{flight:flight('p2','HP11BL',{flightType:'charter'})}),/Chárter/);assert.throws(()=>apply(d,admin,'flight',{id:d.itinerarios[0].id,flight:flight('p1','HP880BL',{flightType:'multi'})}),/director/);});
 test('legacy scheduled rows and extra fields survive first save untouched',()=>{const d=fixture();d.itinerarios=[{id:1,fecha:date,horaInicio:'21:00',horaFin:'22:00',aeronave:'HP-11BL',piloto:'Unlisted historical pilot',unknownField:{keep:true}}];const original=structuredClone(d.itinerarios[0]);apply(d,director,'settings',{nightEnabled:true});assert.deepEqual(d.itinerarios[0],original);});
 test('night needs two distinct aircraft; cancellation withdraws remaining night flight',()=>{const d=fixture();apply(d,director,'settings',{nightEnabled:true});apply(d,director,'flight',{flight:flight('p1','HP1784',{start:'18:30',end:'20:00'})});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).held.length,1);apply(d,director,'flight',{flight:flight('p2','HP1819',{start:'18:30',end:'20:00'})});assert.equal(d.itinerarios.length,2);apply(d,director,'cancel-flight',{id:d.itinerarios[0].id});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).held.length,1);});
-test('status loss reassigns approved mono, pilot may cancel only own relocated flight',()=>{const d=fixture();apply(d,pilot('p1'),'request',{flight:flight()});apply(d,director,'approve',{id:M.day(d,date).requests[0].id});M.publish(d,date,now);const old=structuredClone(d);d.fleet.HP_1907.status='mantenimiento';assert.equal(M.reconcile(old,d,now),true);assert.notEqual(d.itinerarios[0].aeronave,'HP-1907');const id=d.itinerarios[0].id;assert.throws(()=>apply(d,pilot('p2'),'cancel-flight',{id}),/propio/);apply(d,pilot('p1'),'cancel-flight',{id});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).cancelled.length,1);assert.ok(d.itinerary.notices.some(n=>n.kind==='relocated'));});
+test('status loss reassigns approved mono for maintenance and grounded without changing cancellation rights',()=>{
+ for(const status of ['mantenimiento','grounded']){
+  const d=fixture();apply(d,pilot('p1'),'request',{flight:flight()});apply(d,director,'approve',{id:M.day(d,date).requests[0].id});M.publish(d,date,now);
+  const old=structuredClone(d);d.fleet.HP_1907.status=status;assert.equal(M.reconcile(old,d,now),true);
+  assert.notEqual(d.itinerarios[0].aeronave,'HP-1907');const id=d.itinerarios[0].id;
+  assert.throws(()=>apply(d,pilot('p2'),'cancel-flight',{id}),/propio/);apply(d,pilot('p1'),'cancel-flight',{id});
+  assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).cancelled.length,1);assert.ok(d.itinerary.notices.some(n=>n.kind==='relocated'));
+ }
+});
+test('expired pilot rejected on server and closed requests require director',()=>{const d=fixture();d.pilotos[0].instructorExpiry='2026-10-30';assert.throws(()=>apply(d,director,'flight',{flight:flight()}),/vencido/);});
+test('cross-date flight edit is atomic and prevents target collision',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;apply(d,director,'flight',{id,originalDate:date,originalRevision:M.day(d,date).revision,date:'2026-11-01',flight:flight('p2','HP1819')});assert.equal(d.itinerarios.length,1);assert.equal(d.itinerarios[0].fecha,'2026-11-01');assert.equal(d.itinerarios[0].piloto,'Piloto Dos');});
+test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});
+test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
+test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
+test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
 test('published multimotor and helicopter reviews notify the Director with accurate reasons and keep assignments',()=>{
  const d=fixture();
  apply(d,director,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});
@@ -111,10 +142,3 @@ test('published multimotor and helicopter reviews notify the Director with accur
  const after=structuredClone(d),count=d.itinerary.notices.length;
  assert.equal(M.reconcile(after,d,now),false);assert.equal(d.itinerary.notices.length,count);
 });
-test('expired pilot rejected on server and closed requests require director',()=>{const d=fixture();d.pilotos[0].instructorExpiry='2026-10-30';assert.throws(()=>apply(d,director,'flight',{flight:flight()}),/vencido/);});
-test('cross-date flight edit is atomic and prevents target collision',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;apply(d,director,'flight',{id,originalDate:date,originalRevision:M.day(d,date).revision,date:'2026-11-01',flight:flight('p2','HP1819')});assert.equal(d.itinerarios.length,1);assert.equal(d.itinerarios[0].fecha,'2026-11-01');assert.equal(d.itinerarios[0].piloto,'Piloto Dos');});
-test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});
-test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
-test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
-test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
-
