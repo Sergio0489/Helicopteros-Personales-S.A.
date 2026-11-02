@@ -125,7 +125,7 @@
   if(root)return;api=options.api||((action,payload)=>AccountRegistration.api(action,payload));onChange=options.onChange;
   const panel=document.getElementById('panel-itinerarios');if(!panel)return;
   root=document.createElement('div');root.className='hp-itinerary';root.dataset.itineraryControl='true';root.innerHTML='<h2>Itinerario por bloques</h2><p data-message role="status" aria-live="polite">Cargando itinerario por bloques…</p><button type="button" data-retry hidden>Reintentar</button>';root.querySelector('[data-retry]').onclick=()=>load();panel.replaceChildren(root);
-  const refreshVisible=()=>{if(panel.classList.contains('active')&&!dialog)load();};new MutationObserver(refreshVisible).observe(panel,{attributes:true,attributeFilter:['class']});
+  const refreshVisible=()=>{if(panel.classList.contains('active')&&!dialog)load(pendingFlightFocus?.date||date);};new MutationObserver(refreshVisible).observe(panel,{attributes:true,attributeFilter:['class']});
   bell=document.createElement('button');bell.className='hp-itinerary-bell';bell.dataset.itineraryControl='true';bell.onclick=openNotices;bell.textContent='🔔 Avisos de vuelos';(document.getElementById('sidebar')||panel).appendChild(bell);
   refreshVisible();readNotices();setInterval(()=>{if(!document.hidden){readNotices();if(loaded&&panel.classList.contains('active')&&!dialog)load();}},90000);
  }
@@ -137,7 +137,8 @@
   setTimeout(()=>row.classList.remove('hp-search-highlight'),3500);
  }
  function focusFlight(id,targetDate){
-  if(typeof id!=='string'||!id||!/^\d{4}-\d{2}-\d{2}$/.test(targetDate||''))return false;
+  id=id==null?'':String(id);
+  if(!id||!/^\d{4}-\d{2}-\d{2}$/.test(targetDate||''))return false;
   pendingFlightFocus={id,date:targetDate};
   if(busy){queuedDate=targetDate;return true;}
   if(loaded&&date===targetDate){focusPendingFlight();return true;}
