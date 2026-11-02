@@ -145,11 +145,11 @@ function reconcile(before,data,now){
  data.operationalNotices ||= [];
  for(const [registration,aircraft]of Object.entries(data.fleet||{})){
   const previous=before.fleet?.[registration]?.status||'';
-  if(previous===aircraft?.status||!['mantenimiento','aog'].includes(aircraft?.status))continue;
-  const status=aircraft.status==='aog'?'grounded':aircraft.status;
-  const id='aircraft-status:'+hash([registration,previous,status,now]);
+  const previousStatus=previous==='aog'?'grounded':previous,status=aircraft?.status==='aog'?'grounded':aircraft?.status;
+  if(previousStatus===status||!['mantenimiento','grounded'].includes(status))continue;
+  const id='aircraft-status:'+hash([registration,previousStatus,status,now]);
   if(data.operationalNotices.some(n=>n.id===id))continue;
-  data.operationalNotices.push({id,kind:'aircraft-status',aircraft:registration.replaceAll('_','-'),status,previous,createdAt:now,recipients:[{kind:'group',id:'all'}],message:'La aeronave '+registration.replaceAll('_','-')+' cambió a '+(status==='grounded'?'GROUNDED':'MANTENIMIENTO')+'.'});
+  data.operationalNotices.push({id,kind:'aircraft-status',aircraft:registration.replaceAll('_','-'),status,previous:previousStatus,createdAt:now,recipients:[{kind:'group',id:'all'}],message:'La aeronave '+registration.replaceAll('_','-')+' cambió a '+(status==='grounded'?'GROUNDED':'MANTENIMIENTO')+'.'});
   data.operationalNotices=data.operationalNotices.slice(-500);changed=true;
  }
  if(!data.itinerary?.version)return changed;
