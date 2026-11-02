@@ -13,7 +13,8 @@
   else if(t.kind==='personnel'){window.CompanyPersonnel?.select(t.id);}
   else if(t.kind==='pilot'){const p=pilotosData.findIndex((p,i)=>t.id===p.id||t.id==='index:'+i);if(p>=0)window.PilotDossiers?.select?.(p);}
   else if(t.kind==='log')highlight([...document.querySelectorAll('[data-edit-registry]')].find(e=>e.dataset.editRegistry===t.id)?.closest('.registro-entry'));
-  else if(t.kind==='flight'&&row.page==='itinerario'){if(!/^\d{4}-\d{2}-\d{2}$/.test(t.date||''))return;plannerSelectDate(t.date);const i=flightsData.findIndex((f,j)=>t.id===f.id||t.id==='index:'+j);highlight(document.getElementById('planner-flight-'+i));}
+  else if(t.kind==='flight'&&row.page==='itinerario'){if(!/^\d{4}-\d{2}-\d{2}$/.test(t.date||''))return;if(window.HPItineraryUI?.focusFlight){window.HPItineraryUI.focusFlight(t.id,t.date);return;}plannerSelectDate(t.date);const i=flightsData.findIndex((f,j)=>t.id===f.id||t.id==='index:'+j);if(i>=0)highlight(document.getElementById('planner-flight-'+i));}
+  else if(t.kind==='flight'&&row.page==='horario'){if(!/^\d{4}-\d{2}-\d{2}$/.test(t.date||''))return;const i=flightsData.findIndex((f,j)=>(t.id===f.id||t.id==='index:'+j)&&f.fecha===t.date);if(i<0||typeof selectScheduleDate!=='function')return;selectScheduleDate(t.date);highlight(document.getElementById('schedule-flight-'+i));}
  }
  function install(opts){style();const root=document.getElementById('content-area');if(!root||document.getElementById('panel-inicio'))return;
   const home=document.createElement('section');home.id='panel-inicio';home.className='aircraft-panel';home.dataset.homeControl='';root.append(home);

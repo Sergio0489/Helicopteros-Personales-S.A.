@@ -7,7 +7,7 @@
  const clock=value=>{const m=/^(\d{1,2}):([0-5]\d)$/.exec(String(value||''));if(!m||Number(m[1])>23)return 'Sin hora';const h=Number(m[1]);return (h%12||12)+':'+m[2]+' '+(h<12?'AM':'PM');};
  const range=q=>clock(q.start)+' – '+clock(q.end);
  const timeText=value=>String(value??'').replace(/\b([ap])\.\s*m\./gi,(_,p)=>p.toUpperCase()+'M').replace(/\b(\d{1,2}):([0-5]\d)(?:\s*(AM|PM)\b)?/gi,(all,h,m,p)=>p?Number(h)+':'+m+' '+p.toUpperCase():Number(h)<24?clock(h+':'+m):all);
- let api,onChange,root,model,date=E.panamaClock(new Date()).tomorrow,category='Todas',busy=false,loaded=false,noticeData={notices:[],alerts:[]},bell,lastRead=0,dialog,attempt=null;
+ let api,onChange,root,model,date=E.panamaClock(new Date()).tomorrow,category='Todas',busy=false,loaded=false,noticeData={notices:[],alerts:[]},bell,lastRead=0,dialog,attempt=null,pendingFlightFocus=null;
  let calendarYear=date.slice(0,4),calendarData=null,calendarBusy=false,calendarError='',calendarSequence=0,queuedDate=null;
  const field=(name,label,value,type='text')=>type==='time'?timeField(name,label,value):'<label>'+esc(label)+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(name==='newDate'?'required':'')+'></label>';
  function timeField(name,label,value){
@@ -35,7 +35,7 @@
  }
  async function load(d=date){
   if(busy){queuedDate=d;return;}busy=true;root.setAttribute('aria-busy','true');root.querySelector('[data-retry]')?.setAttribute('hidden','');message(loaded?'Actualizando itinerario…':'Cargando itinerario por bloques…');
-  try{const result=await api('itinerary-read',{date:d});if(result.version!==1)throw Error('No se pudo cargar la versión actual del itinerario. Intenta actualizar.');model=result;date=result.state.date;noticeData=result;loaded=true;acceptCalendar(result);render();await onChange?.(result);}
+  try{const result=await api('itinerary-read',{date:d});if(result.version!==1)throw Error('No se pudo cargar la versión actual del itinerario. Intenta actualizar.');model=result;date=result.state.date;noticeData=result;loaded=true;acceptCalendar(result);render();focusPendingFlight();await onChange?.(result);}
   catch(e){if(!loaded)root.querySelector('[data-retry]')?.removeAttribute('hidden');message(e.message==='Operación no válida.'?'No se pudo cargar el itinerario. Intenta actualizar.':e.message,true);}
   finally{busy=false;root.setAttribute('aria-busy','false');const next=queuedDate;queuedDate=null;if(next&&next!==date)load(next);}
  }
@@ -94,7 +94,7 @@
  function flightRow(q,held){
   const r=model.rights,person=personName(q.studentId)||q.studentName||'',detail=(label,value)=>'<div><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd></div>';
   const content=r.role==='director'?'<dl class="hp-flight-details">'+detail('Aeronave',q.aircraft)+detail('Hora de inicio y fin',range(q))+detail('Ruta o destino',q.route||'Sin registrar')+detail('Cliente / Estudiante',person||'Sin asignar')+detail('Piloto / Instructor',pilotName(q.pilot))+detail('Tipo de vuelo',E.flightTypes[q.flightType]?.label||'Privado')+(q.socioName?detail('Socio',q.socioName):'')+'</dl><p class="hp-flight-note"><strong>Observaciones:</strong> '+esc(q.note||'Sin observaciones registradas')+'</p>':'<b>'+esc(q.aircraft)+' · '+range(q)+'</b><p>'+esc(pilotName(q.pilot))+(q.studentId?' · '+esc(person):'')+'</p>'+(q.route?'<p>Ruta o destino: '+esc(q.route)+'</p>':'');
-  return '<div class="hp-row"><div>'+content+'<small>'+esc(E.flightTypes[q.flightType]?.label||'Privado')+(q.directorApproved?' · Aprobado por director · fuera de prioridades':'')+(q.relocation?' · Reubicado desde '+esc(q.relocation.from):'')+(q.relocationPending?' · Requiere revisión del director':'')+(held?' · SIN PUBLICAR'+(q.validationHold?' · '+esc(timeText(q.validationHold)):' · mínimo nocturno'):'')+'</small></div><div class="hp-buttons">'+(r.edit?'<button data-edit-flight="'+esc(q.id)+'">Modificar</button>':'')+(r.edit||E.canCancelRelocated(model.state,q,r.pilot,model.state.now)?'<button class="hp-danger" data-cancel-flight="'+esc(q.id)+'">Cancelar vuelo</button>':'')+'</div></div>';
+  return '<div class="hp-row" data-flight-id="'+esc(q.id)+'" tabindex="-1"><div>'+content+'<small>'+esc(E.flightTypes[q.flightType]?.label||'Privado')+(q.directorApproved?' · Aprobado por director · fuera de prioridades':'')+(q.relocation?' · Reubicado desde '+esc(q.relocation.from):'')+(q.relocationPending?' · Requiere revisión del director':'')+(held?' · SIN PUBLICAR'+(q.validationHold?' · '+esc(timeText(q.validationHold)):' · mínimo nocturno'):'')+'</small></div><div class="hp-buttons">'+(r.edit?'<button data-edit-flight="'+esc(q.id)+'">Modificar</button>':'')+(r.edit||E.canCancelRelocated(model.state,q,r.pilot,model.state.now)?'<button class="hp-danger" data-cancel-flight="'+esc(q.id)+'">Cancelar vuelo</button>':'')+'</div></div>';
  }
  function detailsDialog(a,b){const s=model.state;modal(a.id+' · '+range(b),'<div class="hp-notice">'+esc(a.status)+(a.release?.enabled?' · Disponible desde '+clock(a.release.from):'')+'</div>'+s.confirmed.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)).map(q=>'<p><b>'+range(q)+'</b> · '+esc(pilotName(q.pilot))+'</p>').join('')+'<p>'+s.requests.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)&&!s.cancelled.includes(q.id)).length+' solicitudes en este bloque.</p>');}
  function formFlight(q,request){
@@ -125,9 +125,24 @@
   if(root)return;api=options.api||((action,payload)=>AccountRegistration.api(action,payload));onChange=options.onChange;
   const panel=document.getElementById('panel-itinerarios');if(!panel)return;
   root=document.createElement('div');root.className='hp-itinerary';root.dataset.itineraryControl='true';root.innerHTML='<h2>Itinerario por bloques</h2><p data-message role="status" aria-live="polite">Cargando itinerario por bloques…</p><button type="button" data-retry hidden>Reintentar</button>';root.querySelector('[data-retry]').onclick=()=>load();panel.replaceChildren(root);
-  const refreshVisible=()=>{if(panel.classList.contains('active')&&!dialog)load();};new MutationObserver(refreshVisible).observe(panel,{attributes:true,attributeFilter:['class']});
+  const refreshVisible=()=>{if(panel.classList.contains('active')&&!dialog)load(pendingFlightFocus?.date||date);};new MutationObserver(refreshVisible).observe(panel,{attributes:true,attributeFilter:['class']});
   bell=document.createElement('button');bell.className='hp-itinerary-bell';bell.dataset.itineraryControl='true';bell.onclick=openNotices;bell.textContent='🔔 Avisos de vuelos';(document.getElementById('sidebar')||panel).appendChild(bell);
   refreshVisible();readNotices();setInterval(()=>{if(!document.hidden){readNotices();if(loaded&&panel.classList.contains('active')&&!dialog)load();}},90000);
  }
- window.HPItineraryUI={install,openDate:load};
+ function focusPendingFlight(){
+  if(!pendingFlightFocus||pendingFlightFocus.date!==date||!root)return;
+  const row=[...root.querySelectorAll('[data-flight-id]')].find(e=>e.dataset.flightId===pendingFlightFocus.id);
+  pendingFlightFocus=null;if(!row)return;
+  row.classList.add('hp-search-highlight');row.scrollIntoView({block:'center',behavior:'instant'});row.focus({preventScroll:true});
+  setTimeout(()=>row.classList.remove('hp-search-highlight'),3500);
+ }
+ function focusFlight(id,targetDate){
+  id=id==null?'':String(id);
+  if(!id||!/^\d{4}-\d{2}-\d{2}$/.test(targetDate||''))return false;
+  pendingFlightFocus={id,date:targetDate};
+  if(busy){queuedDate=targetDate;return true;}
+  if(loaded&&date===targetDate){focusPendingFlight();return true;}
+  load(targetDate);return true;
+ }
+ window.HPItineraryUI={install,openDate:load,focusFlight};
 })();

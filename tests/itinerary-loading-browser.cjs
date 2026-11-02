@@ -105,6 +105,13 @@ test('Annual calendar is absent for pilots, administrators and readers',async t=
   assert.equal(await page.locator('[data-year-calendar]').count(),0);assert.equal(await page.locator('[data-calendar-date]').count(),0);
  }
 });
+test('Cancelling a schedule date change keeps the explicitly selected day',async t=>{
+ const page=await app(t),selected='2026-10-30';
+ await page.evaluate(date=>{selectScheduleDate(date);window.confirm=()=>false;selectScheduleOffset(1);},selected);
+ assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-selected-date'),selected);
+ await page.evaluate(()=>renderDailySchedule());
+ assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-date'),selected);
+});
 test('Director sees detailed confirmed flights and cannot submit without route or observations',async t=>{
  const page=await app(t),result=response();Object.assign(result.state.confirmed[0],{route:'Chitré <referencia>',note:'Sin observaciones',studentId:'st1'});
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();

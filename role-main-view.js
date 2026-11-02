@@ -153,7 +153,7 @@
    const searches=new Map();
    window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='home-search-result')return;const item=searches.get(e.data.id);if(!item)return;clearTimeout(item.timer);searches.delete(e.data.id);e.data.error?item.reject(Error(e.data.error)):item.resolve(e.data.rows);});
    HomeUI.install({pages:cfg.pages,policy:cfg.policy,role:cfg.role,name:cfg.name,go:row=>{if(row.page===cfg.page&&!cfg.home){HomeUI.focusTarget(row);return;}parent.postMessage({channel:cfg.channel,action:'home-go',row},'*');},getIndex:()=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{searches.delete(id);reject(Error('La consulta tardó demasiado. Reintenta.'));},22000);searches.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'home-search',id},'*');})});
-   if(cfg.home)HomeUI.showHome();else if(cfg.searchTarget)HomeUI.focusTarget(cfg.searchTarget);
+   if(cfg.home)HomeUI.showHome();
    send('ready');
   };
  }
@@ -174,7 +174,7 @@
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
-  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HPItineraryUI.install({api:window.itineraryRequest});');
+  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
   let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0;
   async function searchIndex(){
    if(searchCache&&Date.now()-searchAt<60000)return searchCache;searchAt=Date.now();
