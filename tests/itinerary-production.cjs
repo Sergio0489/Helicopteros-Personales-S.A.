@@ -121,4 +121,24 @@ test('repeated commands are idempotent and stale edits rejected',()=>{const d=fi
 test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
 test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
 test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
-
+test('published multimotor and helicopter reviews notify the Director with accurate reasons and keep assignments',()=>{
+ const d=fixture();
+ apply(d,director,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});
+ apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'socio',socioName:'Vuelo ficticio',slot:'b2',start:'10:00',end:'12:30'})});
+ M.publish(d,date,now);const original=d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin}));
+ const old=structuredClone(d);d.fleet.HP_880BL.status='grounded';d.fleet.HP_11BL.status='mantenimiento';
+ assert.equal(M.reconcile(old,d,now),true);
+ const expected=new Map([
+  ['HP880BL','Multimotor: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.'],
+  ['HP11BL','Helicóptero: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.']
+ ]);
+ const notices=d.itinerary.notices.filter(n=>n.kind==='review');assert.equal(notices.length,2);
+ for(const n of notices){
+  assert.equal(n.reason,expected.get(n.after.aircraft));assert.equal(n.before.aircraft,n.after.aircraft);
+  assert.equal(n.after.relocationPending,true);assert.deepEqual(n.recipients,[{kind:'group',id:'all'}]);
+ }
+ assert.deepEqual(M.visibleNotices(d,director,now).filter(n=>n.kind==='review').map(n=>n.reason).sort(),[...expected.values()].sort());
+ assert.deepEqual(d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin})),original);
+ const after=structuredClone(d),count=d.itinerary.notices.length;
+ assert.equal(M.reconcile(after,d,now),false);assert.equal(d.itinerary.notices.length,count);
+});

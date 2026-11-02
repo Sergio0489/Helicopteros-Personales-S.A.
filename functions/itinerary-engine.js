@@ -239,7 +239,8 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
    changes.push({kind:'relocated',before,after:structuredClone(q),reason:q.reason});
   }else{
    q.conditional=true;q.relocationPending=true;
-   const reason=inProgress?'Vuelo ya iniciado: requiere revisión del director.':typeOf(q)==='charter'?'Chárter: cambio de aeronave requiere revisión del director.':'Sin aeronave operativa compatible y libre en el mismo horario.';
+   const categoryReason=a.category==='Multimotor'?'Multimotor: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.':a.category==='Helicóptero'?'Helicóptero: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.':'Sin aeronave operativa compatible y libre en el mismo horario.';
+   const reason=inProgress?'Vuelo ya iniciado: requiere revisión del director.':typeOf(q)==='charter'?'Chárter: cambio de aeronave requiere revisión del director.':categoryReason;
    changes.push({kind:'review',before,after:structuredClone(q),reason});
   }
  }
