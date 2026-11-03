@@ -6,12 +6,21 @@ const account={role:'Piloto',assignedAt:'fixture',recordKind:'pilot',recordId:'p
 const actor={uid:pilot.uid,name:'Piloto de prueba',role:'Piloto'};
 const id='11111111-1111-4111-8111-111111111111';
 const body={action:'aircraft-report',aircraft:'HP-1784',description:'Vibración en el rotor de cola',idempotencyKey:id};
-function harness({cold=false}={}){
+function harness({cold=false,concurrent=false}={}){
  const store={dashboard:{operation:'initial',revision:4,payload:JSON.stringify({fleet:{HP_1784:{reg:'HP-1784',mantenimiento:[]}},pilotos:[{id:'pilot-record',authUid:pilot.uid,nombre:'Piloto de prueba'}],operationalNotices:[]})},accountRequests:{[pilot.uid]:structuredClone(account)}};
- let selectedUser=pilot,coldOnce=cold;const transactionInputs=[];
+ let selectedUser=pilot,coldOnce=cold,contenders=0,releaseTransactions;const transactionInputs=[],transactionBarrier=new Promise(resolve=>releaseTransactions=resolve);
  const get=path=>path.split('/').filter(Boolean).reduce((v,k)=>v?.[k],store)??null;
  const put=(path,value)=>{const keys=path.split('/').filter(Boolean);if(!keys.length){for(const k of Object.keys(store))delete store[k];Object.assign(store,value);return;}const last=keys.pop();let at=store;for(const k of keys)at=at[k]||={};at[last]=value;};
  const db={ref:(path='')=>({get:async()=>({val:()=>structuredClone(get(path))}),transaction:async fn=>{
+  if(concurrent&&path==='dashboard'&&contenders<2){
+   // Both requests start from the same snapshot; the loser must retry against
+   // the committed winner, as a conflicting RTDB transaction would.
+   const current=structuredClone(get(path));let next=fn(current);transactionInputs.push(current);
+   if(++contenders===2)releaseTransactions();await transactionBarrier;
+   if(JSON.stringify(get(path))!==JSON.stringify(current)){const latest=structuredClone(get(path));next=fn(latest);transactionInputs.push(latest);}
+   if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(get(path))}};
+   put(path,next);return {committed:true,snapshot:{val:()=>structuredClone(next)}};
+  }
   if(coldOnce&&path==='dashboard'){
    coldOnce=false;const initial=fn(null);transactionInputs.push(null);
    if(initial===undefined)return {committed:false,snapshot:{val:()=>null}};
@@ -48,6 +57,21 @@ test('a delayed confirmation and retry with the same key create one task and one
  assert.equal(tasks.length,1);assert.equal(reports.length,1);assert.equal(tasks[0].reportIdempotencyKey,id);
  assert.deepEqual(reports[0].recipients,[{kind:'group',id:'mechanics'},{kind:'group',id:'pilots'}]);
  assert.equal(reports[0].taskId,tasks[0].id);assert.equal(reports[0].aircraft,'HP-1784');
+});
+
+test('concurrent reports with the same key retry a conflicting transaction without duplicating task or alert',{timeout:5000},async()=>{
+ const h=harness({concurrent:true}),responses=await Promise.all([h.call(reportInput()),h.call(reportInput())]);
+ for(const response of responses){assert.equal(response.status,200);assert.equal(response.body.ok,true);}
+ assert.equal(responses[0].body.taskId,responses[1].body.taskId);
+ assert.equal(responses[0].body.operation,responses[1].body.operation);
+ assert.deepEqual(responses.map(response=>response.body.deduplicated).sort(),[false,true]);
+ assert.equal(h.transactionInputs.length,3,'one transaction must retry after both initial attempts read the same snapshot');
+ assert.deepEqual(h.transactionInputs[0],h.transactionInputs[1]);
+ assert.notEqual(h.transactionInputs[2].operation,'initial');
+ const data=h.data(),tasks=data.fleet.HP_1784.mantenimiento,reports=data.operationalNotices.filter(notice=>notice.kind==='aircraft-report');
+ assert.equal(tasks.length,1);assert.equal(reports.length,1);assert.equal(tasks[0].reportIdempotencyKey,id);
+ assert.equal(reports[0].taskId,tasks[0].id);assert.equal(h.store.dashboard.revision,5);
+ assert.deepEqual(reports[0].recipients,[{kind:'group',id:'mechanics'},{kind:'group',id:'pilots'}]);
 });
 
 test('aircraft report keeps identity checks and rejects an idempotency key reused for different data',async()=>{
