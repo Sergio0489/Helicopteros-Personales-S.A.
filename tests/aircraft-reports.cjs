@@ -33,7 +33,7 @@ function harness({cold=false,concurrent=false}={}){
   put(path,next);return {committed:true,snapshot:{val:()=>structuredClone(next)}};
  }} )};
  const auth={verifyIdToken:async()=>({uid:selectedUser.uid}),getUser:async()=>selectedUser};
- const endpointExports={};vm.runInNewContext(fs.readFileSync(require.resolve('../functions/index.js'),'utf8'),{exports:endpointExports,require:name=>({'firebase-functions/v2/https':{onRequest:(_,handler)=>handler},'firebase-admin/app':{initializeApp(){}},'firebase-admin/auth':{getAuth:()=>auth},'firebase-admin/database':{getDatabase:()=>db}}[name]||require(name.startsWith('./')?'../functions/'+name.slice(2):name))});
+ const endpointExports={};vm.runInNewContext(fs.readFileSync(require.resolve('../functions/index.js'),'utf8'),{Buffer,exports:endpointExports,require:name=>({'firebase-functions/v2/https':{onRequest:(_,handler)=>handler},'firebase-admin/app':{initializeApp(){}},'firebase-admin/auth':{getAuth:()=>auth},'firebase-admin/database':{getDatabase:()=>db}}[name]||require(name.startsWith('./')?'../functions/'+name.slice(2):name))});
  function startCall(payload,holdReply=false){
   let status=200,response,replyReady,release;const ready=new Promise(resolve=>replyReady=resolve),gate=holdReply?new Promise(resolve=>release=resolve):Promise.resolve();
   const done=(async()=>{await endpointExports.accountRegistration({method:'POST',headers:{authorization:'Bearer fixture'},body:payload},{set(){},status(code){status=code;return this;},json(value){response=value;replyReady();},end(){replyReady();}});await gate;return {status,body:response};})();
@@ -72,6 +72,60 @@ test('concurrent reports with the same key retry a conflicting transaction witho
  assert.equal(tasks.length,1);assert.equal(reports.length,1);assert.equal(tasks[0].reportIdempotencyKey,id);
  assert.equal(reports[0].taskId,tasks[0].id);assert.equal(h.store.dashboard.revision,5);
  assert.deepEqual(reports[0].recipients,[{kind:'group',id:'mechanics'},{kind:'group',id:'pilots'}]);
+});
+
+test('aircraft report rejects non-string idempotency keys without writing tasks or receipts',async()=>{
+ const h=harness(),before=structuredClone(h.store.dashboard);
+ for(const idempotencyKey of [[id],{id},42,null,undefined]){
+  const response=await h.call({...reportInput(),idempotencyKey});assert.equal(response.status,400);
+ }
+ assert.deepEqual(h.store.dashboard,before);
+});
+
+test('a report receipt survives an authorized save deleting its task and still binds the original input',async()=>{
+ const h=harness(),saved=await h.call(reportInput()),receipts=structuredClone(h.store.dashboard.aircraftReportReceipts);
+ assert.equal(saved.status,200);assert.equal(Object.keys(receipts).length,1);
+ h.store.accountRequests[pilot.uid]={...structuredClone(account),role:'Director'};
+ const data=h.data();data.fleet.HP_1784.mantenimiento=[];
+ const edited=await h.call({action:'director-save',operation:h.store.dashboard.operation,payload:JSON.stringify(data)});
+ assert.equal(edited.status,200,JSON.stringify(edited));assert.deepEqual(h.store.dashboard.aircraftReportReceipts,receipts);
+ h.store.accountRequests[pilot.uid]=structuredClone(account);
+ const before=structuredClone(h.store.dashboard),retry=await h.call(reportInput());
+ assert.equal(retry.status,200);assert.equal(retry.body.deduplicated,true);assert.equal(retry.body.taskId,saved.body.taskId);assert.equal(retry.body.operation,saved.body.operation);
+ assert.deepEqual(h.store.dashboard,before,'replaying a deleted task must leave the saved payload and revision untouched');
+ const conflict=await h.call({...reportInput(),description:'Otra falla no relacionada'});
+ assert.equal(conflict.status,409);assert.match(conflict.body.error,/ya se usó/);
+ assert.equal(h.data().fleet.HP_1784.mantenimiento.length,0);assert.equal(h.data().operationalNotices.length,1);
+});
+
+test('a legacy keyed task gains a durable receipt without changing application data or audit history',async()=>{
+ const h=harness(),saved=await h.call(reportInput());delete h.store.dashboard.aircraftReportReceipts;
+ const before=structuredClone(h.store.dashboard),retry=await h.call(reportInput());
+ assert.equal(retry.status,200);assert.equal(retry.body.deduplicated,true);assert.equal(retry.body.taskId,saved.body.taskId);
+ const {aircraftReportReceipts,...after}=h.store.dashboard;
+ assert.equal(Object.keys(aircraftReportReceipts).length,1);assert.deepEqual(after,before);
+ const changed=h.data();changed.fleet.HP_1784.mantenimiento[0].description='Descripción modificada en taller';h.store.dashboard.payload=JSON.stringify(changed);
+ const again=await h.call(reportInput());assert.equal(again.status,200);assert.equal(again.body.deduplicated,true);
+ assert.equal(h.data().fleet.HP_1784.mantenimiento.length,1);assert.equal(h.data().operationalNotices.length,1);
+});
+
+test('report receipts are scoped to the verified caller rather than the UUID alone',async()=>{
+ const h=harness(),first=await h.call(reportInput()),other={...pilot,uid:'other-pilot-fixture',email:'other-pilot@example.test'};
+ h.store.accountRequests[other.uid]={...structuredClone(account),recordId:'other-pilot-record'};
+ const data=h.data();data.pilotos.push({id:'other-pilot-record',authUid:other.uid,nombre:'Otro piloto de prueba'});h.store.dashboard.payload=JSON.stringify(data);
+ h.as(other);const second=await h.call(reportInput());
+ assert.equal(second.status,200);assert.equal(second.body.deduplicated,false);assert.notEqual(second.body.taskId,first.body.taskId);
+ const secondRetry=await h.call(reportInput());assert.equal(secondRetry.body.taskId,second.body.taskId);assert.equal(secondRetry.body.deduplicated,true);
+ h.as(pilot);const firstRetry=await h.call(reportInput());assert.equal(firstRetry.body.taskId,first.body.taskId);assert.equal(firstRetry.body.deduplicated,true);
+ assert.equal(Object.keys(h.store.dashboard.aircraftReportReceipts).length,2);
+ assert.equal(h.data().fleet.HP_1784.mantenimiento.length,2);assert.equal(h.data().operationalNotices.length,2);
+});
+
+test('an aborted receipt transaction is not reported as a confirmed retry',async()=>{
+ const h=harness();await h.call(reportInput());const ref=h.db.ref;
+ h.db.ref=path=>({...ref(path),transaction:async fn=>{fn(structuredClone(h.store.dashboard));return {committed:false,snapshot:{val:()=>structuredClone(h.store.dashboard)}};}});
+ const response=await h.call(reportInput());assert.equal(response.status,409);
+ assert.equal(h.data().fleet.HP_1784.mantenimiento.length,1);assert.equal(h.data().operationalNotices.length,1);
 });
 
 test('aircraft report keeps identity checks and rejects an idempotency key reused for different data',async()=>{
