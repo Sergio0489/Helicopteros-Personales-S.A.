@@ -2,6 +2,7 @@
 const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {catalog}=require('../functions/boxes'),{boxView}=require('../functions/box-view'),{handle}=require('../functions/aircraft-reports');
 const root=path.resolve(__dirname,'..'),description='Vibración en el rotor de cola',uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const newReportMessage='Reporte guardado como tarea pendiente de taller.',recognizedReportMessage='Este reporte ya se había recibido.',receivedReportMessage='Reporte recibido.';
 const data={fleet:{HP_1784:{reg:'HP-1784',model:'Aeronave de prueba',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]}},pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]}}};
 const account={uid:'pilot-fixture',role:'Piloto',assignedAt:'fixture',recordKind:'pilot',recordId:'pilot-record',syncStatus:'matched',profile:{name:'Piloto de prueba'}};
 const policy=Object.fromEntries(Object.entries(catalog).map(([page,boxes])=>[page,{actions:{view:true,edit:false},boxes:Object.fromEntries(boxes.map(box=>[box.id,{view:true,edit:false}]))}]));
@@ -12,7 +13,15 @@ function backend(){
  const db={ref:dbPath=>{assert.equal(dbPath,'dashboard');return {transaction:async update=>{const next=update(structuredClone(saved));if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(saved)}};saved=next;return {committed:true,snapshot:{val:()=>structuredClone(saved)}};}};}};
  return {
   call:body=>handle(db,{user:{uid:account.uid,email:'pilot@example.test',emailVerified:true},account,actor:{uid:account.uid,name:account.profile.name,role:account.role},body}),
-  assertSingleReport(){const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento,notices=snapshot.operationalNotices||[];assert.equal(tasks.length,1,'overlapping requests for one report must create one task');assert.equal(notices.length,1,'overlapping requests for one report must create one alert');assert.equal(notices[0].taskId,tasks[0].id);}
+  snapshot:()=>structuredClone(saved),
+  changeTask(state){
+   const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento;assert.equal(tasks.length,1);
+   if(state==='modified'){tasks[0].resuelto=true;tasks[0].nombre='Tarea revisada por taller de prueba';}
+   else if(state==='deleted')snapshot.fleet.HP_1784.mantenimiento=[];
+   else throw Error('Unknown synthetic task state '+state);
+   saved={...saved,payload:JSON.stringify(snapshot),operation:'fixture-task-'+state,revision:saved.revision+1};
+  },
+  assertSingleReport(expectedTaskCount=1){const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento,notices=snapshot.operationalNotices||[],receipts=Object.values(saved.aircraftReportReceipts||{});assert.equal(tasks.length,expectedTaskCount,'retries must preserve the current task count');assert.equal(notices.length,1,'overlapping requests for one report must create one alert');assert.equal(receipts.length,1,'one report must retain one idempotency receipt');assert.equal(notices[0].taskId,receipts[0].taskId);if(expectedTaskCount)assert.equal(tasks[0].id,receipts[0].taskId);}
  };
 }
 
@@ -43,7 +52,7 @@ async function fixture(browser){
   async received(count){await frame.waitForFunction(count=>window.aircraftReportResults.length===count,count);},
   async assertIdentity(count){assert.equal(requests.length,count);const keys=requests.map(request=>request.idempotencyKey);assert.equal(typeof keys[0],'string');assert.match(keys[0],uuid,'the API must receive a UUID idempotency key');for(const key of keys)assert.equal(key,keys[0],'every retry of the same pending report must keep its backend key');const entries=await stored();assert.equal(entries.length,1,'the unconfirmed report must retain one stored key');assert.equal(entries[0][1],keys[0],'the API key must match the persisted value');const ids=await page.evaluate(()=>window.aircraftReportMessages.map(message=>message.id));assert.equal(ids.length,count);assert.equal(new Set(ids).size,count,'every attempt needs its own response correlation id');},
   async assertPending(){assert.equal(await frame.locator('dialog [data-status]').textContent(),'Enviando reporte…','an old response must not settle the active retry');assert.equal(await frame.locator('dialog [data-send]').isDisabled(),true);},
-  async assertSuccess(){await frame.getByText('Reporte guardado como tarea pendiente de taller.').waitFor();await page.waitForFunction(()=>!Object.keys(localStorage).some(key=>key.startsWith('hp-aircraft-report:')));},
+  async assertSuccess(message){await frame.getByText(message,{exact:true}).waitFor();assert.equal(await frame.locator('dialog [data-status]').textContent(),message);await page.waitForFunction(()=>!Object.keys(localStorage).some(key=>key.startsWith('hp-aircraft-report:')));},
   async close(){assert.deepEqual(errors,[]);await page.close();}
  };
 }
@@ -52,12 +61,37 @@ async function fixture(browser){
  let browser;
  try{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));browser=await chromium.launch({...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{}),headless:true,args:['--no-sandbox']});
+  for(const responseKind of ['new','legacy','mistyped']){
+   const f=await fixture(browser);await f.open();await f.send();await f.waitForRequests(1);await f.assertIdentity(1);
+   const result=await f.api.call(f.requests[0]);assert.equal(result.ok,true);assert.equal(result.deduplicated,false,'a first accepted report must be identified as new');
+   const beforeResponse=f.api.snapshot();if(responseKind==='legacy')delete result.deduplicated;else if(responseKind==='mistyped')result.deduplicated='true';
+   f.pending[0].resolve(result);await f.assertSuccess(responseKind==='new'?newReportMessage:receivedReportMessage);
+   assert.deepEqual(f.api.snapshot(),beforeResponse,'displaying a confirmation must not change report data');f.api.assertSingleReport();await f.close();
+  }
+  console.log('PASS new reports confirm a pending task; absent or invalid deduplication flags use a neutral confirmation');
+
+  for(const taskState of ['unchanged','modified','deleted'])for(const staleResult of ['success','error']){
+   const f=await fixture(browser);await f.open();await f.send();await f.waitForRequests(1);
+   const original=await f.api.call(f.requests[0]);assert.equal(original.ok,true);assert.equal(original.deduplicated,false);
+   await f.expire(0);if(taskState!=='unchanged')f.api.changeTask(taskState);const beforeReplay=f.api.snapshot();
+   await f.send();await f.waitForRequests(2);await f.assertIdentity(2);
+   const retry=await f.api.call(f.requests[1]);assert.equal(retry.ok,true);assert.equal(retry.deduplicated,true,'a saved receipt must recognize the report independently of the current task');assert.equal(retry.taskId,original.taskId);
+   assert.deepEqual(f.api.snapshot(),beforeReplay,'replaying a report must preserve task data, receipts, revision, operation and audit history');
+   f.pending[1].resolve(retry);await f.assertSuccess(recognizedReportMessage);
+   staleResult==='success'?f.pending[0].resolve(original):f.pending[0].reject(Error('Error tardío de un reporte ya recibido'));
+   await f.received(2);assert.equal(await f.frame.locator('dialog [data-status]').textContent(),recognizedReportMessage,'an old '+staleResult+' must not replace the recognized-report confirmation');
+   assert.deepEqual(f.api.snapshot(),beforeReplay);f.api.assertSingleReport(taskState==='deleted'?0:1);
+   if(taskState==='modified'){const task=JSON.parse(f.api.snapshot().payload).fleet.HP_1784.mantenimiento[0];assert.equal(task.resuelto,true);assert.equal(task.nombre,'Tarea revisada por taller de prueba');}
+   await f.close();
+  }
+  console.log('PASS recognized reports use a neutral confirmation for existing, modified and deleted tasks, preserve receipts and audit, and ignore late responses');
+
   for(const staleResult of ['error','success'])for(const staleBeforeSuccess of [true,false]){
    const f=await fixture(browser);await f.open();await f.send();await f.waitForRequests(1);await f.expire(0);await f.send();await f.waitForRequests(2);await f.assertIdentity(2);
    const settleStale=async()=>{const saved=await f.api.call(f.requests[0]);assert.equal(saved.ok,true);staleResult==='error'?f.pending[0].reject(Error('Error tardío del primer intento')):f.pending[0].resolve(saved);};
    if(staleBeforeSuccess){await settleStale();await f.received(1);await f.assertPending();await f.assertIdentity(2);}
-   f.pending[1].resolve(await f.api.call(f.requests[1]));await f.assertSuccess();
-   if(!staleBeforeSuccess){await settleStale();await f.received(2);assert.equal(await f.frame.locator('dialog [data-status]').textContent(),'Reporte guardado como tarea pendiente de taller.','a stale '+staleResult+' must not replace the confirmed success');}
+   const retry=await f.api.call(f.requests[1]),message=staleBeforeSuccess?recognizedReportMessage:newReportMessage;assert.equal(retry.deduplicated,staleBeforeSuccess);f.pending[1].resolve(retry);await f.assertSuccess(message);
+   if(!staleBeforeSuccess){await settleStale();await f.received(2);assert.equal(await f.frame.locator('dialog [data-status]').textContent(),message,'a stale '+staleResult+' must not replace the confirmed success');}
    f.api.assertSingleReport();await f.close();
   }
   console.log('PASS overlapping report retries use distinct correlation IDs, retain one idempotency key and ignore stale errors and successes before and after confirmation');
@@ -69,9 +103,9 @@ async function fixture(browser){
    await f.open();await f.send();await f.waitForRequests(2);await f.assertIdentity(2);
    f.pending[0].resolve(await f.api.call(f.requests[0]));await f.received(1);await f.assertPending();
    await f.expire(1);await f.send();await f.waitForRequests(3);await f.assertIdentity(3);
-   f.pending[2].resolve(await f.api.call(f.requests[2]));await f.assertSuccess();
+   const retry=await f.api.call(f.requests[2]);assert.equal(retry.deduplicated,true);f.pending[2].resolve(retry);await f.assertSuccess(recognizedReportMessage);
    f.pending[1].resolve(await f.api.call(f.requests[1]));await f.received(3);
-   assert.equal(await f.frame.locator('dialog [data-status]').textContent(),'Reporte guardado como tarea pendiente de taller.','a late response from the cancelled/reopened flow must not replace success');
+   assert.equal(await f.frame.locator('dialog [data-status]').textContent(),recognizedReportMessage,'a late response from the cancelled/reopened flow must not replace success');
    f.api.assertSingleReport();await f.close();
   }
   console.log('PASS cancelling or escaping and reopening a pending report preserves its backend key and creates one task and alert');

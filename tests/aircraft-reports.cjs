@@ -45,14 +45,15 @@ const reportInput=()=>structuredClone(body);
 
 test('aircraft report survives the initial empty transaction cache',async()=>{
  const h=harness({cold:true}),response=await h.call(reportInput());
- assert.equal(response.status,200);assert.equal(response.body.ok,true);assert.equal(h.transactionInputs.length,2);assert.equal(h.transactionInputs[0],null);assert(h.transactionInputs[1].payload);
+ assert.equal(response.status,200);assert.equal(response.body.ok,true);assert.equal(response.body.deduplicated,false);assert.equal(h.transactionInputs.length,2);assert.equal(h.transactionInputs[0],null);assert(h.transactionInputs[1].payload);
  assert.equal(h.data().fleet.HP_1784.mantenimiento.length,1);assert.equal(h.data().operationalNotices.length,1);
 });
 
 test('a delayed confirmation and retry with the same key create one task and one authorized alert',async()=>{
- const h=harness(),first=h.startCall(reportInput(),true);await first.ready;
+ const h=harness(),first=h.startCall(reportInput(),true);await first.ready;const before=structuredClone(h.store.dashboard);
  const retry=await h.call(reportInput());assert.equal(retry.status,200,JSON.stringify(retry));assert.equal(retry.body.deduplicated,true);
- first.release();const delayed=await first.done;assert.equal(delayed.status,200);assert.equal(delayed.body.taskId,retry.body.taskId);
+ assert.deepEqual(h.store.dashboard,before,'a recognized report must not add another receipt or audit entry');
+ first.release();const delayed=await first.done;assert.equal(delayed.status,200);assert.equal(delayed.body.deduplicated,false);assert.equal(delayed.body.taskId,retry.body.taskId);
  const data=h.data(),tasks=data.fleet.HP_1784.mantenimiento,reports=data.operationalNotices.filter(n=>n.kind==='aircraft-report');
  assert.equal(tasks.length,1);assert.equal(reports.length,1);assert.equal(tasks[0].reportIdempotencyKey,id);
  assert.deepEqual(reports[0].recipients,[{kind:'group',id:'mechanics'},{kind:'group',id:'pilots'}]);
@@ -95,7 +96,24 @@ test('a report receipt survives an authorized save deleting its task and still b
  assert.deepEqual(h.store.dashboard,before,'replaying a deleted task must leave the saved payload and revision untouched');
  const conflict=await h.call({...reportInput(),description:'Otra falla no relacionada'});
  assert.equal(conflict.status,409);assert.match(conflict.body.error,/ya se usó/);
- assert.equal(h.data().fleet.HP_1784.mantenimiento.length,0);assert.equal(h.data().operationalNotices.length,1);
+ assert.equal(h.data().fleet.HP_1784.mantenimiento.length,0);assert.equal(h.data().operationalNotices.length,1);assert.deepEqual(h.store.dashboard.aircraftReportReceipts,receipts);
+});
+
+test('a recognized report preserves an authorized maintenance edit and its audit history',async()=>{
+ const h=harness(),saved=await h.call(reportInput()),receipts=structuredClone(h.store.dashboard.aircraftReportReceipts);
+ assert.equal(saved.status,200);assert.equal(saved.body.deduplicated,false);
+ h.store.accountRequests[pilot.uid]={...structuredClone(account),role:'Director'};
+ const data=h.data(),task=data.fleet.HP_1784.mantenimiento[0];
+ Object.assign(task,{nombre:'Inspección del rotor completada',description:'Observación revisada por taller',resuelto:true,fecha_resuelto:'2026-11-04'});
+ const edited=await h.call({action:'director-save',operation:h.store.dashboard.operation,payload:JSON.stringify(data),reason:'Prueba ficticia de resolución de mantenimiento'});
+ assert.equal(edited.status,200,JSON.stringify(edited));assert.deepEqual(h.store.dashboard.aircraftReportReceipts,receipts);
+ assert.equal(Object.keys(h.store.dashboard.auditPending).length,2,'the report and authorized maintenance edit must both remain audited');
+ h.store.accountRequests[pilot.uid]=structuredClone(account);
+ const before=structuredClone(h.store.dashboard),retry=await h.call(reportInput());
+ assert.equal(retry.status,200);assert.equal(retry.body.ok,true);assert.equal(retry.body.deduplicated,true);
+ assert.equal(retry.body.taskId,saved.body.taskId);assert.equal(retry.body.operation,saved.body.operation);
+ assert.deepEqual(h.store.dashboard,before,'recognition must preserve the edited task, receipt, revision and complete audit history');
+ assert.deepEqual(h.data().fleet.HP_1784.mantenimiento,[task]);assert.equal(h.data().operationalNotices.length,1);assert.equal(Object.keys(h.store.dashboard.aircraftReportReceipts).length,1);
 });
 
 test('a legacy keyed task gains a durable receipt without changing application data or audit history',async()=>{
