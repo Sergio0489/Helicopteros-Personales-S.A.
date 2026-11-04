@@ -2,7 +2,8 @@
 const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {catalog}=require('../functions/boxes'),{boxView}=require('../functions/box-view'),{handle}=require('../functions/aircraft-reports');
 const root=path.resolve(__dirname,'..'),description='Vibración en el rotor de cola',uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const data={fleet:{HP_1784:{reg:'HP-1784',model:'Aeronave de prueba',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]}},pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]}}};
+const reportPolicy={aeronaves:{actions:{view:true,edit:false},boxes:{status:{view:true,edit:false}}}};
+const data={fleet:{HP_1784:{reg:'HP-1784',model:'Aeronave de prueba',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]}},pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]},accessConfiguration:{roles:{Piloto:reportPolicy}}}};
 const account={uid:'pilot-fixture',role:'Piloto',assignedAt:'fixture',recordKind:'pilot',recordId:'pilot-record',syncStatus:'matched',profile:{name:'Piloto de prueba'}};
 const policy=Object.fromEntries(Object.entries(catalog).map(([page,boxes])=>[page,{actions:{view:true,edit:false},boxes:Object.fromEntries(boxes.map(box=>[box.id,{view:true,edit:false}]))}]));
 const server=http.createServer((req,res)=>{const file=path.join(root,req.url.split('?')[0]);if(req.url==='/test'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<body><div id="shell"></div><script src="aircraft-report-recovery.js"></script><script src="role-main-view.js"></script></body>');}else if(file.startsWith(root+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('Content-Type',(file.endsWith('.js')?'application/javascript':'text/html')+'; charset=utf-8');res.end(fs.readFileSync(file));}else{res.statusCode=404;res.end();}});
@@ -12,7 +13,13 @@ function backend(){
  const db={ref:dbPath=>{assert.equal(dbPath,'dashboard');return {transaction:async update=>{const next=update(structuredClone(saved));if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(saved)}};saved=next;return {committed:true,snapshot:{val:()=>structuredClone(saved)}};}};}};
  return {
   call:body=>handle(db,{user:{uid:account.uid,email:'pilot@example.test',emailVerified:true},account,actor:{uid:account.uid,name:account.profile.name,role:account.role},body}),
-  assertReports(count,descriptions){const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento,notices=snapshot.operationalNotices||[];assert.equal(tasks.length,count,'one task must exist per distinct report');assert.equal(notices.length,count,'one alert must exist per distinct report');for(const notice of notices)assert(tasks.some(task=>task.id===notice.taskId));if(descriptions)assert.deepEqual(tasks.map(task=>task.description).sort(),[...descriptions].sort());},
+  snapshot:()=>structuredClone(saved),
+  statusPermission(view){const snapshot=JSON.parse(saved.payload);snapshot.school.accessConfiguration.roles.Piloto.aeronaves.boxes.status.view=view;saved={...saved,payload:JSON.stringify(snapshot)};return structuredClone(saved);},
+  revokeStatus(){return this.statusPermission(false);},
+  restoreStatus(){return this.statusPermission(true);},
+  assertSnapshot(expected){assert.deepEqual(saved,expected,'a rejected or recognized report must preserve the complete dashboard, including audit, revision, operation and receipts');},
+  assertNoReport(expected){this.assertSnapshot(expected);this.assertReports(0,[]);},
+  assertReports(count,descriptions){const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento,notices=snapshot.operationalNotices||[],receipts=Object.values(saved.aircraftReportReceipts||{});assert.equal(tasks.length,count,'one task must exist per distinct report');assert.equal(notices.length,count,'one alert must exist per distinct report');assert.equal(receipts.length,count,'one receipt must exist per distinct report');for(const notice of notices){assert(tasks.some(task=>task.id===notice.taskId));assert(receipts.some(receipt=>receipt.taskId===notice.taskId));}if(descriptions)assert.deepEqual(tasks.map(task=>task.description).sort(),[...descriptions].sort());},
   assertSingleReport(){this.assertReports(1,[description]);}
  };
 }
@@ -27,7 +34,7 @@ async function fixture(browser){
  await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({body:''}));
  async function mount(who=account){
   activeAccount=who;
-  await page.evaluate(uid=>{window.firebase={auth:()=>({currentUser:{uid}})};window.AccountRegistration={api:(action,body)=>{if(action!=='aircraft-report')throw Error('Unexpected API action '+action);return window.holdAircraftReport(body);}};window.aircraftReportMessages=[];if(window.aircraftReportObserver)window.removeEventListener('message',window.aircraftReportObserver);window.aircraftReportObserver=event=>{if(event.data?.action==='aircraft-report'){window.aircraftReportMessages.push(event.data);window.captureAircraftReport(event.data);}};window.addEventListener('message',window.aircraftReportObserver);},who.uid);
+  await page.evaluate(uid=>{window.firebase={auth:()=>({currentUser:{uid}})};window.AccountRegistration={api:(action,body)=>{if(action!=='aircraft-report')throw Error('Unexpected API action '+action);return window.holdAircraftReport(body).then(result=>{if(result.status>=400)throw Error(result.error);return result;});}};window.aircraftReportMessages=[];if(window.aircraftReportObserver)window.removeEventListener('message',window.aircraftReportObserver);window.aircraftReportObserver=event=>{if(event.data?.action==='aircraft-report'){window.aircraftReportMessages.push(event.data);window.captureAircraftReport(event.data);}};window.addEventListener('message',window.aircraftReportObserver);},who.uid);
   const viewData=structuredClone(data);viewData.pilotos=[{...viewData.pilotos[0],id:who.recordId,authUid:who.uid,nombre:who.profile.name}];
   const view=boxView(viewData,who,policy,'aeronaves'),result={native:{...view,operation:'fixture',uid:who.uid},pages:[{id:'aeronaves',name:'Aeronaves'}],name:who.profile.name,role:who.role};
   await page.evaluate(async result=>{window.dispose=await RoleMainView.mount(document.getElementById('shell'),result,'aeronaves',()=>{});},result);
@@ -88,23 +95,62 @@ async function fixture(browser){
   }
   console.log('PASS cancelling or escaping and reopening a pending report preserves its backend key and creates one task and alert');
 
+  const f=await fixture(browser);await f.open();
+  const revokedSnapshot=f.api.revokeStatus();
+  assert.equal(await f.frame.getByRole('button',{name:/Reportar problema a taller/}).count(),1,'the mounted interface still has its original permission');
+  await f.send();await f.waitForRequests(1);
+  const denied=await f.api.call(f.requests[0]);assert.equal(denied.status,403,'the backend must use the permission revoked after opening the form');assert.equal(typeof denied.error,'string');
+  f.pending[0].resolve(denied);await f.received(1);
+  await f.frame.getByText(denied.error,{exact:true}).waitFor();assert.equal(await f.frame.locator('dialog [data-send]').isDisabled(),false,'the rejected report must show an error and release the form');
+  f.api.assertNoReport(revokedSnapshot);await f.close();
+  console.log('PASS a server permission revoked after opening the report form rejects the stale interface without tasks, alerts, receipts or audit changes');
   {
    const f=await fixture(browser);await f.open();await f.send();await f.waitForRequests(1);
-   const accepted=await f.api.call(f.requests[0]);assert.equal(accepted.ok,true);await f.expire(0);await f.assertIdentity(1);
+   const accepted=await f.api.call(f.requests[0]);assert.equal(accepted.ok,true);assert.equal(accepted.deduplicated,false);await f.expire(0);await f.assertIdentity(1);
+   const acceptedSnapshot=f.api.snapshot(),pendingRecord=await f.stored();
    const oldMessage=structuredClone(f.sent[0]);await f.reload();
    assert.equal(f.requests.length,1,'reloading must never resend an uncertain report automatically');
+   assert.deepEqual(await f.stored(),pendingRecord,'reload must preserve the complete original pending record and retention bounds');
    await f.open({recover:false});assert.equal(await f.frame.locator('dialog [data-report-recover]').count(),1);
    assert.equal(f.requests.length,1,'displaying recovery must not write to the server');await f.recover();
    assert.equal(await f.frame.locator('dialog textarea').inputValue(),description,'reload recovery must restore the original content');
    assert.equal(await f.frame.locator('dialog textarea').evaluate(element=>element.readOnly),true,'a pending retry cannot silently change its original content');
    await f.send();await f.waitForRequests(2);await f.assertIdentity(2);
-   const retry=await f.api.call(f.requests[1]);assert.equal(retry.deduplicated,true);f.pending[1].resolve(retry);await f.assertSuccess();
+   const retry=await f.api.call(f.requests[1]);assert.equal(retry.deduplicated,true);assert.equal(retry.taskId,accepted.taskId);assert.equal(retry.operation,accepted.operation);f.api.assertSnapshot(acceptedSnapshot);f.pending[1].resolve(retry);await f.assertSuccess();
    f.pending[0].resolve(accepted);await f.replayResult(oldMessage,'Error tardío anterior a la recarga');await f.received(2);
    assert.equal(await f.frame.locator('dialog [data-status]').textContent(),'Reporte guardado como tarea pendiente de taller.','an old pre-reload response must not replace the recovered report success');
    assert.equal((await f.stored()).length,0,'confirmation must remove the recovered original content and key');
    f.api.assertSingleReport();await f.close();
   }
   console.log('PASS a saved report with delayed confirmation survives reload and explicit recovery without duplicate task or alert');
+
+  for(const acceptedBeforeReload of [true,false])for(const revokeAfterRecovery of [false,true]){
+   const f=await fixture(browser);await f.open();await f.send();await f.waitForRequests(1);
+   const accepted=acceptedBeforeReload?await f.api.call(f.requests[0]):null;
+   if(accepted){assert.equal(accepted.ok,true);assert.equal(accepted.deduplicated,false);}else f.api.assertReports(0,[]);
+   await f.expire(0);await f.assertIdentity(1);const pendingRecord=await f.stored();
+   assert.equal(pendingRecord[0][1].expiresAt-pendingRecord[0][1].createdAt,24*60*60*1000,'the pending record must retain its original 24-hour bounds');
+   if(!revokeAfterRecovery)f.api.revokeStatus();
+   await f.reload();assert.equal(f.requests.length,1,'reload must not automatically retry a report while permission is revoked');
+   assert.deepEqual(await f.stored(),pendingRecord);await f.open({recover:false});await f.recover();
+   assert.equal(await f.frame.locator('dialog textarea').inputValue(),description);assert.equal(await f.frame.locator('dialog textarea').evaluate(element=>element.readOnly),true);
+   assert.equal(await f.frame.getByRole('button',{name:/Reportar problema a taller/}).count(),1,'the recovered form still reflects the originally mounted UI policy');
+   if(revokeAfterRecovery)f.api.revokeStatus();const revokedSnapshot=f.api.snapshot();
+   await f.send();await f.waitForRequests(2);await f.assertIdentity(2);assert.deepEqual(f.requests[1],f.requests[0],'a recovered retry must preserve the original aircraft, text and UUID');
+   const denied=await f.api.call(f.requests[1]);assert.equal(denied.status,403,'current server permission must gate recovered reports, including existing receipts');f.api.assertSnapshot(revokedSnapshot);
+   f.pending[1].resolve(denied);await f.received(1);await f.frame.getByText(denied.error,{exact:true}).waitFor();
+   assert.equal(await f.frame.locator('dialog [data-send]').isDisabled(),false,'a permission rejection must release the retry button');assert.equal(await f.frame.locator('dialog textarea').evaluate(element=>element.readOnly),true,'a rejected recovery must keep its original content locked');
+   assert.deepEqual(await f.stored(),pendingRecord,'a 403 must not acknowledge, delete or replace the pending UUID, original text, createdAt or expiresAt');
+   f.api.assertSnapshot(revokedSnapshot);f.api.assertReports(acceptedBeforeReload?1:0,acceptedBeforeReload?[description]:[]);
+   const restoredSnapshot=f.api.restoreStatus();assert.deepEqual(await f.stored(),pendingRecord,'restoring server permission must not change local recovery content');
+   await f.send();await f.waitForRequests(3);await f.assertIdentity(3);assert.deepEqual(f.requests[2],f.requests[0]);
+   const retry=await f.api.call(f.requests[2]);assert.equal(retry.ok,true);assert.equal(retry.deduplicated,acceptedBeforeReload,'restoring permission must either recognize the original receipt or save the original not-yet-accepted report');
+   if(accepted){assert.equal(retry.taskId,accepted.taskId);assert.equal(retry.operation,accepted.operation);f.api.assertSnapshot(restoredSnapshot);}
+   const confirmedSnapshot=f.api.snapshot();f.pending[2].resolve(retry);await f.assertSuccess();assert.equal((await f.stored()).length,0,'only a successful active confirmation may remove the original pending record');
+   const oldResult=accepted||await f.api.call(f.requests[0]);if(!accepted)assert.equal(oldResult.deduplicated,true,'the original delayed request must also recognize the eventual save');f.pending[0].resolve(oldResult);
+   f.api.assertSnapshot(confirmedSnapshot);f.api.assertSingleReport();await f.close();
+  }
+  console.log('PASS recovered reports with accepted or unaccepted originals preserve full local records after server permission revocation before or after recovery, then reuse their UUID after permission is restored');
 
   {
    const changed='Vibración en el rotor de cola y ruido nuevo en cabina',f=await fixture(browser);await f.open();await f.send();await f.waitForRequests(1);
