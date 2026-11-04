@@ -2,7 +2,8 @@
 const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {catalog}=require('../functions/boxes'),{boxView}=require('../functions/box-view'),{handle}=require('../functions/aircraft-reports');
 const root=path.resolve(__dirname,'..'),description='Vibración en el rotor de cola',uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const data={fleet:{HP_1784:{reg:'HP-1784',model:'Aeronave de prueba',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]}},pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]}}};
+const reportPolicy={aeronaves:{actions:{view:true,edit:false},boxes:{status:{view:true,edit:false}}}};
+const data={fleet:{HP_1784:{reg:'HP-1784',model:'Aeronave de prueba',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]}},pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]},accessConfiguration:{roles:{Piloto:reportPolicy}}}};
 const account={uid:'pilot-fixture',role:'Piloto',assignedAt:'fixture',recordKind:'pilot',recordId:'pilot-record',syncStatus:'matched',profile:{name:'Piloto de prueba'}};
 const policy=Object.fromEntries(Object.entries(catalog).map(([page,boxes])=>[page,{actions:{view:true,edit:false},boxes:Object.fromEntries(boxes.map(box=>[box.id,{view:true,edit:false}]))}]));
 const server=http.createServer((req,res)=>{const file=path.join(root,req.url.split('?')[0]);if(req.url==='/test'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<body><div id="shell"></div><script src="role-main-view.js"></script></body>');}else if(file.startsWith(root+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('Content-Type',(file.endsWith('.js')?'application/javascript':'text/html')+'; charset=utf-8');res.end(fs.readFileSync(file));}else{res.statusCode=404;res.end();}});
@@ -12,7 +13,9 @@ function backend(){
  const db={ref:dbPath=>{assert.equal(dbPath,'dashboard');return {transaction:async update=>{const next=update(structuredClone(saved));if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(saved)}};saved=next;return {committed:true,snapshot:{val:()=>structuredClone(saved)}};}};}};
  return {
   call:body=>handle(db,{user:{uid:account.uid,email:'pilot@example.test',emailVerified:true},account,actor:{uid:account.uid,name:account.profile.name,role:account.role},body}),
-  assertSingleReport(){const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento,notices=snapshot.operationalNotices||[];assert.equal(tasks.length,1,'overlapping requests for one report must create one task');assert.equal(notices.length,1,'overlapping requests for one report must create one alert');assert.equal(notices[0].taskId,tasks[0].id);}
+  revokeStatus(){const snapshot=JSON.parse(saved.payload);snapshot.school.accessConfiguration.roles.Piloto.aeronaves.boxes.status.view=false;saved={...saved,payload:JSON.stringify(snapshot)};return structuredClone(saved);},
+  assertNoReport(expected){assert.deepEqual(saved,expected,'a rejected report must preserve the entire server snapshot, including audit and receipts');const snapshot=JSON.parse(saved.payload);assert.equal(snapshot.fleet.HP_1784.mantenimiento.length,0);assert.equal((snapshot.operationalNotices||[]).length,0);assert.equal(Object.keys(saved.aircraftReportReceipts||{}).length,0);},
+  assertSingleReport(){const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento,notices=snapshot.operationalNotices||[];assert.equal(tasks.length,1,'overlapping requests for one report must create one task');assert.equal(notices.length,1,'overlapping requests for one report must create one alert');assert.equal(Object.keys(saved.aircraftReportReceipts||{}).length,1,'one report must retain one receipt');assert.equal(notices[0].taskId,tasks[0].id);}
  };
 }
 
@@ -23,7 +26,7 @@ async function fixture(browser){
  const origin='http://127.0.0.1:'+server.address().port;
  await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
  await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({body:''}));await page.goto(origin+'/test');
- await page.evaluate(()=>{window.AccountRegistration={api:(action,body)=>{if(action!=='aircraft-report')throw Error('Unexpected API action '+action);return window.holdAircraftReport(body);}};window.aircraftReportMessages=[];window.addEventListener('message',event=>{if(event.data?.action==='aircraft-report')window.aircraftReportMessages.push(event.data);});});
+ await page.evaluate(()=>{window.AccountRegistration={api:(action,body)=>{if(action!=='aircraft-report')throw Error('Unexpected API action '+action);return window.holdAircraftReport(body).then(result=>{if(result.status>=400)throw Error(result.error);return result;});}};window.aircraftReportMessages=[];window.addEventListener('message',event=>{if(event.data?.action==='aircraft-report')window.aircraftReportMessages.push(event.data);});});
  const view=boxView(data,account,policy,'aeronaves'),result={native:{...view,operation:'fixture',uid:account.uid},pages:[{id:'aeronaves',name:'Aeronaves'}],name:account.profile.name,role:account.role};
  await page.evaluate(async result=>{window.dispose=await RoleMainView.mount(document.getElementById('shell'),result,'aeronaves',()=>{});},result);
  const frame=await(await page.locator('iframe').elementHandle()).contentFrame();await frame.locator('#panel-0').waitFor();
@@ -75,5 +78,15 @@ async function fixture(browser){
    f.api.assertSingleReport();await f.close();
   }
   console.log('PASS cancelling or escaping and reopening a pending report preserves its backend key and creates one task and alert');
+
+  const f=await fixture(browser);await f.open();
+  const revokedSnapshot=f.api.revokeStatus();
+  assert.equal(await f.frame.getByRole('button',{name:/Reportar problema a taller/}).count(),1,'the mounted interface still has its original permission');
+  await f.send();await f.waitForRequests(1);
+  const denied=await f.api.call(f.requests[0]);assert.equal(denied.status,403,'the backend must use the permission revoked after opening the form');assert.equal(typeof denied.error,'string');
+  f.pending[0].resolve(denied);await f.received(1);
+  await f.frame.getByText(denied.error,{exact:true}).waitFor();assert.equal(await f.frame.locator('dialog [data-send]').isDisabled(),false,'the rejected report must show an error and release the form');
+  f.api.assertNoReport(revokedSnapshot);await f.close();
+  console.log('PASS a server permission revoked after opening the report form rejects the stale interface without tasks, alerts, receipts or audit changes');
  }finally{await browser?.close();server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
