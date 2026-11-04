@@ -119,24 +119,9 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   res.json({notices});return;
  }
  if(action==='aircraft-report'){
-  if(user.disabled||!user.emailVerified||actorAccount?.role!=='Piloto'||!actorAccount.assignedAt||actorAccount.recordKind!=='pilot'||actorAccount.syncStatus!=='matched')throw Error('Solo un piloto con expediente vinculado puede reportar una aeronave.');
-  const registration=String(req.body.aircraft||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'_');
-  const description=String(req.body.description||'').trim().slice(0,1000);
-  if(!/^HP_[A-Z0-9]+$/.test(registration)||description.length<5)throw Error('Selecciona una aeronave y describe el reporte (mínimo 5 caracteres).');
-  const rootRef=db.ref('dashboard'),operation=randomUUID(),now=new Date().toISOString();let failure='',taskId;
-  const result=await rootRef.transaction(root=>{
-   failure='';if(!root?.payload){failure='No hay datos disponibles para guardar.';return;}
-   try{
-    const data=JSON.parse(root.payload),aircraft=data.fleet?.[registration];if(!aircraft)throw Error('La aeronave no existe. Actualiza la aplicación.');
-    const pilot=(data.pilotos||[]).find(p=>p.id===actorAccount.recordId&&p.authUid===user.uid);if(!pilot)throw Error('El expediente de piloto cambió. Actualiza la aplicación.');
-    if(!Array.isArray(aircraft.mantenimiento))aircraft.mantenimiento=aircraft.mantenimiento&&typeof aircraft.mantenimiento==='object'?Object.values(aircraft.mantenimiento):[];taskId=randomUUID();
-    aircraft.mantenimiento.push({id:taskId,nombre:'Reporte de piloto: '+description,fecha:new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Panama',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now)),resuelto:false,piezas:[],reportadoPor:pilot.nombre||actorAccount.profile?.name||user.email,reportadoPorUid:user.uid,reportadoAt:now});
-    data.operationalNotices||=[];data.operationalNotices.push({id:'aircraft-report:'+taskId,kind:'aircraft-report',aircraft:registration.replaceAll('_','-'),taskId,createdAt:now,recipients:[{kind:'group',id:'mechanics'},{kind:'group',id:'pilots'}],message:'Reporte de piloto para '+registration.replaceAll('_','-')+': '+description});data.operationalNotices=data.operationalNotices.slice(-500);
-    const updated=audit.attach(root,{...root,payload:JSON.stringify(data),operation,revision:(root.revision||0)+1,updatedAt:now,updatedBy:user.uid},actor,'dashboard','Reporte de aeronave por piloto');return updated;
-   }catch(e){failure=e.message;return;}
-  },undefined,false);
-  if(!result.committed||failure){res.status(409).json({error:failure||'No se pudo guardar el reporte.'});return;}
-  res.json({ok:true,taskId,operation});return;
+  const report=await require('./aircraft-reports').handle(db,{user,account:actorAccount,actor,body:req.body});
+  if(report.status){res.status(report.status).json({error:report.error});return;}
+  res.json(report);return;
  }
  if(String(action||'').startsWith('itinerary-')){res.json(await require('./itinerary-service').handle(db,{user,account:actorAccount,director:isDirector},req.body));return;}
  if(action==='director-save'){
