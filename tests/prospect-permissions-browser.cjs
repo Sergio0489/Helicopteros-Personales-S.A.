@@ -273,16 +273,25 @@ test(
       }
     });
     await new Promise((r) => server.listen(0, "127.0.0.1", r));
-    t.after(() => new Promise((r) => server.close(r)));
-    const origin = "http://127.0.0.1:" + server.address().port,
-      browser = await chromium.launch({
-        headless: true,
-        ...(process.env.CHROME_BIN
-          ? { executablePath: process.env.CHROME_BIN }
-          : {}),
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
-      });
-    t.after(() => browser.close());
+    let browser;
+    t.after(async () => {
+      try {
+        await browser?.close();
+      } finally {
+        await new Promise((resolve, reject) => {
+          server.close(error => error ? reject(error) : resolve());
+          server.closeAllConnections();
+        });
+      }
+    });
+    const origin = "http://127.0.0.1:" + server.address().port;
+    browser = await chromium.launch({
+      headless: true,
+      ...(process.env.CHROME_BIN
+        ? { executablePath: process.env.CHROME_BIN }
+        : {}),
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    });
     const contexts = [],
       errors = [],
       external = [];
@@ -701,7 +710,9 @@ test(
       assert.equal(busyDownloads.length,0,'an export must not download while the post-save refresh is active');
     }finally{
       releaseReload();
-      await roleEditor.unroute('**/api',holdReload);
+      // Wait for route.continue() before removing interception patterns;
+      // context-level routes still enforce the external-traffic boundary.
+      await roleEditor.unrouteAll({behavior:'wait'});
       roleEditor.off('download',captureBusyDownload);
     }
     await roleEditor.locator('[data-message]').filter({hasText:'Acceso autorizado por cargo:'}).waitFor();
