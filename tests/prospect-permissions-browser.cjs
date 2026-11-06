@@ -672,9 +672,39 @@ test(
     assert.equal((await call(roleEditor,'prospect-configure',{confirm:true})).ok,false);
     await roleEditor.locator(`[data-edit="${shared}"]`).click();
     await roleEditor.locator('dialog [name=notes]').fill('GENERAL ADMIN UPDATED NOTE');
-    await roleEditor.locator('dialog [type=submit]').click();
-    await roleEditor.locator('dialog').waitFor({state:'detached'});
-    assert.equal(db.root().prospects.contacts[shared].notes,'GENERAL ADMIN UPDATED NOTE');
+    // Closing the editor precedes its refresh finishing. Hold that refresh to
+    // cover a busy export separately from the permission revocation below.
+    let releaseReload;
+    const reloadGate=new Promise(resolve=>releaseReload=resolve);
+    const holdReload=async route=>{
+      const body=route.request().postDataJSON();
+      if(body.action==='prospect-list'&&!body.export)await reloadGate;
+      await route.continue();
+    };
+    const busyDownloads=[],captureBusyDownload=download=>busyDownloads.push(download);
+    roleEditor.on('download',captureBusyDownload);
+    t.after(()=>releaseReload());
+    await roleEditor.route('**/api',holdReload);
+    try{
+      await Promise.all([
+        roleEditor.waitForRequest(request=>{
+          if(request.method()!=='POST'||request.url()!==origin+'/api')return false;
+          const body=request.postDataJSON();
+          return body.action==='prospect-list'&&!body.export;
+        }),
+        roleEditor.locator('dialog [type=submit]').click(),
+      ]);
+      await roleEditor.locator('dialog').waitFor({state:'detached'});
+      assert.equal(db.root().prospects.contacts[shared].notes,'GENERAL ADMIN UPDATED NOTE');
+      await roleEditor.getByRole('button',{name:'Exportar CSV filtrado',exact:true}).click();
+      await roleEditor.locator('[data-message]').filter({hasText:'Espera a que termine la consulta antes de exportar.'}).waitFor();
+      assert.equal(busyDownloads.length,0,'an export must not download while the post-save refresh is active');
+    }finally{
+      releaseReload();
+      await roleEditor.unroute('**/api',holdReload);
+      roleEditor.off('download',captureBusyDownload);
+    }
+    await roleEditor.locator('[data-message]').filter({hasText:'Acceso autorizado por cargo:'}).waitFor();
     db.root().prospects.contacts[shared]=recordBefore;
     const revokedDownloads=[];roleEditor.on('download',d=>revokedDownloads.push(d));
     rights.boxes.contacts.export=false;db.root().dashboard.payload=JSON.stringify(rolePayload);
