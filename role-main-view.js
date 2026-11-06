@@ -1,7 +1,7 @@
 'use strict';
 // The same templates as the director, running without credentials or network access.
 (()=>{
- let bundle,chartBundle;const aircraftReportKeys=new Map();
+ let bundle,chartBundle;
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
@@ -39,15 +39,25 @@
   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='itinerary-result')return;const p=itineraryPending.get(e.data.id);if(!p)return;clearTimeout(p.timer);itineraryPending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.result);});
   const aircraftReports=new Map();
   // Correlate each attempt separately; mount keeps the report's backend idempotency key stable.
-  window.reportAircraft=(aircraft,description,{signal}={})=>new Promise((resolve,reject)=>{
+  window.reportAircraft=(aircraft,description,{signal,reportId,isNew=false,onPrepared}={})=>new Promise((resolve,reject)=>{
    const id=crypto.randomUUID(),cleanup=()=>{clearTimeout(timer);aircraftReports.delete(id);signal?.removeEventListener('abort',cancel);};
    const cancel=()=>{cleanup();reject(new DOMException('El formulario del reporte se cerró.','AbortError'));};
    const timer=setTimeout(()=>{cleanup();reject(Error('No se pudo confirmar el reporte. Puedes reintentar el mismo formulario; se conservará el identificador del envío.'));},25000);
-   aircraftReports.set(id,{resolve,reject,cleanup});signal?.addEventListener('abort',cancel,{once:true});
+   aircraftReports.set(id,{resolve,reject,cleanup,onPrepared});signal?.addEventListener('abort',cancel,{once:true});
    if(signal?.aborted){cancel();return;}
-   parent.postMessage({channel:cfg.channel,action:'aircraft-report',id,aircraft,description},'*');
+   parent.postMessage({channel:cfg.channel,action:'aircraft-report',id,aircraft,description,reportId,isNew},'*');
   });
+  window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='aircraft-report-prepared')return;aircraftReports.get(e.data.id)?.onPrepared?.(e.data.report);});
   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='aircraft-report-result')return;const item=aircraftReports.get(e.data.id);if(!item)return;item.cleanup();if(!e.data.error)parent.postMessage({channel:cfg.channel,action:'aircraft-report-ack',id:e.data.id},'*');e.data.error?item.reject(Error(e.data.error)):item.resolve(e.data.result);});
+  const reportLists=new Map();
+  window.listAircraftReports=(aircraft,{signal}={})=>new Promise((resolve,reject)=>{
+   const id=crypto.randomUUID(),cleanup=()=>{clearTimeout(timer);reportLists.delete(id);signal?.removeEventListener('abort',cancel);};
+   const cancel=()=>{cleanup();reject(new DOMException('El formulario del reporte se cerró.','AbortError'));};
+   const timer=setTimeout(()=>{cleanup();reject(Error('No se pudieron consultar los reportes pendientes. Reabre el formulario.'));},4000);
+   reportLists.set(id,{resolve,reject,cleanup});signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted){cancel();return;}
+   parent.postMessage({channel:cfg.channel,action:'aircraft-report-list',id,aircraft},'*');
+  });
+  window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel)return;if(e.data.action==='aircraft-report-session-ended'){document.querySelectorAll('[data-aircraft-report-dialog]').forEach(dialog=>dialog.close());return;}if(e.data.action!=='aircraft-report-list-result')return;const item=reportLists.get(e.data.id);if(!item)return;item.cleanup();e.data.error?item.reject(Error(e.data.error)):item.resolve(e.data);});
   window.showCloudError=e=>alert(e.message||'No se pudo guardar.');
   window.getPaymentReceivers=()=>[{uid:cfg.uid,label:cfg.name||'Usuario'}];
 
@@ -110,6 +120,41 @@
   }
   document.addEventListener('click',e=>{const control=e.target.closest('button,a,input,select,textarea,[onclick],[data-action]');if(control?.matches('[data-balance-person]'))statementScope=['saldos',control.dataset.balancePerson.startsWith('client:')?'clients':'students','print'];if(control&&outputFor(control)){outputContext=outputFor(control);if(!mayOutput(outputContext)){outputContext=null;e.preventDefault();e.stopImmediatePropagation();}return;}if(control&&canEditControl(control)){dialogPermission=window.HPBoxUI?.owner(control)||dialogPermission;return;}if(control&&readonlyControl(control)&&control.matches('input'))dialogPermission='filter';if(control&&!readonlyControl(control)){e.preventDefault();e.stopImmediatePropagation();}},true);
   document.addEventListener('submit',e=>{if(!canEditControl(e.target)&&!e.target.matches('[data-aac-filters],[data-hp-filters]')){e.preventDefault();e.stopImmediatePropagation();}},true);
+  async function openAircraftReport(aircraft){
+   const dialog=document.createElement('dialog'),controller=new AbortController();
+   dialog.className='user-profile-dialog';dialog.dataset.itineraryControl='true';dialog.dataset.aircraftReportDialog='true';
+   dialog.style.cssText='width:min(520px,92vw);border:1px solid #aac3da;border-radius:12px;padding:20px;font:inherit';
+   dialog.innerHTML='<form method="dialog"><h2></h2><p>Los envíos sin confirmación están disponibles para recuperación en este dispositivo durante 24 horas, hasta 20 por piloto. No equivalen a un guardado confirmado.</p><div data-report-choices></div><label hidden data-report-fields>Describe el problema<textarea name="description" required minlength="5" maxlength="1000" rows="5" style="width:100%;box-sizing:border-box"></textarea></label><p data-report-notice></p><p data-status role="status">Consultando reportes pendientes…</p><button type="submit" data-send hidden>Enviar a taller</button><button type="button" data-report-modify hidden>Modificar y crear reporte nuevo</button><button type="button" data-report-choose hidden>Ver reportes pendientes</button><button type="button" data-cancel>Cancelar</button></form>';
+   dialog.querySelector('h2').textContent='Reporte de aeronave · '+aircraft;
+   const form=dialog.querySelector('form'),choices=dialog.querySelector('[data-report-choices]'),fields=dialog.querySelector('[data-report-fields]'),text=dialog.querySelector('textarea'),notice=dialog.querySelector('[data-report-notice]'),status=dialog.querySelector('[data-status]'),send=dialog.querySelector('[data-send]'),modify=dialog.querySelector('[data-report-modify]'),choose=dialog.querySelector('[data-report-choose]');
+   let entries=[],draft=null,isNew=true,sourceDescription=null,busy=false,legacyPending=false,closeTimer,cleanupProblem=false;
+   const setBusy=value=>{busy=value;text.disabled=value;send.disabled=value;modify.disabled=value;choose.disabled=value;choices.querySelectorAll('button').forEach(button=>button.disabled=value);};
+   const edit=(entry=null)=>{draft={id:crypto.randomUUID(),aircraft,description:entry?.description||''};isNew=true;sourceDescription=entry?.description??null;choices.hidden=true;fields.hidden=false;text.readOnly=false;text.value=draft.description;send.hidden=false;send.textContent=entries.length||legacyPending?'Enviar reporte nuevo':'Enviar a taller';modify.hidden=true;choose.hidden=!entries.length&&!legacyPending;notice.textContent=entries.length||legacyPending?'Este es un reporte distinto y puede crear otra tarea y alerta; los envíos anteriores seguirán pendientes de confirmación.':'Revisa el texto antes de enviar. Si falta la confirmación, recupera este mismo envío para reintentarlo.';status.textContent='';};
+   const recover=entry=>{draft=entry;isNew=false;sourceDescription=null;choices.hidden=true;fields.hidden=false;text.readOnly=true;text.value=entry.description;send.hidden=false;send.textContent='Reintentar reporte pendiente';modify.hidden=false;choose.hidden=false;notice.textContent='Se reenviará exactamente el reporte original para confirmar su resultado. Puede haberse guardado antes. Para cambiar información, crea otro reporte explícitamente.';status.textContent='';};
+   const addChoice=entry=>{const button=document.createElement('button');button.type='button';button.dataset.reportRecover=entry.id;button.style.cssText='display:block;width:100%;text-align:left;margin:8px 0;white-space:normal';button.textContent='Recuperar reporte pendiente · '+new Date(entry.createdAt).toLocaleString('es-PA',{timeZone:'America/Panama',dateStyle:'short',timeStyle:'short'})+' · '+entry.description.slice(0,120);button.onclick=()=>{if(!busy)recover(entry);};choices.prepend(button);};
+   const showChoices=()=>{choices.hidden=false;fields.hidden=true;send.hidden=true;modify.hidden=true;choose.hidden=true;status.textContent='';notice.textContent=legacyPending?'Hay envíos de una versión anterior sin texto recuperable. Revisa lo recibido antes de crear otro reporte.':'Recupera un envío pendiente para confirmar su resultado o elige crear un reporte distinto.';};
+   modify.onclick=()=>{if(!busy)edit(draft);};choose.onclick=()=>{if(!busy)showChoices();};
+   const cleanupNotice=e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='aircraft-report-cleanup-error'&&e.data.reportId===draft?.id){cleanupProblem=true;clearTimeout(closeTimer);status.textContent='Reporte recibido, pero no se pudo completar la limpieza local. La copia pendiente no equivale a otro reporte nuevo.';}};
+   window.addEventListener('message',cleanupNotice);
+   dialog.querySelector('[data-cancel]').onclick=()=>{controller.abort();dialog.close();};dialog.addEventListener('cancel',()=>controller.abort());dialog.addEventListener('close',()=>{controller.abort();clearTimeout(closeTimer);window.removeEventListener('message',cleanupNotice);dialog.remove();});
+   form.onsubmit=async event=>{
+    event.preventDefault();if(busy||!draft)return;
+    const description=isNew?text.value.trim():draft.description;
+    if(isNew&&sourceDescription!==null&&description===sourceDescription){status.textContent='Modifica la descripción para crear otro reporte, o recupera el original para reintentarlo.';return;}
+    setBusy(true);status.textContent='Enviando reporte…';
+    try{
+     const report=await window.reportAircraft(aircraft,description,{signal:controller.signal,reportId:draft.id,isNew,onPrepared:entry=>{if(!dialog.open)return;draft=entry;isNew=false;text.value=entry.description;text.readOnly=true;send.textContent='Reintentar reporte pendiente';modify.hidden=false;choose.hidden=false;if(!entries.some(old=>old.id===entry.id)){entries.push(entry);addChoice(entry);}}});
+     if(!dialog.open)return;if(!cleanupProblem){status.textContent=report?.deduplicated===true?'Este reporte ya se había recibido.':report?.deduplicated===false?'Reporte guardado como tarea pendiente de taller.':'Reporte recibido.';closeTimer=setTimeout(()=>dialog.close(),800);}
+    }catch(error){if(!dialog.open)return;status.textContent=error.message;setBusy(false);}
+   };
+   document.body.appendChild(dialog);dialog.showModal();
+   try{
+    const result=await window.listAircraftReports(aircraft,{signal:controller.signal});if(!dialog.open)return;entries=result.reports;legacyPending=result.legacyPending;
+    for(const entry of entries)addChoice(entry);
+    const fresh=document.createElement('button');fresh.type='button';fresh.dataset.reportNew='true';fresh.textContent='Crear reporte nuevo';fresh.onclick=()=>{if(!busy)edit();};choices.appendChild(fresh);
+    if(entries.length||legacyPending)showChoices();else edit();
+   }catch(error){if(dialog.open)status.textContent=error.message;}
+  }
   window.finishRoleView=()=>{
    cfg.pages=window.HomeSearchModel.sidebarOrdered(cfg.pages);
    document.getElementById('drawerCloseBtn').onclick=()=>closeDrawer();
@@ -128,7 +173,7 @@
    function restrict(){
     HPBoxUI.annotate();
     if(cfg.page==='aeronaves'&&cfg.role==='Piloto'&&HPBoxes.permissions(cfg.policy,'aeronaves','status').view){
-     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const idx=Number(panel.id.slice(7)),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>{const dialog=document.createElement('dialog');dialog.className='user-profile-dialog';dialog.dataset.itineraryControl='true';dialog.style.cssText='width:min(480px,92vw);border:1px solid #aac3da;border-radius:12px;padding:20px;font:inherit';dialog.innerHTML='<form method="dialog"><h2>Reporte de aeronave · '+aircraft+'</h2><label>Describe el problema<textarea name="description" required minlength="5" maxlength="1000" rows="5" style="width:100%;box-sizing:border-box"></textarea></label><p data-status role="status"></p><button type="submit" data-send>Enviar a taller</button><button type="button" data-cancel>Cancelar</button></form>';const controller=new AbortController();document.body.appendChild(dialog);dialog.querySelector('[data-cancel]').onclick=()=>{controller.abort();dialog.close();};dialog.addEventListener('cancel',()=>controller.abort());dialog.addEventListener('close',()=>{controller.abort();dialog.remove();});dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const send=dialog.querySelector('[data-send]'),status=dialog.querySelector('[data-status]');send.disabled=true;status.textContent='Enviando reporte…';try{const report=await window.reportAircraft(aircraft,dialog.querySelector('[name=description]').value,{signal:controller.signal});if(!dialog.open)return;status.textContent=report?.deduplicated===true?'Este reporte ya se había recibido.':report?.deduplicated===false?'Reporte guardado como tarea pendiente de taller.':'Reporte recibido.';setTimeout(()=>dialog.close(),800);}catch(error){if(!dialog.open)return;status.textContent=error.message;send.disabled=false;}};dialog.showModal();};const header=panel.querySelector('.aircraft-header');header?.after(button);});
+     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const idx=Number(panel.id.slice(7)),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>openAircraftReport(aircraft);const header=panel.querySelector('.aircraft-header');header?.after(button);});
     }
     document.querySelectorAll('[data-permission-box]').forEach(e=>{
      const rights=HPBoxes.permissions(cfg.policy||{},e.dataset.permissionPage,e.dataset.permissionBox);
@@ -183,11 +228,25 @@
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
   add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
-  let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0;const aircraftReportResponseKeys=new Map();
-  const aircraftReportIdentity=async(aircraft,description)=>{
-   const mapKey=cfg.uid+'\u0000'+aircraft+'\u0000'+String(description||'').trim();if(aircraftReportKeys.has(mapKey))return aircraftReportKeys.get(mapKey);
-   const pending=(async()=>{const bytes=new TextEncoder().encode(mapKey),digest=await crypto.subtle.digest('SHA-256',bytes),hash=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,'0')).join(''),storageKey='hp-aircraft-report:'+cfg.uid+':'+hash;let id;try{id=localStorage.getItem(storageKey);}catch{}if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id||'')){id=crypto.randomUUID();try{localStorage.setItem(storageKey,id);}catch{}}return {id,mapKey,storageKey};})();
-   aircraftReportKeys.set(mapKey,pending);pending.catch(()=>aircraftReportKeys.delete(mapKey));return pending;
+  let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0,reportStore,stopReportAuth=()=>{},reportQueue=Promise.resolve();const aircraftReportResponseKeys=new Map();
+  const assertReportUser=()=>{if(!cfg.uid||window.firebase?.auth?.()?.currentUser?.uid!==cfg.uid)throw Error('La sesión cambió. Abre la aplicación con tu usuario antes de recuperar o enviar reportes.');};
+  const reports=()=>{assertReportUser();if(!window.AircraftReportRecovery)throw Error('Actualiza la aplicación para recuperar reportes pendientes.');return reportStore||=window.AircraftReportRecovery.createStore({uid:cfg.uid});};
+  // Reopening a dialog must observe the preceding local preparation.
+  const reportLocal=run=>{const next=reportQueue.then(run);reportQueue=next.catch(()=>{});return next;};
+  const validReportId=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  // Older versions kept only a UUID; recover it only after an exact text match.
+  const legacyReportKeys=()=>{
+   assertReportUser();const prefix='hp-aircraft-report:'+cfg.uid+':',marker='hp:aircraft-report:legacy:'+encodeURIComponent(cfg.uid),keys=Object.keys(localStorage).filter(key=>key.startsWith(prefix)&&/^[0-9a-f]{64}$/.test(key.slice(prefix.length))&&validReportId(localStorage.getItem(key)));
+   if(!keys.length){localStorage.removeItem(marker);return keys;}
+   const raw=localStorage.getItem(marker),now=Date.now(),first=Number(raw);
+   if(raw!==null&&(!Number.isFinite(first)||first>now||now-first>=window.AircraftReportRecovery.TTL)){for(const key of keys)localStorage.removeItem(key);localStorage.removeItem(marker);return [];}
+   if(raw===null)localStorage.setItem(marker,String(now));return keys;
+  };
+  const legacyReportKey=async(aircraft,description)=>{const bytes=new TextEncoder().encode(cfg.uid+'\u0000'+aircraft+'\u0000'+description.trim()),digest=await crypto.subtle.digest('SHA-256',bytes),hash=[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('');return 'hp-aircraft-report:'+cfg.uid+':'+hash;};
+  const prepareReport=async data=>{
+   const store=reports();let id=data.reportId;
+   if(data.isNew===true){const keys=legacyReportKeys();if(keys.length){const key=await legacyReportKey(String(data.aircraft).trim().toUpperCase(),String(data.description).trim());assertReportUser();if(keys.includes(key))id=localStorage.getItem(key);}}
+   assertReportUser();return store.prepare({id,aircraft:data.aircraft,description:data.description,isNew:data.isNew===true});
   };
   async function searchIndex(){
    if(searchCache&&Date.now()-searchAt<60000)return searchCache;searchAt=Date.now();
@@ -208,7 +267,7 @@
    })().catch(e=>{searchCache=null;throw e;});return searchCache;
   }
   const ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
-  const dispose=()=>{clearTimeout(timer);window.removeEventListener('message',listener);frame.remove();};
+  const dispose=()=>{clearTimeout(timer);stopReportAuth();window.removeEventListener('message',listener);frame.remove();};
   const listener=e=>{
    if(e.source!==frame.contentWindow||e.data?.channel!==channel)return;
    if(e.data.action==='home-go'){if(settled&&(e.data.row?.page==='inicio'||result.pages.some(p=>p.id===e.data.row?.page)))onAction({action:'home-go',row:e.data.row});return;}
@@ -223,12 +282,16 @@
     if(!settled||!['itinerary-read','itinerary-calendar','itinerary-command','itinerary-notices'].includes(e.data.method))return;
     Promise.resolve().then(()=>{if(!window.AccountRegistration?.api)throw Error('La conexión del itinerario aún no está disponible.');return window.AccountRegistration.api(e.data.method,e.data.payload);}).then(result=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,error:error.message},'*'));return;
    }
+   if(e.data.action==='aircraft-report-list'){
+    if(!settled||result.role!=='Piloto')return;
+    reportLocal(()=>{const entries=reports().list(e.data.aircraft),legacyPending=legacyReportKeys().length>0;assertReportUser();frame.contentWindow?.postMessage({channel,action:'aircraft-report-list-result',id:e.data.id,reports:entries,legacyPending},'*');}).catch(error=>frame.contentWindow?.postMessage({channel,action:'aircraft-report-list-result',id:e.data.id,error:error.message},'*'));return;
+   }
    if(e.data.action==='aircraft-report-ack'){
-    const identity=aircraftReportResponseKeys.get(e.data.id);if(identity){aircraftReportResponseKeys.delete(e.data.id);aircraftReportKeys.delete(identity.mapKey);try{localStorage.removeItem(identity.storageKey);}catch{}}return;
+    const identity=aircraftReportResponseKeys.get(e.data.id);if(identity){aircraftReportResponseKeys.delete(e.data.id);reportLocal(async()=>{reports().complete(identity);const key=await legacyReportKey(identity.aircraft,identity.description);assertReportUser();if(localStorage.getItem(key)===identity.id)localStorage.removeItem(key);legacyReportKeys();}).catch(()=>frame.contentWindow?.postMessage({channel,action:'aircraft-report-cleanup-error',reportId:identity.id},'*'));}return;
    }
     if(e.data.action==='aircraft-report'){
     if(!settled||result.role!=='Piloto')return;
-    Promise.resolve().then(async()=>{const identity=await aircraftReportIdentity(e.data.aircraft,e.data.description);aircraftReportResponseKeys.set(e.data.id,identity);if(!window.AccountRegistration?.api)throw Error('La conexión de reportes aún no está disponible.');return window.AccountRegistration.api('aircraft-report',{aircraft:e.data.aircraft,description:e.data.description,idempotencyKey:identity.id});}).then(result=>frame.contentWindow?.postMessage({channel,action:'aircraft-report-result',id:e.data.id,result},'*')).catch(error=>{aircraftReportResponseKeys.delete(e.data.id);frame.contentWindow?.postMessage({channel,action:'aircraft-report-result',id:e.data.id,error:error.message},'*');});return;
+    reportLocal(()=>prepareReport(e.data)).then(identity=>{assertReportUser();aircraftReportResponseKeys.set(e.data.id,identity);frame.contentWindow?.postMessage({channel,action:'aircraft-report-prepared',id:e.data.id,report:identity},'*');if(!window.AccountRegistration?.api)throw Error('La conexión de reportes aún no está disponible.');return window.AccountRegistration.api('aircraft-report',{aircraft:identity.aircraft,description:identity.description,idempotencyKey:identity.id});}).then(result=>{assertReportUser();frame.contentWindow?.postMessage({channel,action:'aircraft-report-result',id:e.data.id,result},'*');}).catch(error=>{aircraftReportResponseKeys.delete(e.data.id);frame.contentWindow?.postMessage({channel,action:'aircraft-report-result',id:e.data.id,error:error.message},'*');});return;
    }
    if(e.data.action==='box-save'){
     if(!settled)return;searchCache=null;
@@ -242,6 +305,7 @@
    if(e.data.action==='ready'){if(!settled){settled=true;resolveReady();}return;}
    if(settled)onAction(e.data);
   };
+  const reportAuth=window.firebase?.auth?.();if(reportAuth?.onAuthStateChanged)stopReportAuth=reportAuth.onAuthStateChanged(user=>{if(user?.uid!==cfg.uid)frame.contentWindow?.postMessage({channel,action:'aircraft-report-session-ended'},'*');});
   window.addEventListener('message',listener);
   frame.style.visibility='hidden';frame.style.position='absolute';
   container.appendChild(frame);frame.srcdoc='<!DOCTYPE html>'+doc.documentElement.outerHTML;
