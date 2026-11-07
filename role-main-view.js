@@ -134,7 +134,7 @@
    const addChoice=entry=>{const button=document.createElement('button');button.type='button';button.dataset.reportRecover=entry.id;button.style.cssText='display:block;width:100%;text-align:left;margin:8px 0;white-space:normal';button.textContent='Recuperar reporte pendiente · '+new Date(entry.createdAt).toLocaleString('es-PA',{timeZone:'America/Panama',dateStyle:'short',timeStyle:'short'})+' · '+entry.description.slice(0,120);button.onclick=()=>{if(!busy)recover(entry);};choices.prepend(button);};
    const showChoices=()=>{choices.hidden=false;fields.hidden=true;send.hidden=true;modify.hidden=true;choose.hidden=true;status.textContent='';notice.textContent=legacyPending?'Hay envíos de una versión anterior sin texto recuperable. Revisa lo recibido antes de crear otro reporte.':'Recupera un envío pendiente para confirmar su resultado o elige crear un reporte distinto.';};
    modify.onclick=()=>{if(!busy)edit(draft);};choose.onclick=()=>{if(!busy)showChoices();};
-   const cleanupNotice=e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='aircraft-report-cleanup-error'&&e.data.reportId===draft?.id){cleanupProblem=true;clearTimeout(closeTimer);status.textContent='Reporte guardado, pero no se pudo completar la limpieza local. La copia pendiente no equivale a otro reporte nuevo.';}};
+   const cleanupNotice=e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='aircraft-report-cleanup-error'&&e.data.reportId===draft?.id){cleanupProblem=true;clearTimeout(closeTimer);status.textContent='Reporte recibido, pero no se pudo completar la limpieza local. La copia pendiente no equivale a otro reporte nuevo.';}};
    window.addEventListener('message',cleanupNotice);
    dialog.querySelector('[data-cancel]').onclick=()=>{controller.abort();dialog.close();};dialog.addEventListener('cancel',()=>controller.abort());dialog.addEventListener('close',()=>{controller.abort();clearTimeout(closeTimer);window.removeEventListener('message',cleanupNotice);dialog.remove();});
    form.onsubmit=async event=>{
@@ -143,8 +143,8 @@
     if(isNew&&sourceDescription!==null&&description===sourceDescription){status.textContent='Modifica la descripción para crear otro reporte, o recupera el original para reintentarlo.';return;}
     setBusy(true);status.textContent='Enviando reporte…';
     try{
-     await window.reportAircraft(aircraft,description,{signal:controller.signal,reportId:draft.id,isNew,onPrepared:entry=>{if(!dialog.open)return;draft=entry;isNew=false;text.value=entry.description;text.readOnly=true;send.textContent='Reintentar reporte pendiente';modify.hidden=false;choose.hidden=false;if(!entries.some(old=>old.id===entry.id)){entries.push(entry);addChoice(entry);}}});
-     if(!dialog.open)return;if(!cleanupProblem){status.textContent='Reporte guardado como tarea pendiente de taller.';closeTimer=setTimeout(()=>dialog.close(),800);}
+     const report=await window.reportAircraft(aircraft,description,{signal:controller.signal,reportId:draft.id,isNew,onPrepared:entry=>{if(!dialog.open)return;draft=entry;isNew=false;text.value=entry.description;text.readOnly=true;send.textContent='Reintentar reporte pendiente';modify.hidden=false;choose.hidden=false;if(!entries.some(old=>old.id===entry.id)){entries.push(entry);addChoice(entry);}}});
+     if(!dialog.open)return;if(!cleanupProblem){status.textContent=report?.deduplicated===true?'Este reporte ya se había recibido.':report?.deduplicated===false?'Reporte guardado como tarea pendiente de taller.':'Reporte recibido.';closeTimer=setTimeout(()=>dialog.close(),800);}
     }catch(error){if(!dialog.open)return;status.textContent=error.message;setBusy(false);}
    };
    document.body.appendChild(dialog);dialog.showModal();
