@@ -118,6 +118,8 @@ Contacto 2 — consentVersion:
 
 Las dos conexiones existentes **Apps HP - Escuela - Contacto** y **Apps HP - Escuela - Contacto 2** quedaron ACTIVE, revisión 5, con validación VALID y una sola acción HTTP cada una. Se preservaron sus campos originales, credencial, URL y envoltura. Se desactivó, conservándola recuperable, la conexión antigua duplicada **Apps HP - Consultas HP Flight School**, que también recibía Contacto sin teléfono, curso ni consentimiento y competía por el mismo identificador de envío. La conexión de Charters quedó ACTIVE sin modificaciones.
 
+La revisión final abrió ambas conexiones en el editor de automatizaciones de Wix y confirmó el disparador, la única acción y el final del recorrido, sin errores de presentación ni cambios pendientes. También se publicó un ajuste de espacio bajo Contacto para que su mensaje de confirmación completo quede por encima del mapa, conservando la disposición móvil verificada.
+
 En Firebase se publicó el catálogo por formulario en una nueva versión del secreto existente, conservando la credencial, sitio y entrada de Charters. Se desplegaron únicamente `wixInterests` y `accountRegistration`; después se actualizó solo `wixInterests` con la compatibilidad de versión vacía sin aceptación. La interfaz del CRM quedó publicada en GitHub Pages. No se cambiaron reglas, usuarios, permisos ni el servicio de aviso interno de consultas.
 
 ## Comprobación externa autorizada
