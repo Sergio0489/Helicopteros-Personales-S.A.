@@ -62,6 +62,8 @@ Una consulta manual con texto queda en el historial, junto con las consultas web
 
 ## Wix
 
+Diseño aprobado e implementación local de autorización opcional de cursos: [CONSENTIMIENTO_CURSOS.md](CONSENTIMIENTO_CURSOS.md). Incluye evidencia por envío y versionado; su publicación y la modificación de Wix/Firebase requieren aprobación posterior. No cambia por sí mismo el estado operativo documentado a continuación.
+
 Los formularios autorizados del sitio envían los datos mediante una automatización HTTP al receptor privado `wixInterests`. La credencial está en un secreto de Firebase y en la automatización de Wix; nunca se guarda en archivos públicos. La lista de formularios y sus áreas está en la configuración privada del receptor.
 
 Se conservan los controles del sitio y formulario, tamaño, fecha, correo, consentimiento y deduplicación. Los reintentos no generan consultas repetidas. El registro no envía campañas por sí mismo.

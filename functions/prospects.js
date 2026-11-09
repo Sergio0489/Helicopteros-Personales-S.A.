@@ -1,6 +1,7 @@
 'use strict';
 // Private CRM storage. Never writes students, Auth users, or the operational dashboard.
 const {createHash,timingSafeEqual}=require('node:crypto');
+const consentLog=require('./prospect-consent');
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const COURSES=['privado','comercial','ifr','multimotor','rpa','instructor'];
 const STATES=['Nueva','En seguimiento','Información enviada','Confirmada','No concretada'];
@@ -17,6 +18,7 @@ function areaState(old){const area=old?.areas?.length===1?old.areas[0]:null,foll
 function manualMerge(old,input,actor,now){const p=manualInput(input);p.responsible ||= p.areas.length===2?'Antonio / Fernando Alvarado':p.areas[0]==='charters'?'Antonio':'Fernando Alvarado';if(input.id&&input.id!==hash(p.email))throw Error('El correo identifica el registro y no puede cambiarse.');if((old?.version||0)!==input.version)throw Error('El registro cambió. Actualiza antes de guardar.');const next={...(old||newContact(p,now)),...areaState(old),...p,updatedAt:now,updatedBy:actor.uid,version:(old?.version||0)+1};delete next.interest;delete next.channel;if(p.areas.length===1)next.areaFollowups[p.areas[0]]={status:p.status,responsible:p.responsible,notes:p.notes,nextContact:p.nextContact,updatedAt:now,updatedBy:actor.uid};if(input.consentStatus&&input.consentStatus!==(old?.consent?.status||'unknown'))next.consent=consent(input.consentStatus,input.consentEvidence,now,'Registro manual · '+actor.uid);
  if(!old){next.lastInquiry={channel:p.channel,interest:p.interest,at:now};next.inquiryCount=1;}
  if(p.interest){const inquiry={channel:p.channel,interest:p.interest,at:now,areas:p.areas,courses:p.courses};next.lastInquiry=inquiry;next.inquiryCount=(old?.inquiryCount||0)+1;for(const area of p.areas)next.areaLastInquiry[area]=inquiry;}
+ consentLog.manualChange(old,next,input,actor,now);
  return next;
 }
 function authorizedConfig(raw){let cfg;try{cfg=JSON.parse(raw);}catch{throw Error('Integración pendiente de configuración.');}if(typeof cfg.token!=='string'||cfg.token.length<43||!cfg.siteId||!cfg.forms||typeof cfg.forms!=='object')throw Error('Integración pendiente de configuración.');return cfg;}
@@ -26,14 +28,65 @@ function webhookInput(body,cfg,now){
  if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>32768)throw Error('Envío no válido.');
  // Wix can wrap the configured parameters in data. Never merge both envelopes.
  if(!Object.hasOwn(body,'token')&&body.data&&typeof body.data==='object'&&!Array.isArray(body.data))body=body.data;
- if(!validToken(body.token,cfg.token)){const err=Error('No autorizado.');err.status=401;throw err;}const formId=text(body.formId,200),form=Object.hasOwn(cfg.forms,formId)?cfg.forms[formId]:null;if(body.siteId!==cfg.siteId||!form||!['charters','school'].includes(form.area))throw Error('Formulario no autorizado.');const submittedAt=timestamp(body.submittedAt);if(Date.parse(submittedAt)>Date.parse(now)+300000)throw Error('Fecha futura no válida.');const p={email:email(body.email),name:text(body.name,160),phone:text(body.phone,40),areas:[form.area],courses:courses(body.courses),...(body.requestedCourse?{requestedCourse:text(body.requestedCourse,500)}:{}),interest:text(body.interest,3000),submissionId:text(body.submissionId,200),formId,submittedAt,courseUpdates:body.courseUpdates===true||body.courseUpdates==='true'};if(!p.name||!p.submissionId)throw Error('Falta nombre o identificador del envío.');if(form.area==='charters'&&(p.courses.length||p.requestedCourse||p.courseUpdates))throw Error('Un formulario de Charters no puede registrar cursos ni consentimiento de Escuela.');if(p.requestedCourse&&form.courseMap&&Object.hasOwn(form.courseMap,p.requestedCourse))p.courses=courses([...new Set([...p.courses,form.courseMap[p.requestedCourse]])]);if(p.courseUpdates&&(!form.consentVersion||!form.consentStatement))throw Error('Falta configurar el texto de consentimiento del formulario.');if(p.courseUpdates)p.consent=consent('granted',text(form.consentStatement,1000),submittedAt,'Wix · '+formId+' · '+text(form.consentVersion,100));return p;}
-function wixMerge(old,p,eventId,now){if(old?.received?.[eventId])return old;const next={...(old||newContact(p,now)),...areaState(old),areas:[...new Set([...(old?.areas||[]),...p.areas])].sort(),courses:[...new Set([...(old?.courses||[]),...p.courses])].sort(),updatedAt:now,version:(old?.version||0)+1,inquiryCount:(old?.inquiryCount||0)+1};for(const area of p.areas){if(!next.areaLastInquiry[area]||p.submittedAt>=next.areaLastInquiry[area].at)next.areaLastInquiry[area]={channel:'Formulario web',interest:p.interest,requestedCourse:p.requestedCourse||'',at:p.submittedAt,formId:p.formId,areas:[area],courses:p.courses};}const last=old?.lastInquiry;if(!last||p.submittedAt>=last.at)next.lastInquiry={channel:'Formulario web',interest:p.interest,at:p.submittedAt,formId:p.formId};if(!old?.phone&&p.phone)next.phone=p.phone;if(p.consent&&(!old?.consent?.at||p.consent.at>old.consent.at))next.consent=p.consent;
+ if(!validToken(body.token,cfg.token)){const err=Error('No autorizado.');err.status=401;throw err;}
+ const formId=text(body.formId,200),form=Object.hasOwn(cfg.forms,formId)?cfg.forms[formId]:null;
+ if(body.siteId!==cfg.siteId||!form||!['charters','school'].includes(form.area))throw Error('Formulario no autorizado.');
+ const submittedAt=timestamp(body.submittedAt);
+ if(Date.parse(submittedAt)>Date.parse(now)+300000)throw Error('Fecha futura no válida.');
+ const p={email:email(body.email),name:text(body.name,160),phone:text(body.phone,40),areas:[form.area],courses:courses(body.courses),...(body.requestedCourse?{requestedCourse:text(body.requestedCourse,500)}:{}),interest:text(body.interest,3000),submissionId:text(body.submissionId,200),formId,submittedAt,courseUpdates:body.courseUpdates===true||body.courseUpdates==='true'};
+ if(!p.name||!p.submissionId)throw Error('Falta nombre o identificador del envío.');
+ if(form.area==='charters'&&(p.courses.length||p.requestedCourse||p.courseUpdates||body.consentVersion))throw Error('Un formulario de Charters no puede registrar cursos ni consentimiento de Escuela.');
+ const submittedCourses=p.courses;
+ if(p.requestedCourse&&form.courseMap&&Object.hasOwn(form.courseMap,p.requestedCourse))p.courses=courses([...new Set([...p.courses,form.courseMap[p.requestedCourse]])]);
+ if(form.area==='school'){
+  const response=consentLog.resolve(body,form,p);
+  if(p.courseUpdates){
+   p.consent=consent('granted',response.statement,submittedAt,response.source);
+   p.consent.version=response.version;p.consent.channels=response.channels;
+  }
+  p.consentResponse=response;
+ }
+ // Fingerprint submitted values separately from server-derived policy and
+ // course mappings. Freeze the resolved snapshot on the first receipt.
+ p.submittedCourses=submittedCourses;p.submittedConsentVersion=body.consentVersion==null?'':text(body.consentVersion,100);
+ return p;
+}
+function wixMerge(old,p,eventId,now,receivedAt=now){if(old?.received?.[eventId])return old;const next={...(old||newContact(p,now)),...areaState(old),areas:[...new Set([...(old?.areas||[]),...p.areas])].sort(),courses:[...new Set([...(old?.courses||[]),...p.courses])].sort(),updatedAt:now,version:(old?.version||0)+1,inquiryCount:(old?.inquiryCount||0)+1};for(const area of p.areas){if(!next.areaLastInquiry[area]||p.submittedAt>=next.areaLastInquiry[area].at)next.areaLastInquiry[area]={channel:'Formulario web',interest:p.interest,requestedCourse:p.requestedCourse||'',at:p.submittedAt,formId:p.formId,areas:[area],courses:p.courses};}const last=old?.lastInquiry;if(!last||p.submittedAt>=last.at)next.lastInquiry={channel:'Formulario web',interest:p.interest,at:p.submittedAt,formId:p.formId};if(!old?.phone&&p.phone)next.phone=p.phone;if(p.consent&&(!old?.consent?.at||p.consent.at>old.consent.at))next.consent=p.consent;
  // Keep retry markers bounded; durable receipts remain separately available.
+ if(p.consent&&next.consent===p.consent)consentLog.change(old,next,String(Date.parse(p.submittedAt)).padStart(13,'0')+'_'+eventId,receivedAt,{kind:'web',formId:p.formId,submissionId:p.submissionId});
  const received={...old?.received,[eventId]:now};next.received=Object.fromEntries(Object.entries(received).sort((a,b)=>b[1].localeCompare(a[1])).slice(0,100));return next;
 }
-async function receive(db,p,now){const id=hash(p.formId+'\0'+p.submissionId),key=hash(p.email),digest=hash(JSON.stringify(p)),receipt=db.ref('prospects/receipts/'+id);let collision=false;const claim=await receipt.transaction(old=>{collision=false;if(old&&old.digest!==digest){collision=true;return;}return old||{digest,contact:key,createdAt:now,done:false};},undefined,false);if(collision||!claim.committed)throw Error('El identificador ya corresponde a otro envío.');if(claim.snapshot.val()?.done)return {ok:true,duplicate:true};await db.ref('prospects/contacts/'+key).transaction(old=>wixMerge(old,p,id,now),undefined,false);await db.ref('prospects/inquiries/'+key+'/'+String(Date.parse(p.submittedAt)).padStart(13,'0')+'_'+id).set({channel:'Formulario web',at:p.submittedAt,formId:p.formId,requestedCourse:p.requestedCourse||'',interest:p.interest,areas:p.areas,courses:p.courses,receivedAt:now,contact:{name:p.name,email:p.email,phone:p.phone}});await receipt.update({done:true});return {ok:true};}
+function deliveryDigest(p){
+ return hash(JSON.stringify({email:p.email,name:p.name,phone:p.phone,areas:p.areas,courses:p.submittedCourses||p.courses,requestedCourse:p.requestedCourse||'',interest:p.interest,submissionId:p.submissionId,formId:p.formId,submittedAt:p.submittedAt,courseUpdates:p.courseUpdates,consentVersion:p.submittedConsentVersion||''}));
+}
+function legacyDigest(p){
+ const {consentResponse,submittedCourses,submittedConsentVersion,...legacy}=p;
+ if(legacy.consent){const {status,evidence,at,source}=legacy.consent;legacy.consent={status,evidence,at,source};}
+ return hash(JSON.stringify(legacy));
+}
+async function receive(db,p,now){
+ await consentLog.pinPolicy(db,p.consentResponse,now);
+ const id=hash(p.formId+'\0'+p.submissionId),key=hash(p.email),digest=deliveryDigest(p),receipt=db.ref('prospects/receipts/'+id);
+ let collision=false;
+ const claim=await receipt.transaction(old=>{
+  collision=false;
+  const expected=old?.schemaVersion===2?digest:legacyDigest(p);
+  if(old&&(old.digest!==expected||old.schemaVersion!==2&&p.submittedConsentVersion)){collision=true;return;}
+  return old||{schemaVersion:2,digest,contact:key,createdAt:now,done:false,input:p};
+ },undefined,false);
+ if(collision||!claim.committed)throw Error('El identificador ya corresponde a otro envío.');
+ const saved=claim.snapshot.val();
+ if(saved?.done)return {ok:true,duplicate:true};
+ p=saved.input?{...saved.input,courses:saved.input.courses||[]}:p;
+ const receivedAt=saved.createdAt||now;
+ await db.ref('prospects/contacts/'+key).transaction(old=>wixMerge(old,p,id,now,receivedAt),undefined,false);
+ const inquiry={channel:'Formulario web',at:p.submittedAt,formId:p.formId,submissionId:p.submissionId,requestedCourse:p.requestedCourse||'',interest:p.interest,areas:p.areas,courses:p.courses,receivedAt,contact:{name:p.name,email:p.email,phone:p.phone},...(p.consentResponse?{consentResponse:{...p.consentResponse,receivedAt}}:{})};
+ // Retries must not overwrite evidence or change its original receipt time.
+ await db.ref('prospects/inquiries/'+key+'/'+String(Date.parse(p.submittedAt)).padStart(13,'0')+'_'+id).transaction(old=>old||inquiry,undefined,false);
+ await receipt.update({done:true});return {ok:true};
+}
 function enrolled(s){const paid=items=>(Array.isArray(items)?items:[]).some(p=>!p.voidedAt&&!p.voided&&Number(p.cents)>0);return !!s.enrolledDate||['Matriculado','En formación','Culminado','Carrera culminada','Retirado'].includes(s.stage)||(s.courses||[]).some(c=>paid(c.payments))||paid(s.extraPayments);}
-function publicContact(record,students){const {received,...out}=record;const matches=students.filter(s=>{try{return email(s.email)===record.email;}catch{return false;}});out.studentMatch=matches.length===1?{id:matches[0].id||'',name:matches[0].name||'',enrolled:enrolled(matches[0])}:null;out.ambiguousStudent=matches.length>1;out.courseUpdatesEligible=record.areas.includes('school')&&record.consent?.status==='granted'&&!out.ambiguousStudent&&!out.studentMatch?.enrolled;return out;}
+function publicContact(record,students){const {received,consentHistory,...out}=record;const matches=students.filter(s=>{try{return email(s.email)===record.email;}catch{return false;}});out.studentMatch=matches.length===1?{id:matches[0].id||'',name:matches[0].name||'',enrolled:enrolled(matches[0])}:null;out.ambiguousStudent=matches.length>1;out.courseUpdatesEligible=record.areas.includes('school')&&record.consent?.status==='granted'&&!out.ambiguousStudent&&!out.studentMatch?.enrolled;return out;}
 function scopedContact(record,students,area){
  if(!area)return publicContact(record,students);
  if(!record.areas.includes(area))return null;
@@ -56,6 +109,7 @@ function scopedMerge(old,input,actor,now){
  if(next.areas.length===1)Object.assign(next,next.areaFollowups[area]);
  if(area==='school'&&input.consentStatus&&input.consentStatus!==(old?.consent?.status||'unknown'))next.consent=consent(input.consentStatus,input.consentEvidence,now,'Registro manual · '+actor.uid);
  if(p.interest){const inquiry={channel:p.channel,interest:p.interest,at:now,areas:[area],courses:p.courses};next.lastInquiry=inquiry;next.areaLastInquiry={...next.areaLastInquiry,[area]:inquiry};next.inquiryCount=(old?.inquiryCount||0)+1;}
+ if(area==='school')consentLog.manualChange(old,next,input,actor,now);
  return next;
 }
 async function handle(db,action,input,actor,now=new Date().toISOString()){
@@ -67,12 +121,21 @@ async function handle(db,action,input,actor,now=new Date().toISOString()){
   if(p.interest||created){const id=String(Date.parse(now)).padStart(13,'0')+'_'+hash(actor.uid+'|'+result.snapshot.val().version);await db.ref('prospects/inquiries/'+key+'/'+id).set({channel:p.channel,at:now,interest:p.interest,areas:p.areas,courses:p.courses,receivedAt:now,contact:{name:p.name,email:p.email,phone:p.phone}});}
   return {ok:true};
  }
+ if(action==='prospect-consent-history'){
+  if(!/^[a-f0-9]{64}$/.test(input.id||'')||input.cursor&&!/^\d{13}_[a-f0-9]{64}$/.test(input.cursor))throw Error('Contacto o página no válida.');
+  const record=(await db.ref('prospects/contacts/'+input.id).get()).val();
+  if(area==='charters'||!record?.areas?.includes('school'))throw Error('No tienes acceso a estas autorizaciones.');
+  let query=db.ref('prospects/contacts/'+input.id+'/consentHistory').orderByKey();
+  if(input.cursor)query=query.endBefore(input.cursor);
+  const entries=Object.entries((await query.limitToLast(21).get()).val()||{}).sort(([a],[b])=>b.localeCompare(a));
+  return {consent:record.consent||{status:'unknown'},events:entries.slice(0,20).map(([id,event])=>({id,...event})),nextCursor:entries.length>20?entries[19][0]:null};
+ }
  if(action==='prospect-detail'){
   if(!/^[a-f0-9]{64}$/.test(input.id||'')||input.cursor&&!/^\d{13}_[a-f0-9]{64}$/.test(input.cursor))throw Error('Contacto o página no válida.');
   const record=(await db.ref('prospects/contacts/'+input.id).get()).val();if(!record||area&&!record.areas.includes(area))throw Error('No tienes acceso a este contacto.');
   let before=input.cursor,entries=[];
   do{let query=db.ref('prospects/inquiries/'+input.id).orderByKey();if(before)query=query.endBefore(before);const batch=Object.entries((await query.limitToLast(21).get()).val()||{}).sort(([a],[b])=>b.localeCompare(a));entries.push(...batch.filter(([,q])=>!area||q.areas?.includes(area)));if(batch.length<21)break;before=batch.at(-1)[0];}while(entries.length<21);
-  return {inquiries:entries.slice(0,20).map(([id,q])=>({id,...q,...(area?{areas:[area],courses:area==='school'?(q.courses||[]):[]}: {})})),nextCursor:entries.length>20?entries[19][0]:null};
+  return {inquiries:entries.slice(0,20).map(([id,q])=>{const {consentResponse,...rest}=q;return {id,...rest,...(area?{areas:[area],courses:area==='school'?(q.courses||[]):[]}: {}),...(area!=='charters'&&consentResponse?{consentResponse}: {})};}),nextCursor:entries.length>20?entries[19][0]:null};
  }
  if(action==='prospect-list'){
   if(input.cursor&&!/^[a-f0-9]{64}$/.test(input.cursor))throw Error('Página no válida.');

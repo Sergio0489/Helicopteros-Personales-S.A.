@@ -1,0 +1,31 @@
+{
+  "token": "FICTIONAL-NOT-A-REAL-CREDENTIAL-DO-NOT-DEPLOY-0000000000",
+  "siteId": "fictional-site",
+  "forms": {
+    "school-contact": {
+      "area": "school",
+      "consentPolicies": {
+        "hpfs-cursos-email-v1": {
+          "statement": "Quiero recibir por correo electrónico novedades sobre próximos cursos de HP Flight School, de Helicópteros Personales S.A. Puedo retirar mi autorización en cualquier momento escribiendo a info@helicopterospersonales.com.",
+          "channels": [
+            "email"
+          ]
+        }
+      }
+    },
+    "school-contact-2": {
+      "area": "school",
+      "consentPolicies": {
+        "hpfs-cursos-email-v1": {
+          "statement": "Quiero recibir por correo electrónico novedades sobre próximos cursos de HP Flight School, de Helicópteros Personales S.A. Puedo retirar mi autorización en cualquier momento escribiendo a info@helicopterospersonales.com.",
+          "channels": [
+            "email"
+          ]
+        }
+      }
+    },
+    "charters": {
+      "area": "charters"
+    }
+  }
+}
