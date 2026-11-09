@@ -8,7 +8,10 @@ function requiredText(value,max){
 
 // The request selects an approved version, never the wording or the channel.
 function resolve(body,form,input){
- const requested=body.consentVersion==null?'':requiredText(body.consentVersion,100);
+ // Legacy Wix mappings may serialize an absent field as an empty string.
+ // Preserve that inquiry without inventing a version or an authorization.
+ const missing=body.consentVersion==null||!input.courseUpdates&&body.consentVersion==='';
+ const requested=missing?'':requiredText(body.consentVersion,100);
  let version='',statement='',channels=[],mode='legacy';
  if(form.consentPolicies!==undefined){
   mode='versioned';

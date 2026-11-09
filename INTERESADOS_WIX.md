@@ -62,7 +62,7 @@ Una consulta manual con texto queda en el historial, junto con las consultas web
 
 ## Wix
 
-Diseño aprobado e implementación local de autorización opcional de cursos: [CONSENTIMIENTO_CURSOS.md](CONSENTIMIENTO_CURSOS.md). Incluye evidencia por envío y versionado; su publicación y la modificación de Wix/Firebase requieren aprobación posterior. No cambia por sí mismo el estado operativo documentado a continuación.
+**Estado vigente al 09/11/2026:** la autorización opcional de novedades de cursos está publicada en ambos formularios de Escuela, con evidencia por envío y versionado. La publicación en Wix/Firebase y las pruebas ficticias fueron autorizadas por el propietario. Se verificaron los cuatro recorridos con/sin aceptación y sus reintentos; no se activaron campañas ni se modificó Charters. El contrato, mapeos y alcance exacto de la validación están en [CONSENTIMIENTO_CURSOS.md](CONSENTIMIENTO_CURSOS.md).
 
 Los formularios autorizados del sitio envían los datos mediante una automatización HTTP al receptor privado `wixInterests`. La credencial está en un secreto de Firebase y en la automatización de Wix; nunca se guarda en archivos públicos. La lista de formularios y sus áreas está en la configuración privada del receptor.
 
@@ -70,7 +70,9 @@ Se conservan los controles del sitio y formulario, tamaño, fecha, correo, conse
 
 ## Verificación
 
-### Conexión de formularios antiguos de HP Flight School
+### Registro histórico: conexión inicial de formularios antiguos (22/10/2026)
+
+Este apartado conserva el diagnóstico y procedimiento iniciales. Sus estados INACTIVE, campos ausentes y pendientes **no describen la publicación del 09/11/2026**; consultar el estado vigente y su comprobación en [CONSENTIMIENTO_CURSOS.md](CONSENTIMIENTO_CURSOS.md).
 
 Estado al 22/10/2026, actualizado tras conectar Wix: se verificaron los dos formularios antiguos de Escuela mediante el esquema dinámico del disparador y sus páginas públicas. Se crearon, validaron con resultado VALID y comprobaron por lectura posterior dos automatizaciones INACTIVE: **Apps HP - Escuela - Contacto** y **Apps HP - Escuela - Contacto 2**. Los ID reales de formulario, claves de campos y credencial permanecen dentro de Wix; deben añadirse a la configuración privada de Firebase, sin publicarlos en este archivo. Charters se comprobó ACTIVE y no fue modificado.
 

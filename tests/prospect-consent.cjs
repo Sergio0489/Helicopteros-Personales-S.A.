@@ -43,6 +43,17 @@ test('a query without the new fields remains unknown and does not claim displaye
  assert.equal(inquiries(db)[0].consentResponse.version,'');assert.equal(inquiries(db)[0].consentResponse.statement,'');
  assert.equal(db.read('prospects/consentPolicies'),undefined);
 });
+test('an empty legacy Wix version preserves the inquiry but can never grant consent',async()=>{
+ for(const courseUpdates of [undefined,null,'',false,'false']){
+  const db=memory();await p.receive(db,input({courseUpdates,consentVersion:''}),now);
+  assert.equal(contact(db).consent.status,'unknown');assert.equal(contact(db).consentHistory,undefined);
+  assert.equal(inquiries(db).length,1);assert.equal(inquiries(db)[0].consentResponse.accepted,false);
+  assert.equal(inquiries(db)[0].consentResponse.version,'');assert.equal(inquiries(db)[0].consentResponse.statement,'');
+  assert.equal(db.read('prospects/consentPolicies'),undefined);
+ }
+ for(const courseUpdates of [true,'true'])assert.throws(()=>input({courseUpdates,consentVersion:''}));
+ for(const consentVersion of [' ','unknown',{},1])assert.throws(()=>input({courseUpdates:false,consentVersion}));
+});
 test('new versions retain old evidence and identical retries, even if course mappings change',async()=>{
  const db=memory();await p.receive(db,input(),now);const original=inquiries(db)[0];
  const cfg=structuredClone(config);cfg.forms['school-contact'].consentPolicies.v2={statement:'Otro texto ficticio.',channels:['email']};
