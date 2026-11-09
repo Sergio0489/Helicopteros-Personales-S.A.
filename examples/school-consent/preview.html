@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HP Flight School · Vista previa local de autorización</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#edf2f7;color:#173653;font:16px/1.6 system-ui,sans-serif}main{max-width:820px;margin:36px auto;padding:32px;background:white;border-radius:16px}.badge{font-size:13px;font-weight:700;color:#46657e;letter-spacing:.06em}h1{line-height:1.2;font-size:30px}label{display:block;margin-top:18px}input:not([type=checkbox]),select,textarea{width:100%;font:inherit;padding:10px;border:1px solid #a6b7c8;border-radius:6px}textarea{min-height:90px}.consent{display:flex;align-items:flex-start;gap:12px;padding:18px;background:#f3f7fb;border:1px solid #c6d5e3;border-radius:8px}.consent input{flex:none;width:20px;height:20px;margin-top:4px}.help{font-size:14px;color:#4a6278}button{border:0;border-radius:8px;padding:12px 20px;background:#173653;color:white;font:inherit;cursor:pointer;margin-top:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f7fb;padding:16px;border-radius:8px;font-size:13px}[hidden]{display:none}@media(max-width:600px){main{margin:12px;padding:20px}h1{font-size:25px}}
+</style>
+<main>
+ <div class="badge">HP FLIGHT SCHOOL · DEMOSTRACIÓN LOCAL</div>
+ <h1>Consulta sobre nuestros cursos</h1>
+ <p>Vista de referencia para ambos formularios. Usa únicamente datos ficticios. Esta página muestra el envío preparado y no se conecta con Wix ni Firebase.</p>
+ <form id="preview-form">
+  <label>Formulario de referencia<select name="formId"><option value="school-contact">/hpflightschooldivision</option><option value="school-contact-2">/escueladepilotos</option></select></label>
+  <label>Nombre<input name="name" value="Persona Ficticia" required maxlength="160"></label>
+  <label>Correo electrónico<input name="email" type="email" value="persona@example.test" required maxlength="254"></label>
+  <label>Teléfono<input name="phone" value="TEST-ONLY" maxlength="40"></label>
+  <label>Curso solicitado<input name="requestedCourse" value="Piloto privado" maxlength="500"></label>
+  <label>Mensaje<textarea name="interest" maxlength="3000">Consulta ficticia sobre horarios.</textarea></label>
+  <label class="consent"><input type="checkbox" name="courseUpdates"><span id="consent-statement">Quiero recibir por correo electrónico novedades sobre próximos cursos de HP Flight School, de Helicópteros Personales S.A. Puedo retirar mi autorización en cualquier momento escribiendo a info@helicopterospersonales.com.</span></label>
+  <p class="help">Esta autorización es opcional. Puedes enviar tu consulta sin marcar la casilla.</p>
+  <input type="hidden" name="consentVersion" value="hpfs-cursos-email-v1">
+  <button>Simular envío</button>
+ </form>
+ <section id="result" hidden><h2>Envío preparado</h2><p id="decision" role="status"></p><pre id="payload"></pre></section>
+</main>
+<script>
+document.querySelector('form').addEventListener('submit',event=>{
+ event.preventDefault();
+ const fields=new FormData(event.target);
+ const body={siteId:'fictional-site',formId:fields.get('formId'),submissionId:'fictional-'+crypto.randomUUID(),submittedAt:new Date().toISOString(),
+  name:fields.get('name'),email:fields.get('email'),phone:fields.get('phone'),requestedCourse:fields.get('requestedCourse'),interest:fields.get('interest'),
+  courseUpdates:fields.get('courseUpdates')==='on',consentVersion:fields.get('consentVersion')};
+ // Real credentials belong only in the server-side automation; never in HTML.
+ document.querySelector('#payload').textContent=JSON.stringify(body,null,2);
+ document.querySelector('#decision').textContent=body.courseUpdates?'Aceptación expresa de novedades por correo electrónico.':'Consulta preparada sin otorgar una nueva autorización.';
+ document.querySelector('#result').hidden=false;
+});
+</script>
+</html>

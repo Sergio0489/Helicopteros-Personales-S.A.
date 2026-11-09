@@ -74,7 +74,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   res.json(await require('./prospect-access').configure(getAuth(),db,req.body,{...actor,role:'Director'}));return;
  }
  if(action==='prospect-session'){res.json({access:prospectScope});return;}
- if(action==='prospect-list'||action==='prospect-save'||action==='prospect-detail'){
+ if(action==='prospect-list'||action==='prospect-save'||action==='prospect-detail'||action==='prospect-consent-history'){
   if(!prospectScope){res.status(403).json({error:'No tienes acceso al registro de interesados.'});return;}
   if(action==='prospect-save'&&prospectScope.edit===false){res.status(403).json({error:'Solo tienes permiso de consulta.'});return;}
   if(req.body.export===true&&prospectScope.export===false){res.status(403).json({error:'No tienes permiso para exportar interesados.'});return;}
