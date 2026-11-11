@@ -4,6 +4,7 @@ const {randomUUID,createHash}=require('node:crypto');
 const ROLES=['Director','Gerente','Administrativo','Contabilidad','Mecánico','Piloto','Estudiante'];
 const email=v=>String(v||'').trim().toLowerCase();
 const identity=v=>String(v||'').normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu,'');
+const personName=v=>String(v||'').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');
 const rows=data=>[
  ...(data.school?.students||[]).map(record=>({kind:'student',record})),
  ...(data.pilotos||[]).map(record=>({kind:'pilot',record})),
@@ -18,7 +19,7 @@ function items(root){
 }
 function groups(root){
  const all=items(root),parents=all.map((_,i)=>i),find=i=>parents[i]===i?i:parents[i]=find(parents[i]);const seen=new Map();
- all.forEach((x,i)=>{for(const key of [x.personKey&&'p:'+x.personKey,x.uid&&'u:'+x.uid,email(x.email)&&'e:'+email(x.email),identity(x.identity)&&'i:'+identity(x.identity)].filter(Boolean)){if(seen.has(key))parents[find(i)]=find(seen.get(key));else seen.set(key,i);}});
+ all.forEach((x,i)=>{for(const key of [x.personKey&&'p:'+x.personKey,x.uid&&'u:'+x.uid,email(x.email)&&'e:'+email(x.email),identity(x.identity)&&'i:'+identity(x.identity),personName(x.name)&&'n:'+personName(x.name)].filter(Boolean)){if(seen.has(key))parents[find(i)]=find(seen.get(key));else seen.set(key,i);}});
  const grouped=new Map();all.forEach((x,i)=>{const k=find(i);if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(x);});
  return [...grouped.values()].filter(g=>{const records=g.filter(x=>x.kind),uids=new Set(g.filter(x=>x.key.startsWith('user:')).map(x=>x.uid));
   const oneOwner=records.length&&records.every(x=>x.uid&&x.uid===records[0].uid),onePerson=records.length&&records.every(x=>x.personKey&&x.personKey===records[0].personKey);
@@ -88,7 +89,7 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
   for(const f of data.school?.registry?.entries||[])for(const k of ['pilot','copilot'])if(f[k]===r.nombre)f[k]=profile.name;
  }
  for(const u of ranked){accounts[u].syncedOperation=null;if(u!==uid){accounts[u].mergedInto=uid;accounts[u].mergedAt=now;accounts[u].mergedBy=actorUid;accounts[u].role='Estudiante';accounts[u].assignedAt=null;}}
- if(uid)Object.assign(accounts[uid],{role,profile,syncedOperation:null,mergedAt:now});
+ if(uid)Object.assign(accounts[uid],{role,profile,syncedOperation:null,identityReviewPending:false,mergedAt:now});
  data.school ||= {};data.school.userProfiles ||= {};for(const u of ranked)if(u!==uid)delete data.school.userProfiles[u];if(uid)delete data.school.userProfiles[uid]?.dossier;
  data.school.identityLinks ||= {};const selectedRefs=new Set(originals.map(x=>x.kind+':'+x.record.id));for(const [key,value]of Object.entries(data.school.identityLinks))if((value.records||[]).some(r=>selectedRefs.has(r.kind+':'+r.id)))delete data.school.identityLinks[key];
  data.school.identityLinks[personId]={records:linked.map(x=>({kind:x.kind,id:x.record.id})),mergedAt:now};
@@ -126,4 +127,4 @@ function assertUnique(before,after){
   if(a.some(y=>y!==x&&!samePerson(x,y)&&!(r.authUid&&r.authUid===y.record.authUid)&&((email(r.email)&&email(r.email)===email(y.record.email))||(identity(r.identity)&&identity(r.identity)===identity(y.record.identity)))))throw Error('El correo o la cédula ya pertenece a otro expediente. Unifica la coincidencia desde USUARIOS antes de guardar.');
  }
 }
-module.exports={ROLES,email,identity,highest,groups,merge,assertUnique,syncLinked,revision};
+module.exports={ROLES,email,identity,personName,highest,groups,merge,assertUnique,syncLinked,revision};
