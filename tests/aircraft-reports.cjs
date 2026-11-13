@@ -76,6 +76,46 @@ test('a pilot with status view permission can report without any edit permission
  }
 });
 
+test('an authorized pilot can report every registered aircraft independently of schedule scope',async()=>{
+ for(const registration of ['HP_1907','HP1907']){
+  const h=harness(),data=h.data(),history=structuredClone(h.store.dashboard.auditPending);
+  data.fleet[registration]={reg:registration.replaceAll('_','-'),status:'operativo',mantenimiento:[]};
+  data.school.accessConfiguration.roles.Piloto.horario={actions:{view:true},areas:{'Vuelos y rutas':true},aircraft:{mode:'selected',registrations:['HP-1784']}};
+  h.store.dashboard.payload=JSON.stringify(data);
+  const policy=require('../functions/access').policyFor(h.data(),account);
+  assert.equal(require('../functions/boxes').aircraftAllowed(policy,registration),false,'the new aircraft is outside the schedule scope');
+  const projected=require('../functions/box-view').boxView(h.data(),account,policy,'aeronaves');
+  assert.deepEqual(Object.keys(projected.data.fleet).sort(),['HP_1784',registration].sort(),'status access must expose every registered aircraft');
+  const input={...reportInput(),aircraft:registration},saved=await h.call(input);
+  assert.equal(saved.status,200);assert.equal(saved.body.deduplicated,false);
+  const beforeRetry=structuredClone(h.store.dashboard),retry=await h.call(input);
+  assert.equal(retry.status,200);assert.equal(retry.body.deduplicated,true);
+  assert.equal(retry.body.taskId,saved.body.taskId);assert.equal(retry.body.operation,saved.body.operation);
+  assert.deepEqual(h.store.dashboard,beforeRetry,'a retry must preserve the report and its audit history');
+  const current=h.data(),tasks=current.fleet[registration].mantenimiento;
+  assert.equal(current.fleet.HP_1784.mantenimiento.length,0);
+  assert.equal(tasks.length,1);assert.equal(tasks[0].registration,registration);assert.equal(tasks[0].reportIdempotencyKey,input.idempotencyKey);
+  assert.equal(current.operationalNotices.length,1);assert.equal(current.operationalNotices[0].taskId,saved.body.taskId);
+  assert.equal(Object.keys(h.store.dashboard.aircraftReportReceipts).length,1);
+  assert.deepEqual(h.store.dashboard.auditPending['fixture-history'],history['fixture-history']);
+ }
+});
+
+test('another registered aircraft does not bypass revocation and an unknown aircraft creates no records',async()=>{
+ for(const registration of ['HP_1907','HP1907']){
+  const h=harness(),data=h.data();
+  data.fleet[registration]={reg:registration.replaceAll('_','-'),mantenimiento:[]};
+  h.store.dashboard.payload=JSON.stringify(data);
+  setPilotPolicy(h,{aeronaves:{actions:{view:true},boxes:{status:{view:false}}}});
+  const before=structuredClone(h.store.dashboard),response=await h.call({...reportInput(),aircraft:registration});
+  assert.equal(response.status,403);assertNoReportWrites(h,before);
+  assert.equal(h.data().fleet[registration].mantenimiento.length,0);
+ }
+ const h=harness(),before=structuredClone(h.store.dashboard);
+ const response=await h.call({...reportInput(),aircraft:'HP_9999'});
+ assert.equal(response.status,409);assert.match(response.body.error,/aeronave no existe/);assertNoReportWrites(h,before);
+});
+
 test('aircraft report denies missing, hidden-page and explicitly hidden status policies without writes',async()=>{
  const policies=[
   {name:'missing server access configuration',policy:undefined},
