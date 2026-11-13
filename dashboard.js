@@ -1650,6 +1650,7 @@ function updateSummary() {
     else if (d.status === 'mantenimiento') maint++;
     else if (d.status === 'aog') aog++;
   });
+  document.getElementById('sum-total').textContent = fleet.length;
   document.getElementById('sum-ok').textContent = ok || '—';
   document.getElementById('sum-maint').textContent = maint || '—';
   document.getElementById('sum-aog').textContent = aog || '—';
