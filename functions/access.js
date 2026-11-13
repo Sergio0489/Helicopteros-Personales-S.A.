@@ -15,12 +15,6 @@ function policyFor(data,account){
   for(const id of ['status','pending','maintenance'])page.boxes[id]={view:true,edit:true};
   page.areas['Información y estatus']=true;page.areas['Mantenimiento y taller']=true;
  }
- // Pilots need the full aircraft list to choose where a report should create a workshop task.
- if(account.role==='Piloto'){
-  const page=policy.aeronaves;page.actions.view=true;
-  page.boxes.status={...page.boxes.status,view:true,edit:false};
-  page.areas['Información y estatus']=true;
- }
  return policy;
 }
 function can(policy,page,area){return policy?.[page]?.actions?.view===true&&policy[page].areas?.[area]===true;}
