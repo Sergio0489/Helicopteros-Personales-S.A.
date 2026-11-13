@@ -1029,8 +1029,8 @@ function renderBitacora(idx, items) {
     if (!m.resuelto || !m.nombre) return '';
     const piezas = Array.isArray(m.piezas) ? m.piezas.filter(p => p.nombre) : [];
     const diasTotal = m.fecha && m.fecha_resuelto ? (() => {
-      const n=dayNumber(m.fecha_resuelto)-dayNumber(m.fecha);
-      return Number.isFinite(n) && n>=0 ? n+'d' : 'Revisar fechas';
+      const n=diasEntreFechas(m.fecha,m.fecha_resuelto);
+      return n!==null && n>=0 ? n+'d' : 'Revisar fechas';
     })() : '—';
     const director = isDirectorView();
     const dates = director ? `
