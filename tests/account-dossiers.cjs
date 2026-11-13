@@ -9,11 +9,11 @@ function harness(){
  let user=member;const people=[member,director,existing];
  const get=path=>path.split('/').filter(Boolean).reduce((o,k)=>o?.[k],store)??null;
  const put=(path,value)=>{if(!path){for(const k of Object.keys(store))delete store[k];Object.assign(store,value);return;}const keys=path.split('/').filter(Boolean),last=keys.pop();let target=store;for(const key of keys)target=target[key]||={};target[last]=value;};
- const db={ref:(path='')=>({get:async()=>({val:()=>get(path)}),transaction:async fn=>{const next=fn(structuredClone(get(path)));if(next===undefined)return {committed:false,snapshot:{val:()=>get(path)}};put(path,next);return {committed:true,snapshot:{val:()=>next}};},update:async patch=>{for(const [key,value]of Object.entries(patch))put([path,key].filter(Boolean).join('/'),value);}})};
+ const db={ref:(path='')=>({get:async()=>({val:()=>structuredClone(get(path))}),transaction:async fn=>{const next=fn(structuredClone(get(path)));if(next===undefined)return {committed:false,snapshot:{val:()=>get(path)}};put(path,next);return {committed:true,snapshot:{val:()=>next}};},update:async patch=>{for(const [key,value]of Object.entries(patch))put([path,key].filter(Boolean).join('/'),value);}})};
  const auth={verifyIdToken:async()=>({uid:user.uid}),getUser:async uid=>people.find(u=>u.uid===uid),listUsers:async()=>({users:[existing]})};
  const endpoints={};vm.runInNewContext(fs.readFileSync(__dirname+'/../functions/index.js','utf8'),{exports:endpoints,require:id=>({'firebase-functions/v2/https':{onRequest:(_,fn)=>fn},'firebase-admin/app':{initializeApp(){}},'firebase-admin/auth':{getAuth:()=>auth},'firebase-admin/database':{getDatabase:()=>db}}[id]||require(id.startsWith('./')?'../functions/'+id.slice(2):id))});
  const call=async(action,extra={})=>{let status=200,body;const res={set(){},status(s){status=s;return res;},json(v){body=v;},end(){}};await endpoints.accountRegistration({method:'POST',headers:{authorization:'Bearer synthetic'},body:{action,...extra}},res);return {status,body};};
- return {store,member,director,existing,call,as:u=>{user=u;},data:()=>JSON.parse(store.dashboard.payload)};
+ return {store,member,director,existing,db,auth,call,as:u=>{user=u;},data:()=>JSON.parse(store.dashboard.payload)};
 }
 test('registration creates a student without granting access; roles classify dossiers and preserve financial history',async()=>{
  const h=harness();let result=await h.call('submit',{role:'Director',profile:{name:'Usuario de prueba',address:'Dirección de prueba',phone:'TEST-CONTACT'}});assert.equal(result.status,200);assert.equal(h.store.accountRequests[h.member.uid].role,'Estudiante');assert(!h.store.accountRequests[h.member.uid].assignedAt);assert.equal(h.data().school.students.length,1);assert.equal(h.data().school.students[0].name,'Usuario de prueba');assert.equal((await h.call('access')).status,403);
@@ -39,4 +39,162 @@ test('verified email matching refuses ambiguous or differently owned records; un
  base.school.students[0].authUid='other';assert.equal(ensure(base,u,{}).status,'linked-to-another-user');delete base.school.students[0].authUid;
  const updated=ensure(base,u,{role:'Piloto',profile:{name:'Attempt'}});assert.equal(updated.record.nombre,'Existing');assert.equal(matchRecord(updated.data,u.email,u.uid).kind,'pilot');assert.equal(updated.data.school.students[0].name,'Existing');
  assert.equal(ensure(updated.data,u,{role:'Piloto',recordKind:'pilot'}).changed,false);
+});
+
+const reviewProfile={name:'Álex Prueba',identity:'TEST-OWN'};
+function reviewFixture({verified=true,assigned=true,own=true,foreign='student',sameIdentity=false,accountOnly=false}={}){
+ const h=harness();h.member.emailVerified=verified;
+ const data=h.data();data.school.accessConfiguration={roles:{Estudiante:{estudiantes:{actions:{view:true},boxes:{account:{view:true,edit:false}}}}}};
+ if(own)data.school.students.push({id:'own-student',name:reviewProfile.name,email:h.member.email,identity:reviewProfile.identity,authUid:assigned?h.member.uid:undefined,courses:[{id:'own-course',payments:[{id:'own-payment',cents:12000}],flights:[{id:'own-flight',hours100:100}]}]});
+ const other={id:'foreign-record',name:'ALEX PRUEBA',email:'homonym@example.test',identity:sameIdentity?'TEST-OWN':'TEST-OTHER',courses:[{id:'foreign-course',payments:[{id:'foreign-payment',cents:7000}]}]};
+ if(foreign==='pilot'){other.nombre=other.name;delete other.name;data.pilotos.push(other);}
+ else if(foreign==='personnel')data.school.personnel.push(other);
+ else if(foreign==='client')data.school.registry.clients.push(other);
+ else if(foreign==='student')data.school.students.push(other);
+ if(accountOnly)h.store.accountRequests['other-fixture']={role:'Estudiante',profile:{name:'ALEX PRUEBA',identity:'TEST-OTHER'},email:'other@example.test'};
+ h.store.dashboard.payload=JSON.stringify(data);
+ if(assigned)h.store.accountRequests[h.member.uid]={role:'Estudiante',assignedAt:'fixture-approved',email:h.member.email,profile:{...reviewProfile}};
+ return h;
+}
+function beforeAccountSync(h,hook){
+ const ref=h.db.ref;let once=true;
+ h.db.ref=(path='')=>{
+  const original=ref(path);if(path!=='accountRequests/'+h.member.uid)return original;
+  return {...original,transaction:async update=>{
+   if(once){once=false;await hook();}
+   return original.transaction(update);
+  }};
+ };
+}
+const requestReview=h=>h.call('submit',{profile:reviewProfile,requestIdentityReview:true});
+
+test('homonyms in every dossier directory keep review pending despite a matching own email',async()=>{
+ for(const foreign of ['student','pilot','personnel','client'])for(const assigned of [true,false]){
+  const h=reviewFixture({foreign,assigned}),before=h.data(),response=await requestReview(h);
+  const access=await h.call('access',{page:'estudiantes',layout:'main'});
+  assert.equal(access.status,403,'a confirmed role and matching email must not bypass the pending name review');
+  assert.equal(response.status,200);assert.equal(response.body.identityReviewPending,true,foreign);
+  assert.equal(response.body.matched,false);assert.equal(response.body.syncStatus,'duplicate-identity');
+  assert.equal((await h.call('access',{page:'estudiantes',layout:'main'})).status,403);
+  const after=h.data(),rows=data=>[...data.pilotos,...data.school.students,...data.school.personnel,...data.school.registry.clients];
+  assert.deepEqual(rows(after).find(r=>r.id==='foreign-record'),rows(before).find(r=>r.id==='foreign-record'),'the other person and their history must remain unchanged');
+  assert.deepEqual(after.school.students.find(r=>r.id==='own-student').courses,before.school.students.find(r=>r.id==='own-student').courses);
+ }
+});
+
+test('a new account with a homonym stays pending after email verification without granting a role',async()=>{
+ const h=reviewFixture({verified:false,assigned:false,own:false});
+ const submitted=await requestReview(h);assert.equal(submitted.body.identityReviewPending,true);
+ assert(!h.store.accountRequests[h.member.uid].assignedAt);
+ h.member.emailVerified=true;
+ const response=await h.call('status');assert.equal(response.body.identityReviewPending,true);assert.equal(response.body.matched,false);
+ assert.equal((await h.call('access',{page:'estudiantes'})).status,403);
+ assert(!h.store.accountRequests[h.member.uid].assignedAt);
+});
+
+test('a homonym in another account cannot be cleared by matching the caller own dossier',async()=>{
+ const h=reviewFixture({foreign:null,accountOnly:true}),response=await requestReview(h);
+ assert.equal(response.body.identityReviewPending,true);assert.equal(response.body.matched,false);
+ assert.equal((await h.call('access',{page:'estudiantes'})).status,403);
+});
+
+test('resubmitting changed personal data cannot withdraw a pending Director review',async()=>{
+ const h=reviewFixture({verified:false,assigned:false,own:false});
+ assert.equal((await requestReview(h)).body.identityReviewPending,true);
+ const response=await h.call('submit',{profile:{name:'Nombre Diferente',identity:'TEST-CHANGED'},requestIdentityReview:true,identityReviewPending:false,role:'Director'});
+ assert.equal(response.status,200);assert.equal(response.body.identityReviewPending,true);
+ assert.equal(h.store.accountRequests[h.member.uid].identityReviewPending,true);
+ assert.equal(h.store.accountRequests[h.member.uid].role,'Estudiante');
+});
+
+test('status, users refresh, cache invalidation and role assignment do not approve an identity review',async()=>{
+ const h=reviewFixture();Object.assign(h.store.accountRequests[h.member.uid],{identityReviewPending:true,syncedOperation:null});
+ for(let i=0;i<2;i++){
+  const response=await h.call('status');assert.equal(response.body.identityReviewPending,true);assert.equal(response.body.matched,false);
+ }
+ h.store.dashboard.operation='fixture-refresh';
+ h.auth.listUsers=async()=>({users:[h.member]});h.as(h.director);
+ const users=await h.call('users');assert.equal(users.status,200);assert.equal(users.body.users[0].identityReviewPending,true);
+ const assigned=await h.call('assign',{uid:h.member.uid,role:'Estudiante'});assert.equal(assigned.status,200);
+ assert.equal(h.store.accountRequests[h.member.uid].identityReviewPending,true);
+ h.as(h.member);assert.equal((await h.call('access',{page:'estudiantes'})).status,403);
+});
+
+test('synchronization preserves an identity review recorded after its initial account read',async()=>{
+ const h=reviewFixture({foreign:null});
+ beforeAccountSync(h,()=>{h.store.accountRequests[h.member.uid].identityReviewPending=true;});
+ const response=await h.call('status');
+ assert.equal(response.status,200);assert.equal(response.body.identityReviewPending,true);assert.equal(response.body.matched,false);
+ assert.equal(h.store.accountRequests[h.member.uid].identityReviewPending,true);
+});
+
+test('a confirmed Director merge clears review only for records representing the same fictitious person',async()=>{
+ const h=reviewFixture({foreign:null}),data=h.data();
+ data.school.personnel.push({id:'legacy-personnel',name:reviewProfile.name,email:'previous@example.test',identity:reviewProfile.identity});
+ h.store.dashboard.payload=JSON.stringify(data);
+ assert.equal((await requestReview(h)).body.identityReviewPending,true);
+ h.as(h.director);const preview=await h.call('identity-preview'),group=preview.body.groups.find(g=>g.uids.includes(h.member.uid));
+ const input={members:group.members.map(m=>m.key),revision:group.revision,confirm:true,primaryKey:group.members.find(m=>m.id==='own-student').key};
+ h.as(h.member);assert.equal((await h.call('identity-merge',input)).status,403);
+ h.as(h.director);assert.equal((await h.call('identity-merge',{...input,confirm:false})).status,400);
+ const approved=await h.call('identity-merge',input);assert.equal(approved.status,200);
+ assert.equal(h.store.accountRequests[h.member.uid].identityReviewPending,false);
+ assert.equal(Object.keys(h.store.identityMergeArchive).length,1);
+ h.as(h.member);const response=await h.call('status');assert.equal(response.body.identityReviewPending,false);assert.equal(response.body.matched,true);
+ assert.equal((await h.call('access',{page:'estudiantes'})).status,200);
+});
+
+test('a stale synchronization cannot overwrite a Director merge completed during its account transaction',async()=>{
+ const h=reviewFixture({foreign:null}),data=h.data();
+ data.school.personnel.push({id:'legacy-personnel',name:reviewProfile.name,email:'previous@example.test',identity:reviewProfile.identity});
+ h.store.dashboard.payload=JSON.stringify(data);
+ Object.assign(h.store.accountRequests[h.member.uid],{identityReviewPending:true,verified:true,syncedOperation:null});
+ beforeAccountSync(h,async()=>{
+  h.as(h.director);const preview=await h.call('identity-preview'),group=preview.body.groups.find(g=>g.uids.includes(h.member.uid));
+  const result=await h.call('identity-merge',{members:group.members.map(m=>m.key),revision:group.revision,confirm:true,primaryKey:group.members.find(m=>m.id==='own-student').key});
+  assert.equal(result.status,200);h.as(h.member);
+ });
+ const stale=await h.call('status');assert.equal(stale.status,400,'the stale account write must abort');
+ assert.equal(h.store.accountRequests[h.member.uid].identityReviewPending,false);
+ const refreshed=await h.call('status');assert.equal(refreshed.body.identityReviewPending,false);assert.equal(refreshed.body.matched,true);
+});
+
+test('uncontested verified email matches and records already linked to the same person still synchronize',async()=>{
+ const h=reviewFixture({foreign:null}),data=h.data();
+ data.school.personnel.push({id:'own-personnel',name:reviewProfile.name,email:h.member.email,identity:reviewProfile.identity,authUid:h.member.uid});
+ h.store.dashboard.payload=JSON.stringify(data);
+ const response=await requestReview(h);assert.equal(response.status,200);assert.equal(response.body.identityReviewPending,false);assert.equal(response.body.matched,true);
+ assert.equal((await h.call('access',{page:'estudiantes'})).status,200);
+});
+
+test('a duplicate document with different names retains the existing identity restriction',async()=>{
+ const h=reviewFixture({sameIdentity:true}),data=h.data();data.school.students.find(r=>r.id==='foreign-record').name='Otro Nombre';
+ h.store.dashboard.payload=JSON.stringify(data);
+ const response=await requestReview(h);assert.equal(response.body.identityReviewPending,true);assert.equal(response.body.matched,false);
+ assert.equal((await h.call('access',{page:'estudiantes'})).status,403);
+});
+
+test('an uncommitted synchronization cannot return a successful identity decision',async()=>{
+ const h=reviewFixture({foreign:null}),ref=h.db.ref;
+ h.db.ref=(path='')=>{const original=ref(path);return path==='accountRequests/'+h.member.uid?{...original,transaction:async update=>{update(structuredClone(h.store.accountRequests[h.member.uid]));return {committed:false,snapshot:{val:()=>structuredClone(h.store.accountRequests[h.member.uid])}};}}:original;};
+ assert.equal((await h.call('status')).status,400);
+});
+
+test('synchronization retries empty caches for existing accounts and still creates missing requests',async()=>{
+ for(const merged of [false,true]){
+  const h=reviewFixture({foreign:null}),account=h.store.accountRequests[h.member.uid];
+  account.identityReviewPending=true;if(merged)account.mergedAt='2026-11-01T12:00:00.000Z';
+  const ref=h.db.ref;let cold=true;
+  h.db.ref=(path='')=>{
+   const original=ref(path);if(path!=='accountRequests/'+h.member.uid)return original;
+   return {...original,transaction:async update=>{
+    if(cold){cold=false;assert.equal(update(null),null,'an empty cache must retry instead of removing or rejecting an existing review');}
+    return original.transaction(update);
+   }};
+  };
+  const response=await h.call('status');assert.equal(response.status,200);assert.equal(response.body.identityReviewPending,true);assert.equal(response.body.matched,false);assert.equal(cold,false);
+ }
+ const h=harness();h.member.emailVerified=true;
+ const response=await h.call('status');assert.equal(response.status,200);assert.equal(response.body.matched,true);
+ assert(h.store.accountRequests[h.member.uid]);assert(!h.store.accountRequests[h.member.uid].assignedAt);
 });
