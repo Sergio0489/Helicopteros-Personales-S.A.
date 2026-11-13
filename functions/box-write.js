@@ -62,6 +62,18 @@ function allowed(policy,path,root,action,context={}){
 function applyChanges(current,before,after,policy,account){
  if(!before||!after||typeof before!=='object'||typeof after!=='object'||Array.isArray(before)||Array.isArray(after))throw Error('Cambios no válidos.');
  let writes=0;const root=clone(current);
+ const assertPendingTaskRemoval=(path,task)=>{if(path[0]==='fleet'&&path[2]==='mantenimiento'&&task&&!task.resuelto&&account.role!=='Director')throw Error('Solo el Director puede eliminar pendientes de taller.');};
+ const maintenanceMatchIndex=(task,candidates)=>{
+  if(task?.id!=null)return candidates.findIndex(candidate=>candidate?.id!=null&&String(candidate.id)===String(task.id));
+  if(task?.reportadoAt)return candidates.findIndex(candidate=>candidate?.reportadoAt&&String(candidate.reportadoAt)===String(task.reportadoAt));
+  return candidates.findIndex(candidate=>String(candidate?.nombre||'')===String(task?.nombre||''));
+ };
+ const assertUnkeyedPendingRemovals=(path,actual,next)=>{
+  const records=Array.isArray(actual)?actual:actual&&typeof actual==='object'?Object.keys(actual).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(key=>actual[key]):[];
+  if(path[0]!=='fleet'||path[2]!=='mantenimiento'||!Array.isArray(next)||next.length>=records.length||account.role==='Director')return;
+  const remaining=clone(next);
+  for(const task of records){const match=maintenanceMatchIndex(task,remaining);if(match>=0)remaining.splice(match,1);else assertPendingTaskRemoval(path,task);}
+ };
  const check=(path,context)=>{if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
    const pilot=root.pilotos?.[path[1]];
    if(!pilot||account.syncStatus!=='matched'||account.recordKind!=='pilot'||pilot.id!==account.recordId)throw Error('Solo puedes modificar tu expediente de piloto autorizado.');
@@ -85,11 +97,11 @@ function applyChanges(current,before,after,policy,account){
    const keyed=[...old,...next].every(v=>v&&typeof v==='object'&&v.id!=null)&&new Set(next.map(v=>String(v.id))).size===next.length;
    if(keyed&&(Array.isArray(actual)||actual===undefined)){
     const result=clone(actual)||[];const newIds=new Set(next.map(v=>String(v.id)));
-    for(const item of old)if(!newIds.has(String(item.id))){const n=result.findIndex(v=>String(v.id)===String(item.id));if(n>=0){checkTree(result[n],[...path,n],context);result.splice(n,1);}}
+    for(const item of old)if(!newIds.has(String(item.id))){const n=result.findIndex(v=>String(v.id)===String(item.id));if(n>=0){assertPendingTaskRemoval(path,result[n]);checkTree(result[n],[...path,n],context);result.splice(n,1);}}
     for(const item of next){const previous=old.find(v=>String(v.id)===String(item.id)),n=result.findIndex(v=>String(v.id)===String(item.id));if(previous&&n<0)throw Error('El registro ya no existe. Actualiza la página.');if(!previous){if(n>=0)throw Error('El identificador del registro ya existe.');checkTree(item,[...path,result.length],{creating:true});result.push(clone(item));}else result[n]=merge(result[n],previous,item,[...path,n],context);}
     return result;
    }
-   if(old.length!==next.length){checkTree(actual,path,context);checkTree(next,path,context);return clone(next);}
+   if(old.length!==next.length){assertUnkeyedPendingRemovals(path,actual,next);checkTree(actual,path,context);checkTree(next,path,context);return clone(next);}
    return next.map((v,i)=>merge(actual?.[i],old[i],v,[...path,i],context));
   }
   if(old&&next&&typeof old==='object'&&typeof next==='object'&&!Array.isArray(old)&&!Array.isArray(next)){

@@ -755,6 +755,19 @@ function estadoPiezaBadge(estado) {
   return '<span style="font-family:IBM Plex Mono,monospace;font-size:8px;padding:1px 6px;border-radius:8px;background:var(--dim);color:var(--muted)">PENDIENTE</span>';
 }
 
+function isDirectorView() {
+  return !window.ROLE_VIEW || window.ROLE_VIEW.role === 'Director';
+}
+
+function diasEntreFechas(inicio, fin) {
+  const a = dayNumber(inicio), b = dayNumber(fin);
+  return Number.isFinite(a) && Number.isFinite(b) ? b - a : null;
+}
+
+function diasEntregaVista(dias) {
+  return dias === null || dias === undefined ? '—' : dias < 0 ? 'Revisar fechas' : dias + 'd';
+}
+
 function renderMaintList(idx, items) {
   const container = document.getElementById('maint-list-' + idx);
   if (!container) return;
@@ -762,6 +775,7 @@ function renderMaintList(idx, items) {
   if (!items || !items.length) return;
   items.forEach((m, mi) => {
     if (m.resuelto) return; // skip resolved tasks
+    const director = isDirectorView();
     const dias = diasTranscurridos(m.fecha);
     const piezas = Array.isArray(m.piezas) ? m.piezas : [];
     const wrap = document.createElement('div');
@@ -770,14 +784,15 @@ function renderMaintList(idx, items) {
 
     // Main row
     const mainRow = document.createElement('div');
-    mainRow.className = 'workshop-task-row';
-    mainRow.style = 'display:grid;grid-template-columns:1fr 150px 60px auto auto;gap:8px;align-items:center;margin-bottom:6px';
+    mainRow.className = 'workshop-task-row' + (director ? ' workshop-task-row-director' : '');
+    mainRow.style = `display:grid;grid-template-columns:1fr 150px 60px auto auto${director ? ' auto' : ''};gap:8px;align-items:center;margin-bottom:6px`;
     mainRow.innerHTML = `
       <input type="text" class="maint-input" placeholder="Tarea de mantenimiento" value="${m.nombre||''}" onchange="updateMaint(${idx},${mi},'nombre',this.value)">
       <input type="date" class="maint-input" aria-label="Fecha de inicio de la tarea" title="Fecha de inicio" value="${m.fecha||''}" onchange="updateMaint(${idx},${mi},'fecha',this.value);renderMaintList(${idx},state[${idx}].mantenimiento)">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);font-weight:700;text-align:center">${dias !== null ? dias + 'd' : '—'}</span>
       <button onclick="togglePiezas(${idx},${mi})" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:transparent;border:1px solid var(--border);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--muted)">🔩 Piezas</button>
       <button onclick="resolverTarea(${idx},${mi})" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(0,119,68,0.1);border:1px solid var(--ok);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--ok)">✓ Resuelto</button>
+      ${director ? `<button type="button" onclick="eliminarPendienteTaller(${idx},${mi})" title="Eliminar pendiente de taller" aria-label="Eliminar pendiente de taller" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(180,30,30,.08);border:1px solid var(--danger);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--danger)">✕ Eliminar</button>` : ''}
     `;
     wrap.appendChild(mainRow);
 
@@ -791,15 +806,19 @@ function renderMaintList(idx, items) {
       const isPedida = p.estado === 'pedida';
       pRow.style = 'padding:6px 0;border-bottom:1px solid var(--dim)';
       const pedidaExtra = isPedida ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;padding-left:8px;margin-top:4px">
+        <div style="display:grid;grid-template-columns:${director ? '1fr 1fr 1fr auto' : '1fr 1fr auto'};gap:6px;align-items:end;padding-left:8px;margin-top:4px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:2px">FECHA DE PEDIDO</div>
-            <input type="date" class="maint-input" value="${p.fecha_pedido||''}" style="font-size:10px;width:100%" onchange="updatePieza(${idx},${mi},${pi},'fecha_pedido',this.value);renderSeguimiento(${idx})">
+            <input type="date" class="maint-input" value="${p.fecha_pedido||''}" style="font-size:10px;width:100%" onchange="${director ? `updatePendingOrderDate(${idx},${mi},${pi},this.value)` : `updatePieza(${idx},${mi},${pi},'fecha_pedido',this.value);renderSeguimiento(${idx})`}">
           </div>
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:2px">PROVEEDOR</div>
             <input type="text" class="maint-input" placeholder="Proveedor" value="${p.proveedor||''}" style="font-size:10px;width:100%" onchange="updatePieza(${idx},${mi},${pi},'proveedor',this.value)">
           </div>
+          ${director ? `<div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:2px">FECHA RECIBIDO</div>
+            <input type="date" class="maint-input" id="received-date-${idx}-${mi}-${pi}" aria-label="Fecha real de recepción del pedido" value="${p.fecha_recibida||panamaISO()}" style="font-size:10px;width:100%">
+          </div>` : ''}
           <button onclick="recibirPieza(${idx},${mi},${pi})" style="font-family:'IBM Plex Mono',monospace;font-size:9px;background:rgba(0,119,68,0.1);color:var(--ok);border:1px solid var(--ok);border-radius:8px;padding:4px 8px;cursor:pointer">✓ Recibido</button>
         </div>` : '';
       pRow.innerHTML = `
@@ -854,16 +873,26 @@ function removePieza(idx, mi, pi) {
   renderMaintList(idx, state[idx].mantenimiento);
 }
 
-function recibirPieza(idx, mi, pi) {
+async function recibirPieza(idx, mi, pi) {
   const pieza = state[idx].mantenimiento[mi].piezas[pi];
+  if (!pieza) return;
+  const previous = structuredClone(state[idx]);
+  const receivedDateInput = document.getElementById(`received-date-${idx}-${mi}-${pi}`);
+  const receivedDate = isDirectorView() ? receivedDateInput?.value : panamaISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate || '')) {
+    alert('Selecciona la fecha en que llegó el pedido.');
+    return;
+  }
   pieza.estado = 'recibida';
-  pieza.fecha_recibida = getFechaPanama();
-  // Calculate days it took
-  const dias = pieza.fecha_pedido ? diasTranscurridos(pieza.fecha_pedido) : null;
+  pieza.id ||= `pedido-${Date.now()}-${mi}-${pi}`;
+  pieza.fecha_recibida = receivedDate;
+  const dias = diasEntreFechas(pieza.fecha_pedido, pieza.fecha_recibida);
   pieza.dias_entrega = dias;
   // Add to bitacora_pedidos
   if (!state[idx].bitacora_pedidos) state[idx].bitacora_pedidos = [];
   state[idx].bitacora_pedidos.push({
+    id: pieza.id,
+    piezaId: pieza.id,
     pieza: pieza.nombre,
     tarea: state[idx].mantenimiento[mi].nombre,
     proveedor: pieza.proveedor || '—',
@@ -871,10 +900,11 @@ function recibirPieza(idx, mi, pi) {
     fecha_recibida: pieza.fecha_recibida,
     dias: dias
   });
+  const saved = await savePanel(idx);
+  if (!saved) state[idx] = previous;
   renderMaintList(idx, state[idx].mantenimiento);
   renderSeguimiento(idx);
   renderBitacoraPedidos(idx);
-  savePanel(idx);
 }
 
 function renderBitacoraPedidos(idx) {
@@ -885,6 +915,7 @@ function renderBitacoraPedidos(idx) {
     container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
     return;
   }
+  const director = isDirectorView();
   container.innerHTML = [...items].reverse().map((r, ri) => {
     const origIdx = items.length - 1 - ri;
     const isLast = origIdx === items.length - 1;
@@ -892,9 +923,9 @@ function renderBitacoraPedidos(idx) {
       <span style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${r.pieza}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${r.tarea||'—'}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text)">${r.proveedor}</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${fechaVista(r.fecha_pedido)}</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ok)">${fechaVista(r.fecha_recibida)}</span>
-      <span style="font-family:'Orbitron',monospace;font-size:10px;color:var(--accent);font-weight:700">${r.dias !== null && r.dias !== undefined ? r.dias+'d' : '—'}</span>
+      ${director ? `<input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del pedido" value="${r.fecha_pedido==='—'?'':r.fecha_pedido||''}" onchange="updateOrderLogDate(${idx},${origIdx},'fecha_pedido',this.value)" style="font-size:10px;min-width:0;width:100%">` : `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${fechaVista(r.fecha_pedido)}</span>`}
+      ${director ? `<input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de recepción del pedido" value="${r.fecha_recibida||''}" onchange="updateOrderLogDate(${idx},${origIdx},'fecha_recibida',this.value)" style="font-size:10px;min-width:0;width:100%">` : `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ok)">${fechaVista(r.fecha_recibida)}</span>`}
+      <span style="font-family:'Orbitron',monospace;font-size:10px;color:var(--accent);font-weight:700">${diasEntregaVista(diasEntreFechas(r.fecha_pedido, r.fecha_recibida))}</span>
       ${isLast ? `<button onclick="eliminarBitacoraPedido(${idx},${origIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0">✕</button>` : '<span></span>'}
     </div>`;
   }).join('');
@@ -907,6 +938,43 @@ function eliminarBitacoraPedido(idx, ri) {
   savePanel(idx);
 }
 
+async function updateOrderLogDate(idx, ri, key, value) {
+  if (!isDirectorView() || !['fecha_pedido','fecha_recibida'].includes(key)) return;
+  const before = structuredClone(state[idx]);
+  const record = state[idx].bitacora_pedidos?.[ri];
+  if (!record) return;
+  record[key] = value;
+  record.dias = diasEntreFechas(record.fecha_pedido, record.fecha_recibida);
+  const linkedId = record.piezaId;
+  let linkedPiece = null;
+  for (const task of state[idx].mantenimiento || []) {
+    if (linkedId) linkedPiece = (task.piezas || []).find(p => p.id === linkedId) || null;
+    else if (task.nombre === record.tarea) linkedPiece = (task.piezas || []).find(p => p.estado === 'recibida' && p.nombre === record.pieza && (p.proveedor || '—') === record.proveedor) || null;
+    if (linkedPiece) break;
+  }
+  if (linkedPiece) {
+    linkedPiece.fecha_pedido = record.fecha_pedido;
+    linkedPiece.fecha_recibida = record.fecha_recibida;
+    linkedPiece.dias_entrega = record.dias;
+  }
+  const saved = await savePanel(idx);
+  if (!saved) state[idx] = before;
+  renderBitacoraPedidos(idx);
+  renderSeguimiento(idx);
+}
+
+async function updatePendingOrderDate(idx, mi, pi, value) {
+  const before = structuredClone(state[idx]);
+  const piece = state[idx].mantenimiento?.[mi]?.piezas?.[pi];
+  if (!piece) return;
+  piece.fecha_pedido = value;
+  const saved = await savePanel(idx);
+  if (!saved) state[idx] = before;
+  renderMaintList(idx, state[idx].mantenimiento);
+  renderSeguimiento(idx);
+  renderBitacoraPedidos(idx);
+}
+
 function renderSeguimiento(idx) {
   const container = document.getElementById('seguimiento-' + idx);
   if (!container) return;
@@ -917,7 +985,7 @@ function renderSeguimiento(idx) {
     (m.piezas || []).forEach(p => {
       if (p.estado === 'pedida' && p.nombre) {
         const dias = p.fecha_pedido ? diasTranscurridos(p.fecha_pedido) : null;
-        pedidas.push({ tarea: m.nombre, pieza: p.nombre, proveedor: p.proveedor||'—', fecha: p.fecha_pedido||'—', dias });
+        pedidas.push({ tarea: m.nombre, pieza: p.nombre, proveedor: p.proveedor||'—', fecha: p.fecha_pedido||'—', dias, mi:items.indexOf(m), pi:(m.piezas||[]).indexOf(p) });
       }
     });
   });
@@ -925,21 +993,24 @@ function renderSeguimiento(idx) {
     container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin pedidos pendientes</div>';
     return;
   }
+  const director = isDirectorView();
   container.innerHTML = pedidas.map(p => `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 80px 60px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
       <span style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${p.pieza}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${p.tarea}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text)">${p.proveedor}</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${fechaVista(p.fecha)}</span>
+      ${director ? `<input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del pedido" value="${p.fecha==='—'?'':p.fecha}" onchange="updatePendingOrderDate(${idx},${p.mi},${p.pi},this.value)" style="font-size:10px;min-width:0;width:100%">` : `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${fechaVista(p.fecha)}</span>`}
       <span style="font-family:'Orbitron',monospace;font-size:10px;color:var(--warn);font-weight:700">${p.dias !== null ? p.dias+'d' : '—'}</span>
     </div>`).join('');
 }
 
-function resolverTarea(idx, mi) {
+async function resolverTarea(idx, mi) {
+  const previous = structuredClone(state[idx]);
   const today = fechaVista(panamaISO());
   state[idx].mantenimiento[mi].resuelto = true;
   state[idx].mantenimiento[mi].fecha_resuelto = today;
-  savePanel(idx);
+  const saved = await savePanel(idx);
+  if (!saved) state[idx] = previous;
   renderMaintList(idx, state[idx].mantenimiento);
   renderBitacora(idx, state[idx].mantenimiento);
 }
@@ -961,13 +1032,22 @@ function renderBitacora(idx, items) {
       const n=dayNumber(m.fecha_resuelto)-dayNumber(m.fecha);
       return Number.isFinite(n) && n>=0 ? n+'d' : 'Revisar fechas';
     })() : '—';
+    const director = isDirectorView();
+    const dates = director ? `
+      <label style="display:flex;flex-direction:column;gap:2px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">CREADO
+        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del mantenimiento" value="${m.fecha||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha',this.value)" style="font-size:10px;min-width:0;width:118px">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:2px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">RESUELTO
+        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de cierre del mantenimiento" value="${m.fecha_resuelto||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha_resuelto',this.value)" style="font-size:10px;min-width:0;width:118px">
+      </label>` : `
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">Inicio: ${fechaVista(m.fecha)||'—'}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ok);font-weight:700">✓ ${fechaVista(m.fecha_resuelto)||'—'}</span>`;
     return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);background:rgba(0,119,68,0.03)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
         <span style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${m.nombre}</span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">Inicio: ${fechaVista(m.fecha)||'—'}</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${dates}
           <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">Duración: ${diasTotal}</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ok);font-weight:700">✓ ${m.fecha_resuelto||'—'}</span>
           <button onclick="eliminarBitacora(${idx},${origIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px" title="Eliminar registro">✕</button>
         </div>
       </div>
@@ -977,6 +1057,33 @@ function renderBitacora(idx, items) {
     </div>`;
   }).join('');
   if (!container.innerHTML.trim()) container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
+}
+
+async function updateMaintenanceLogDate(idx, mi, key, value) {
+  if (!isDirectorView() || !['fecha','fecha_resuelto'].includes(key)) return;
+  const before = structuredClone(state[idx]);
+  const task = state[idx].mantenimiento?.[mi];
+  if (!task) return;
+  task[key] = value;
+  const saved = await savePanel(idx);
+  if (!saved) state[idx] = before;
+  renderMaintList(idx, state[idx].mantenimiento);
+  renderBitacora(idx, state[idx].mantenimiento);
+}
+
+async function eliminarPendienteTaller(idx, mi) {
+  if (!isDirectorView()) return;
+  const task = state[idx].mantenimiento?.[mi];
+  if (!task || task.resuelto) return;
+  if (!window.confirm('¿Eliminar este pendiente de taller? Esta acción no se puede deshacer.')) return;
+  const previous = structuredClone(state[idx]);
+  state[idx].mantenimiento.splice(mi, 1);
+  const saved = await savePanel(idx);
+  if (!saved) state[idx] = previous;
+  renderMaintList(idx, state[idx].mantenimiento);
+  renderBitacora(idx, state[idx].mantenimiento);
+  renderSeguimiento(idx);
+  renderBitacoraPedidos(idx);
 }
 
 function eliminarBitacora(idx, mi) {
