@@ -21,7 +21,7 @@ async function handle(db,{user,account,actor,body,now=()=>new Date().toISOString
  if(user.disabled||!user.emailVerified||account?.role!=='Piloto'||!account.assignedAt||account.recordKind!=='pilot'||account.syncStatus!=='matched')return {status:403,error:'Solo un piloto con expediente vinculado puede reportar una aeronave.'};
  const registration=String(body.aircraft||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'_');
  const description=String(body.description||'').trim().slice(0,1000),idempotencyKey=body.idempotencyKey;
- if(!/^HP_[A-Z0-9]+$/.test(registration)||description.length<5||typeof idempotencyKey!=='string'||!REQUEST_ID.test(idempotencyKey))return {status:400,error:'Selecciona una aeronave, describe el reporte (mínimo 5 caracteres) y conserva su identificador de envío.'};
+ if(!/^HP_?[A-Z0-9]+$/.test(registration)||description.length<5||typeof idempotencyKey!=='string'||!REQUEST_ID.test(idempotencyKey))return {status:400,error:'Selecciona una aeronave, describe el reporte (mínimo 5 caracteres) y conserva su identificador de envío.'};
 
  const rootRef=db.ref('dashboard'),operation=randomUUID(),createdAt=now(),newTaskId=randomUUID(),receiptKey=hash(user.uid+'\u0000'+idempotencyKey),inputHash=hash(registration+'\u0000'+description);let failure='',failureStatus=409,taskId='',savedOperation='',replayed=false;
  const result=await rootRef.transaction(root=>{
