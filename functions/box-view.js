@@ -23,6 +23,10 @@ function boxView(data,account,rawPolicy,page){
  if(page==='horario'){fine.itinerarios=(fine.itinerarios||[]).filter(f=>aircraftAllowed(policy,f.aeronave));return {...base,data:fine,policy,boxes:policy[page]?.boxes||{},editable:false};}
  // Include editable source records only when this role has explicit view access to them.
  const sources=clone(data);delete sources.undoFleet;if(sources.school)delete sources.school.paymentReceiverNames;
+ if(account.role==='Piloto'){
+  const own=account.syncStatus==='matched'&&account.recordKind==='pilot'?account.recordId:null;
+  sources.pilotos=(sources.pilotos||[]).filter(p=>own&&p.id===own);
+ }
  if(account.role==='Estudiante'){
   sources.school ||= {};sources.school.students=(sources.school.students||[]).filter(p=>account.recordKind==='student'&&account.syncStatus==='matched'&&p.id===account.recordId);
   sources.pilotos=[];sources.itinerarios=[];

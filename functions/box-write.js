@@ -62,7 +62,10 @@ function allowed(policy,path,root,action,context={}){
 function applyChanges(current,before,after,policy,account){
  if(!before||!after||typeof before!=='object'||typeof after!=='object'||Array.isArray(before)||Array.isArray(after))throw Error('Cambios no válidos.');
  let writes=0;const root=clone(current);
- const check=(path,context)=>{if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Estudiante'){
+ const check=(path,context)=>{if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
+   const pilot=root.pilotos?.[path[1]];
+   if(!pilot||account.syncStatus!=='matched'||account.recordKind!=='pilot'||pilot.id!==account.recordId)throw Error('Solo puedes modificar tu expediente de piloto autorizado.');
+  }if(account.role==='Estudiante'){
    const student=path[0]==='school'&&path[1]==='students',client=path[0]==='school'&&path[1]==='registry'&&path[2]==='clients';
    const person=student?root.school?.students?.[path[2]]:client?root.school?.registry?.clients?.[path[3]]:null;
    if(!person||account.syncStatus!=='matched'||person.id!==account.recordId||account.recordKind!==(student?'student':'client'))throw Error('Solo puedes modificar tu expediente autorizado.');

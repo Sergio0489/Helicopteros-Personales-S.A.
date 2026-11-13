@@ -36,7 +36,7 @@ function projectPage(data,account,policy,page){
   add('Tarifas',Object.entries(school.rates||{}).map(([aircraft,r])=>({aircraft,...fields(r,'cents')})));
  }
  if(page==='pilotos'){
-  let pilots=arr(data.pilotos);if(account.role==='Estudiante')pilots=[];
+  let pilots=arr(data.pilotos);if(account.role==='Estudiante')pilots=[];else if(account.role==='Piloto')pilots=pilots.filter(p=>account.syncStatus==='matched'&&account.recordKind==='pilot'&&p.id===account.recordId);
   add('Datos personales',pilots.map(p=>fields(p,'nombre email telefono celular')));
   add('Licencias y habilitaciones',pilots.map(p=>fields(p,'nombre licencia tipo habilitaciones')));
   add('Vencimientos y documentos',pilots.flatMap(p=>[{...fields(p,'nombre licencia medico escuela')},...arr(p.verificaciones).map(v=>({piloto:p.nombre,...fields(v,'nombre fecha')}))]));
