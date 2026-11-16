@@ -20,5 +20,5 @@ test('the application keeps its complete head, inline styles, and registration c
  assert.match(styles[0][1],/:root\s*\{/);
  assert.match(styles[0][1],/--bg:\s*#cfd8e3/);
  assert.match(head[1],/<link\b[^>]*rel="manifest"[^>]*>/i);
- assert.match(html,/<script src="registration\.js\?v=identity-review-20261111"><\/script>/);
+ assert.match(html,/<script src="registration\.js\?v=identity-distinct-20261115"><\/script>/);
 });
