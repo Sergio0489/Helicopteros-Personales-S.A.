@@ -41,7 +41,7 @@ function setDocument(h,uid,value){h.root.accountRequests[uid].profile.identity=v
 test('Director confirms one distinct person without merging dossiers, granting roles or losing audit history',async()=>{
  const h=harness(),before=structuredClone(h.root),preview=await eligiblePreview(h),response=await save(h,preview);
  assert.equal(response.status,200,JSON.stringify(response));assert.equal(response.body.ok,true);assert.equal(response.body.resolved,true);assert.equal(response.body.remaining,0);assert.equal(response.body.targetUid,'target');assert.equal(response.body.deduplicated,false);
- const account=h.root.accountRequests.target;assert.equal(account.identityReviewPending,false);assert.equal(account.identityReviewVersion,1);
+ const account=h.root.accountRequests.target;assert.equal(account.identityReviewPending,false);assert.equal(account.syncStatus,'no-match','a valid individual decision clears the previous duplicate status without granting a matched dossier');assert.equal(account.identityReviewVersion,1);
  assert.equal(Object.keys(account.identityDistinctDecisions).length,1);assert(account.identityDistinctDecisions[response.body.decisionId]);
  const audits=Object.values(account.auditPending).filter(x=>x.meta.id!=='fixture-account-history');assert.equal(audits.length,1,'one auditable decision must be appended');assert.equal(audits[0].meta.uid,'director');assert(audits[0].meta.reason.endsWith(reason),'the complete verification reason must remain in the audit');
  assertPreserved(h,before);assert.equal(h.root.accountRequests.other.identityReviewPending,true,'the counterpart requires its own individual review');

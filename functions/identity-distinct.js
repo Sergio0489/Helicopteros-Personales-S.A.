@@ -140,6 +140,7 @@ function confirm(root,body,actor,now=new Date().toISOString()){
  const nextRoot={...root,accountRequests:{...root.accountRequests,[body.targetUid]:nextAccount}};
  const remaining=context(nextRoot,body.targetUid).remaining;
  decision.remaining=remaining;decision.resolved=remaining===0;nextAccount.identityReviewPending=remaining!==0;
+ if(remaining===0)nextAccount.syncStatus='no-match';
  nextRoot.accountRequests[body.targetUid]=audit.attach(stored,nextAccount,actor,'account','Personas distintas: '+reason,body.targetUid);
  return {root:nextRoot,targetUid:body.targetUid,decisionId:requestId,remaining,resolved:remaining===0,deduplicated:false};
 }
