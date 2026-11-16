@@ -16,7 +16,9 @@ async function transaction(db,actor,reason,update){
  const result=await db.ref('dashboard').transaction(root=>{
   failure='';outcome=undefined;if(!root?.payload){failure='El dashboard no contiene datos.';return root===null?null:undefined;}
   try{const data=JSON.parse(root.payload),before=JSON.stringify(data);outcome=update(data,now);if(before===JSON.stringify(data))return root;
-   return audit.attach(root,{...root,payload:JSON.stringify(data),operation,revision:(root.revision||0)+1,updatedAt:now,updatedBy:actor?.uid||'itinerary-system'},actor||{uid:'itinerary-system',name:'Programador de itinerario',role:'Sistema'},'dashboard',reason);
+   const next=audit.attach(root,{...root,payload:JSON.stringify(data),operation,revision:(root.revision||0)+1,updatedAt:now,updatedBy:actor?.uid||'itinerary-system'},actor||{uid:'itinerary-system',name:'Programador de itinerario',role:'Sistema'},'dashboard',reason);
+   if(outcome?.emailPublication){const id=outcome.emailPublication.id;next.itineraryEmailOutbox ||= {};if(!next.itineraryEmailOutbox[id])next.itineraryEmailOutbox[id]=outcome.emailPublication;}
+   return next;
   }catch(e){failure=e.message;return;}
  },undefined,false);
  if(failure||!result.committed)throw Error(failure||'No se pudo confirmar el guardado. Actualiza para comprobar el resultado.');
@@ -49,7 +51,7 @@ async function scheduled(db,now=new Date().toISOString()){
  return transaction(db,null,'Publicación automática del horario',data=>{
   if(!data.itinerary?.version)return false;
   // The scheduler may retry across midnight: never publish a different date by accident.
-  return M.publish(data,clock.tomorrow,now);
+  return M.publish(data,clock.tomorrow,now)?{emailPublication:M.publicationEmail(data,clock.tomorrow)}:false;
  });
 }
 module.exports={handle,transaction,scheduled,enable};

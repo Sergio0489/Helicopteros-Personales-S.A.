@@ -13,11 +13,12 @@ function recipientList(value){
  return value.map(address);
 }
 
-function configuration(raw){
+function smtpConfiguration(raw){
  let cfg;try{cfg=JSON.parse(raw);}catch{throw Error('Configuración de correo no válida.');}
  if(!cfg||!address(cfg.from)||typeof cfg.host!=='string'||!/^([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/.test(cfg.host)||![465,587].includes(cfg.port)||typeof cfg.user!=='string'||!cfg.user.trim()||typeof cfg.password!=='string'||!cfg.password||cfg.password.length>4096)throw Error('Configuración de correo incompleta.');
- return {from:address(cfg.from),recipients:recipientList(cfg.recipients),transport:{host:cfg.host,port:cfg.port,secure:cfg.port===465,requireTLS:true,tls:{minVersion:'TLSv1.2'},auth:{user:cfg.user,pass:cfg.password},connectionTimeout:20000,greetingTimeout:15000,socketTimeout:25000,dnsTimeout:10000,logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true}};
+ return {from:address(cfg.from),recipients:cfg.recipients,transport:{host:cfg.host,port:cfg.port,secure:cfg.port===465,requireTLS:true,tls:{minVersion:'TLSv1.2'},auth:{user:cfg.user,pass:cfg.password},connectionTimeout:20000,greetingTimeout:15000,socketTimeout:25000,dnsTimeout:10000,logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true}};
 }
+function configuration(raw){const cfg=smtpConfiguration(raw);return {...cfg,recipients:recipientList(cfg.recipients)};}
 
 function panamaDate(value){
  const date=new Date(value);if(!Number.isFinite(date.getTime()))return '';
@@ -104,4 +105,4 @@ async function deliver({db,event,from,recipients,send,now=()=>Date.now(),report=
  if(retry)throw Error('Entrega de correo pendiente de reintento.');
 }
 
-module.exports={recipientList,configuration,panamaDate,message,failure,deliver};
+module.exports={recipientList,smtpConfiguration,configuration,panamaDate,message,failure,deliver};

@@ -1,5 +1,6 @@
 (function(root){
 'use strict';
+const PRIORITY_IDLE_DAYS=3;
 const slots=[{id:'b1',start:'06:30',end:'09:30'},{id:'b2',start:'09:30',end:'12:30'},{id:'b3',start:'12:30',end:'15:30'},{id:'b4',start:'15:30',end:'18:30'},{id:'b5',start:'18:30',end:'20:00'}];
 const fleet=[
  ['HP1784','Piper Warrior · PA 28','Monomotor','#ce3437'],
@@ -108,6 +109,14 @@ function canChooseFlightType(state,type,role,a){
 function aircraftOrder(state,type){
  const allowed=allowedForType(state,type);
  return allowed.map(id=>state.aircraft.find(a=>a.id===id)).filter(a=>a?.category==='Monomotor');
+}
+function priorityAssignment(state,q,a,requests,assignments){
+ const competing=requests.some(other=>other.id!==q.id&&other.aircraft===q.aircraft&&other.pilot!==q.pilot&&overlaps(other,q));
+ if(q.aircraft===a.id)return {allowed:true,competing,idle:false};
+ const order=aircraftOrder(state,typeOf(q)).map(other=>other.id),rank=order.indexOf(a.id),requestedRank=order.indexOf(q.aircraft);
+ const higher=rank>=0&&requestedRank>rank;
+ const idle= higher&&Number.isFinite(a.idleDays)&&a.idleDays>=PRIORITY_IDLE_DAYS&&!assignments.some(f=>f.aircraft===a.id);
+ return {allowed:higher&&(competing||idle),competing,idle};
 }
 function compatible(state,q,a){
  const p=state.pilots.find(x=>x.id===q.pilot);
@@ -287,16 +296,15 @@ function simulate(state){
    // Short adjacent requests can share one base block; long requests occupy every minute.
    while(true){
     const candidates=valid.filter(q=>
-     state.aircraft.find(x=>x.id===q.aircraft)?.category==='Monomotor'&&typeOf(q)===type&&!used.has(q.id)&&covers(a,q,state.date)&&compatible(state,q,a)&&
+     state.aircraft.find(x=>x.id===q.aircraft)?.category==='Monomotor'&&typeOf(q)===type&&!used.has(q.id)&&priorityAssignment(state,q,a,valid,assignments).allowed&&covers(a,q,state.date)&&compatible(state,q,a)&&
      !assignments.some(x=>(x.pilot===q.pilot||x.aircraft===a.id)&&overlaps(x,q))&&
      (!state.maxBlocks||assignments.filter(x=>x.pilot===q.pilot).length<state.maxBlocks)
     ).sort((x,y)=>ranking(x.pilot)-ranking(y.pilot)||x.created-y.created||x.id.localeCompare(y.id));
     if(!candidates.length)break;
-    const q=candidates[0],touched=active(a).filter(s=>overlaps(s,q));
-    const order=allowedForType(state,type);
-    const rule=flightTypes[type].label+' · prioridad por tipo #'+(order.indexOf(a.id)+1)+(a.id===order.at(-1)?' (última opción)':'');
-    const reason=rule+' · prioridad de piloto '+(ranking(q.pilot)===Number.MAX_SAFE_INTEGER?'fuera de lista':'#'+(ranking(q.pilot)+1))+
-     (q.aircraft!==a.id?' · redistribuido desde '+q.aircraft:' · mantiene la matrícula solicitada')+' · horario solicitado conservado'+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
+    const q=candidates[0],touched=active(a).filter(s=>overlaps(s,q)),priority=priorityAssignment(state,q,a,valid,assignments);
+    const reason=flightTypes[type].label+' · '+(priority.competing?'prioridad por solicitudes coincidentes':priority.idle?'prioridad de aeronave: '+a.registration+' lleva '+a.idleDays+' días sin vuelos registrados':'solicitud concedida en la aeronave solicitada')+
+     (priority.competing?' · prioridad de piloto '+(ranking(q.pilot)===Number.MAX_SAFE_INTEGER?'fuera de lista':'#'+(ranking(q.pilot)+1)):'')+
+     (q.aircraft!==a.id?' · redistribuido desde '+q.aircraft:'')+' · horario solicitado conservado'+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
     used.add(q.id);assignments.push({...q,aircraft:a.id,slot:touched[0].id,coveredSlots:touched.map(s=>s.id),requestedAircraft:q.aircraft,fixed:false,conditional:a.status!=='operativo',reason});
     results.push({...q,assignedAircraft:a.id,status:'assigned',conditional:a.status!=='operativo',reason});
    }

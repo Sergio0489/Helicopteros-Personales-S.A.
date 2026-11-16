@@ -9,6 +9,7 @@ const copy=v=>structuredClone(v),arr=v=>Array.isArray(v)?v:[];
 const key=v=>String(v||'').replace(/[^a-z0-9]/gi,'').toUpperCase();
 const iso=v=>V.iso(v),eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0,24);
+const DAY_MS=86400000;
 const status=v=>v==='aog'?'grounded':['operativo','mantenimiento','grounded'].includes(v)?v:'sin registrar';
 const error=s=>{throw Error(s);};
 function date(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value)error('Selecciona una fecha válida.');return value;}
@@ -18,9 +19,22 @@ function pilots(data){return arr(data.pilotos).map((p,i)=>({id:String(p.id||'leg
 function students(data){return [...arr(data.school?.students).map(p=>({id:'student:'+p.id,name:p.name})),...arr(data.school?.registry?.clients).map(p=>({id:'client:'+p.id,name:p.name}))].sort((a,b)=>a.name.localeCompare(b.name,'es'));}
 function legacyId(f){return f.id==null?'legacy-'+hash(f):String(f.id);}
 function fromFlight(f,ps){return {...f.schedule,publicationStatus:'published',id:legacyId(f),date:iso(f.fecha),aircraft:key(f.aeronave),pilot:f.schedule?.pilot||ps.find(p=>p.name===f.piloto)?.id||'legacy-name:'+f.piloto,studentName:f.estudiante||'',studentId:f.personId&&f.personKind?f.personKind+':'+f.personId:f.schedule?.studentId||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',flightType:f.schedule?.flightType||'privado',note:f.observaciones||f.schedule?.note||'',route:f.ruta||f.schedule?.route||'',fixed:true,legacy:!f.schedule};}
+function idleDays(data,id,targetDate){
+ const entry=Object.entries(data.fleet||{}).find(([registration])=>key(registration)===id)?.[1]||{};
+ const logs=Array.isArray(entry.bitacora_horas)?entry.bitacora_horas:Object.values(entry.bitacora_horas||{});
+ const target=Date.parse(targetDate+'T12:00:00Z');let latest='';
+ for(const log of logs){
+  if(!(Number(log?.hv)>0))continue;
+  const logged=iso(log.fecha),time=Date.parse(logged+'T12:00:00Z');
+  if(Number.isFinite(time)&&new Date(time).toISOString().slice(0,10)===logged&&logged<=targetDate&&logged>latest)latest=logged;
+ }
+ if(!latest||!Number.isFinite(target))return null;
+ const days=(target-Date.parse(latest+'T12:00:00Z'))/DAY_MS;
+ return Number.isFinite(days)?Math.max(0,Math.floor(days)-1):null;
+}
 function stateFor(data,d,now){
  date(d);const config=data.itinerary?.config||{},stored=data.itinerary?.days?.[d]||{},ps=pilots(data);
- const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id]};});
+ const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id]};});
  const confirmed=[...arr(data.itinerarios).filter(f=>iso(f.fecha)===d).map(f=>fromFlight(f,ps)),...copy(arr(stored.held)).map(q=>({...q,publicationStatus:'held'}))];
  const defaults=E.defaultTypeRules();if(config.aircraftOrder)for(const type of ['privado','xc','maniobras'])defaults[type]=copy(config.aircraftOrder);
  return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,aircraft,pilots:ps,students:students(data),typeRules:copy(config.typeRules||defaults),requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
@@ -76,6 +90,10 @@ function publish(data,dateValue,now){
  d.published=true;d.publishedAt=now;d.results=result.results;d.revision++;state.published=true;
  storeFlights(data,state);notice(data,E.publicationNotice(state),now,'publication:'+dateValue);return true;
 }
+function publicationEmail(data,dateValue){
+ const scheduled=arr(data.itinerarios).filter(f=>iso(f.fecha)===dateValue).map(f=>({aircraft:f.aeronave||'',pilot:f.piloto||'',student:f.estudiante||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',type:f.tipo||f.schedule?.flightType||'Privado',route:f.ruta||'',notes:f.observaciones||''})).sort((a,b)=>a.start.localeCompare(b.start)||a.aircraft.localeCompare(b.aircraft));
+ return {id:'publication-'+dateValue,date:dateValue,publishedAt:data.itinerary?.days?.[dateValue]?.publishedAt||'',pilotRecipients:arr(data.pilotos).map(p=>p.email||'').filter(Boolean),flights:scheduled};
+}
 function apply(data,actor,body,now){
  const rights=scope(data,actor);if(!rights.view)error('No tienes acceso al itinerario.');
  const dte=date(body.date),d=day(data,dte),action=body.command;
@@ -83,7 +101,7 @@ function apply(data,actor,body,now){
  const receipt=actor.user.uid+':'+body.actionId,signature=hash({...body,revision:undefined});
  d.receipts ||= [];const prior=d.receipts.find(r=>r.id===receipt);if(prior){if(prior.signature!==signature)error('Identificador reutilizado con datos distintos.');return {duplicate:true};}
  if(action!=='request'||body.id)checkExpected(d,body);
- const state=stateFor(data,dte,now),before=copy(state.confirmed);
+ const state=stateFor(data,dte,now),before=copy(state.confirmed);let emailPublication=null;
  const requireDirector=()=>{if(!rights.settings)error('Solo un director puede realizar esta operación.');};
  if(action==='settings'){
   requireDirector();validateDateRange(dte,now);const c=setup(data).config ||= {};
@@ -126,12 +144,12 @@ function apply(data,actor,body,now){
   const q=state.confirmed.find(q=>q.id===body.id);if(!q)error('El vuelo ya no existe.');
   if(!rights.edit&&!(rights.role==='pilot'&&rights.pilot&&E.canCancelRelocated(state,q,rights.pilot,now)))error('Solo puedes cancelar tu propio vuelo reubicado antes del inicio.');
   state.confirmed=state.confirmed.filter(f=>f.id!==q.id);d.cancelled.push(q.sourceRequestId||q.id);storeFlights(data,state);changeNotice(data,{...q,date:dte},null,state.published,now,receipt,!!q.relocation);
- }else if(action==='publish'){requireDirector();validateDateRange(dte,now);publish(data,dte,now);}
+ }else if(action==='publish'){requireDirector();validateDateRange(dte,now);const alreadyPublished=!!d.published;if(publish(data,dte,now)&&!alreadyPublished)emailPublication=publicationEmail(data,dte);}
  else error('Operación de itinerario no válida.');
  d.revision++;d.receipts.push({id:receipt,signature});d.receipts=d.receipts.slice(-250);
  const after=stateFor(data,dte,now).confirmed;
  if(state.published&&!eq(before,after)&&action==='settings')notice(data,{kind:'change',action:'night-update',date:dte,recipients:[{kind:'group',id:'all'}]},now,receipt);
- return {duplicate:false};
+ return {duplicate:false,...(emailPublication?{emailPublication}:{})};
 }
 // Preserve server-owned requests/config and reject bypass through the legacy generic saver.
 function protect(before,after){
@@ -181,7 +199,7 @@ function visibleNotices(data,actor,now){
 }
 function view(data,actor,d,now){
  const rights=scope(data,actor);if(!rights.view)error('No tienes permiso para consultar el itinerario.');const state=stateFor(data,d,now);
- if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot;return own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};}):[];
+ if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot;return own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};}):[];
   if(!rights.boxes.flights&&!rights.boxes.planner)state.confirmed=[];
   state.lastResults=state.lastResults.filter(q=>q.pilot===rights.pilot);
  }
@@ -205,4 +223,4 @@ function calendar(data,actor,year,now){
  }
  return {version:1,year,days};
 }
-module.exports={E,date,key,day,setup,stateFor,scope,view,calendar,apply,publish,protect,reconcile,operational,visibleNotices,storeFlights,assertPilot};
+module.exports={E,date,key,day,setup,stateFor,scope,view,calendar,apply,publish,publicationEmail,protect,reconcile,operational,visibleNotices,storeFlights,assertPilot};
