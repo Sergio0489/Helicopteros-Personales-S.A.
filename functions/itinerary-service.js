@@ -3,6 +3,7 @@ const {randomUUID}=require('node:crypto');
 const M=require('./itinerary-model');
 const audit=require('./audit');
 const {normalize}=require('./boxes');
+const identityReview=require('./identity-review');
 function enable(data){
  if(data.itinerary?.version)return false;
  M.setup(data);
@@ -23,6 +24,7 @@ async function transaction(db,actor,reason,update){
  return {root:result.snapshot.val(),outcome};
 }
 async function handle(db,context,body){
+ if(identityReview.pending(context.account))throw Error(identityReview.message);
  const actor={uid:context.user.uid,name:context.account?.profile?.name||context.user.displayName||context.user.email,role:context.director?'Director':context.account?.role};
  let root;
  if(body.action==='itinerary-calendar'){
