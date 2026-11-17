@@ -61,7 +61,7 @@ async function syncAccount(db,u,account,marker,readRoot){
  if(!synced.committed)throw Error('No se pudo sincronizar la identidad. Actualiza e intenta nuevamente.');
  return synced.snapshot.val();
 }
-exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2},async(req,res)=>{
+exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2,secrets:['HP_WIX_INTERESTS_CONFIG']},async(req,res)=>{
  res.set('Cache-Control','no-store');if(req.method==='GET'){res.json({ready:true});return;}if(req.method!=='POST'){res.status(405).end();return;}
  try{
  const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!token){res.status(401).json({error:'Inicia sesión.'});return;}
@@ -72,12 +72,20 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  let prospectPolicy={};
- if(!isDirector&&(action==='access'||String(action||'').startsWith('prospect-'))){
+ if(!isDirector&&(action==='access'||String(action||'').startsWith('prospect-')||String(action||'').startsWith('quote-'))){
   const payload=(await db.ref('dashboard/payload').get()).val();
   const data=typeof payload==='string'?JSON.parse(payload):payload||{};
   prospectPolicy=data.school?.accessConfiguration?.roles?.[actorAccount?.role]||{};
  }
  const prospectScope=require('./prospect-access').scope(user,actorAccount,isDirector,prospectPolicy);
+ if(String(action||'').startsWith('quote-')){
+  const quotes=require('./quotes');
+  if(!quotes.permitted(prospectScope)){res.status(403).json({error:'No tienes acceso a las cotizaciones de Charters.'});return;}
+  if(action==='quote-save'&&prospectScope.edit===false){res.status(403).json({error:'Solo tienes permiso de consulta.'});return;}
+  const current=quotes.policy(require('./prospects').authorizedConfig(process.env.HP_WIX_INTERESTS_CONFIG));
+  if(action==='quote-session'){res.json({access:{view:true,edit:prospectScope.edit!==false},policy:current});return;}
+  res.json(await quotes.handle(db,action,req.body,actor,current));return;
+ }
  if(action==='prospect-configure'){
   if(!isDirector||!prospectScope){res.status(403).json({error:'Solo el Director con correo verificado puede conceder accesos.'});return;}
   res.json(await require('./prospect-access').configure(getAuth(),db,req.body,{...actor,role:'Director'}));return;
