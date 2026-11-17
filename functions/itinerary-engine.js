@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 6744)
+Total output lines: 332
+
 (function(root){
 'use strict';
 const PRIORITY_IDLE_DAYS=3;
@@ -111,7 +114,11 @@ function aircraftOrder(state,type){
  return allowed.map(id=>state.aircraft.find(a=>a.id===id)).filter(a=>a?.category==='Monomotor');
 }
 function priorityAssignment(state,q,a,requests,assignments){
- const competing=requests.some(other=>other.id!==q.id&&other.aircraft===q.aircraft&&other.pilot!==q.pilot&&overlaps(other,q));
+ const competing=requests.some(other=>{
+  if(other.id===q.id||other.aircraft!==q.aircraft||other.pilot===q.pilot||!overlaps(other,q))return false;
+  const assigned=assignments.find(f=>f.id===other.id);
+  return !assigned||assigned.aircraft===q.aircraft;
+ });
  if(q.aircraft===a.id)return {allowed:true,competing,idle:false};
  const order=aircraftOrder(state,typeOf(q)).map(other=>other.id),rank=order.indexOf(a.id),requestedRank=order.indexOf(q.aircraft);
  const higher=rank>=0&&requestedRank>rank;
@@ -133,90 +140,7 @@ function normalizeRequest(state,q){
 }
 function typeHint(state,type){return (flightTypes[type]?.label||'Tipo no válido')+': '+(allowedForType(state,type).join(' → ')||'sin aeronaves asignadas')+(type==='charter'?' · solo director · agenda fija':type==='multi'?' · orden de referencia manual · pilotos: solo HP880BL':' · prioridad por tipo; solo se redistribuyen monomotores');}
 function flightDataError(state,q){
- if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la lista o deja la casilla en blanco.';
- if(typeOf(q)==='socio'&&(typeof q.socioName!=='string'||!q.socioName.trim()||q.socioName.trim().length>120))return 'Escribe el nombre del socio (máximo 120 caracteres).';
- return '';
-}
-function panamaClock(now){
- const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Panama',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(now));
- const d=Object.fromEntries(parts.map(p=>[p.type,p.value])),date=d.year+'-'+d.month+'-'+d.day;
- const next=new Date(date+'T12:00:00Z');next.setUTCDate(next.getUTCDate()+1);
- return {date,time:d.hour+':'+d.minute,tomorrow:next.toISOString().slice(0,10)};
-}
-function reservationGate(state){
- const clock=panamaClock(state.now);
- if(state.date!==clock.tomorrow)return 'Los pilotos solo pueden reservar para mañana: '+clock.tomorrow.split('-').reverse().join('/')+'.';
- if(state.published)return 'El horario ya está publicado. Los cambios los realiza un director.';
- if(minutes(clock.time)<721||minutes(clock.time)>=1200)return 'Reservas cerradas. Se reciben de 12:01 p. m. a 8:00 p. m. del día anterior, hora de Panamá.';
- return '';
-}
-// Planning alerts, never an operational release or an outgoing notification.
-function operationalAlerts(scheduleDays,now){
- const clock=panamaClock(now),alerts=[];
- for(const day of scheduleDays){
-  if(!day||![clock.date,clock.tomorrow].includes(day.date))continue;
-  for(const flight of day.confirmed||[]){
-   const a=day.aircraft.find(a=>a.id===flight.aircraft);
-   if(a?.status==='operativo')continue;
-   alerts.push({id:day.date+':'+flight.id,date:day.date,when:day.date===clock.date?'today':'tomorrow',flightId:flight.id,aircraft:flight.aircraft,status:a?.status||'sin registrar',pilot:flight.pilot,start:flight.start,end:flight.end});
-  }
- }
- return alerts.sort((a,b)=>a.date.localeCompare(b.date)||minutes(a.start)-minutes(b.start)||a.aircraft.localeCompare(b.aircraft));
-}
-function directorFlightError(state,q,excludeId,role='director'){
- const a=state.aircraft.find(x=>x.id===q.aircraft),p=state.pilots.find(x=>x.id===q.pilot);
- if(!canSchedule(role,a))return 'Este cargo no puede agendar esta aeronave.';
- const metadataError=flightDataError(state,q);if(metadataError)return metadataError;
- if(role!=='director'&&(!a||!bookable(a,state.date)))return 'La aeronave no está operativa ni tiene disponibilidad prevista para esta fecha.';
- if(!p||!p.valid||!p.categories.includes(a.category))return 'El piloto no está habilitado para esta aeronave.';
- if(!canChooseFlightType(state,typeOf(q),role,a))return typeOf(q)==='charter'?'Chárter solo está disponible para director en multimotor o helicóptero.':'La aeronave no corresponde al tipo de vuelo seleccionado.';
- if(!validWindow(q))return 'La hora final debe ser posterior a la inicial, dentro del mismo día.';
- if(role!=='director'&&!covers(a,q,state.date))return 'El intervalo completo debe estar habilitado. Revisa horarios base, previsión y bloque nocturno.';
- if(state.confirmed.some(x=>x.id!==excludeId&&(x.aircraft===q.aircraft||x.pilot===q.pilot)&&overlaps(x,q)))return 'El horario se cruza con otro vuelo de la aeronave o del piloto.';
- return '';
-}
-function requestError(state,q){
- q=normalizeRequest(state,q);
- const gate=reservationGate(state);if(gate)return gate;
- const a=state.aircraft.find(x=>x.id===q.aircraft),p=state.pilots.find(x=>x.id===q.pilot),s=a&&active(a).find(x=>x.id===q.slot),type=typeOf(q);
- if(!pilotCanRequest(a))return 'Los pilotos solo pueden solicitar monomotores y HP880BL. Las demás aeronaves las agenda un director o administrativo.';
- if(!a||!bookable(a,state.date))return 'La aeronave debe estar operativa o habilitada por un director para esta fecha.';
- if(!flightTypes[type])return 'Selecciona un tipo de vuelo válido.';
- const metadataError=flightDataError(state,q);if(metadataError)return metadataError;
- if(type==='charter')return 'Chárter solo está disponible para director en multimotor o helicóptero.';
- if(!p||!p.valid||!p.categories.includes(a.category))return 'El piloto no está habilitado para esta solicitud.';
- if(!canChooseFlightType(state,type,'pilot',a))return 'El director no ha habilitado aeronaves accesibles para este tipo de vuelo.';
- if(!allowedForType(state,type).length)return 'El director debe asignar una aeronave a este tipo de vuelo.';
- if(!s)return 'Este bloque no está habilitado.';
- const timing=timeError(a,q);if(timing)return timing;
- if(!covers(a,q,state.date))return 'El horario comienza antes de la habilitación del director o queda fuera de los horarios disponibles.';
- if(state.confirmed.some(x=>x.aircraft===a.id&&overlaps(x,q)))return 'El horario solicitado se cruza con un vuelo confirmado de esta aeronave.';
- if(state.confirmed.some(x=>x.pilot===q.pilot&&overlaps(x,q)))return 'El piloto ya tiene un vuelo confirmado durante el horario solicitado.';
- const others=state.requests.filter(x=>x.id!==q.id&&x.status!=='approved'&&!state.cancelled.includes(x.id));
- if(others.some(x=>x.aircraft==='HP880BL'&&x.pilot===q.pilot&&overlaps(x,q)))return 'El piloto ya tiene otra solicitud en HP880BL a esa hora.';
- if(q.aircraft==='HP880BL'&&others.some(x=>x.pilot===q.pilot&&overlaps(x,q)))return 'El piloto ya tiene otra solicitud en ese horario. Modifícala antes de reservar HP880BL.';
-
- return '';
-}
-function competingRequests(state,request){
- return state.requests.filter(q=>q.id!==request.id&&q.status!=='approved'&&q.status!=='cancelled'&&!state.cancelled.includes(q.id)&&!state.confirmed.some(f=>f.sourceRequestId===q.id)&&q.aircraft===request.aircraft&&q.pilot!==request.pilot&&overlaps(q,request));
-}
-function prepareApproval(state,requestId,role='director'){
- if(role!=='director')return {error:'Solo el director puede aprobar y fijar solicitudes.'};
- if(state.published)return {error:'El horario ya está publicado. Usa la edición del director.'};
- const request=state.requests.find(q=>q.id===requestId);
- if(!request||state.cancelled.includes(requestId))return {error:'La solicitud ya no está disponible.'};
- if(request.status==='approved'||state.confirmed.some(q=>q.sourceRequestId===requestId))return {error:'Esta solicitud ya fue aprobada.'};
- const error=directorFlightError(state,request);if(error)return {error};
- const aircraft=state.aircraft.find(a=>a.id===request.aircraft);
- return {error:'',flight:{...request,id:'approved-'+request.id,sourceRequestId:request.id,fixed:true,createdByRole:'director',directorApproved:true,approvedAt:state.now,conditional:aircraft.status!=='operativo',reason:'Aprobado por director · fuera del orden de prioridades'}};
-}
-function publishedChange(before,after,isPublished){
- if(!isPublished||!before&&!after)return null;
- const fields=['date','aircraft','pilot','studentId','start','end','flightType','socioName','route','note'];
- const snapshot=q=>q?Object.fromEntries(fields.map(k=>[k,k==='flightType'?typeOf(q):(q[k]||'')])):null;
- const from=snapshot(before),to=snapshot(after);
- if(JSON.stringify(from)===JSON.stringify(to))return null;
+ if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la…1744 tokens truncated… if(JSON.stringify(from)===JSON.stringify(to))return null;
  const recipients=new Map();
  for(const flight of [from,to].filter(Boolean)){
   if(flight.pilot)recipients.set('pilot:'+flight.pilot,{kind:'pilot',id:flight.pilot});
