@@ -33,10 +33,10 @@ test('requests require operational aircraft and director-enabled night block',()
  a.status='operativo';Object.assign(q,{slot:'b5',start:'18:30',end:'20:00'});
  assert.match(H.requestError(s,q),/habilitado/);a.night=true;assert.equal(H.requestError(s,q),'');
 });
-test('all pilots choosing same aircraft are redistributed by priority without consent flag',()=>{
+test('competing pilots follow priorities while the last unopposed request keeps its aircraft',()=>{
  const s=base();s.requests=['a','b','c'].map((p,i)=>request('q'+(i+1),p));
  const r=H.simulate(s);assert.equal(assigned(r).length,3);
- assert.deepEqual(assigned(r).map(q=>q.assignedAircraft),['HP1784','HP1819','HP1815']);
+ assert.deepEqual(assigned(r).map(q=>q.assignedAircraft),['HP1784','HP1819','HP1907']);
  for(const q of assigned(r))assert.equal(q.aircraft,'HP1907');
 });
 test('IFR never assigned outside HP1579 and HP1815',()=>{
@@ -90,7 +90,7 @@ test('destination pilot priority then oldest request decides tied candidates',()
  s.aircraft[0].pilots=[];assert.equal(assigned(H.simulate(s)).find(q=>q.assignedAircraft==='HP1784').pilot,'a');
 });
 test('time edits keep exact requested interval and invalidate old requests',()=>{
- const s=base();s.requests=[request('q1','a')];
+ const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.requests=[request('q1','a')];
  s.aircraft.find(a=>a.id==='HP1907').slots[0].start='07:00';
  assert.equal(H.simulate(s).results[0].status,'review');
  s.requests[0].start='07:00';
@@ -121,7 +121,7 @@ test('pilots can shorten a block or reserve across adjacent blocks',()=>{
  assert.deepEqual(r.assignments[0].coveredSlots,['b1','b2']);
 });
 test('short adjacent flights share a base block without overlap',()=>{
- const s=base();s.requests=[{...request('q1','a'),end:'08:00'},{...request('q2','b'),start:'08:00'}];
+ const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.requests=[{...request('q1','a'),end:'08:00'},{...request('q2','b'),start:'08:00'}];
  const r=H.simulate(s);assert.equal(assigned(r).length,2);assert.ok(assigned(r).every(q=>q.assignedAircraft==='HP1784'));
 });
 test('whole long reservation blocks intersecting flight on aircraft and pilot',()=>{
@@ -250,7 +250,7 @@ test('director can change Multi and Grob lists without expanding pilot permissio
  s.requests=[request('q1','a','grob','HP1784')];assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1907');
 });
 test('student optional and preserved throughout automatic aircraft reassignment',()=>{
- const s=base(),q={...request('q1','a','privado','HP1907'),studentId:''};
+ const s=base(),q={...request('q1','a','privado','HP1907'),studentId:''};s.aircraft.find(a=>a.id==='HP1784').idleDays=3;
  assert.equal(H.requestError(s,q),'');q.studentId='st2';assert.equal(H.requestError(s,q),'');s.requests=[q];
  const r=H.simulate(s);assert.equal(r.assignments[0].aircraft,'HP1784');assert.equal(r.assignments[0].studentId,'st2');assert.equal(r.results[0].studentId,'st2');
  q.studentId='missing';assert.match(H.requestError(s,q),/estudiante/);
@@ -291,7 +291,7 @@ test('Charter is director-only on multi or helicopter and immutable in automatic
  assert.deepEqual(H.simulate(s).assignments,s.confirmed);
 });
 test('Socio requires name and preserves it with optional student through allocation',()=>{
- const s=base(),q={...request('q1','a','socio','HP1907'),studentId:'st1',socioName:''};
+ const s=base(),q={...request('q1','a','socio','HP1907'),studentId:'st1',socioName:''};s.aircraft.find(a=>a.id==='HP1784').idleDays=3;
  assert.match(H.requestError(s,q),/nombre del socio/);assert.match(H.directorFlightError(s,q),/nombre del socio/);
  q.socioName='Socio de ejemplo';assert.equal(H.requestError(s,q),'');s.requests=[q];const r=H.simulate(s);
  assert.equal(r.assignments[0].socioName,'Socio de ejemplo');assert.equal(r.assignments[0].studentId,'st1');assert.equal(r.assignments[0].aircraft,'HP1784');
@@ -360,7 +360,7 @@ test('night rule uses 18:30 boundary and preserves whole mixed and late director
  const before=structuredClone(flights);assert.equal(H.nightPublication(s,flights).ready,true);assert.deepEqual(flights,before);
 });
 test('night minimum is checked after aircraft assignment, not based on requested aircraft',()=>{
- const s=base();s.nightEnabled=true;s.aircraft.forEach(a=>a.night=true);
+ const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.nightEnabled=true;s.aircraft.forEach(a=>a.night=true);
  s.requests=[{...request('q1','a','privado','HP1907','b5'),start:'18:30',end:'19:00'},{...request('q2','b','privado','HP1819','b5'),start:'19:00',end:'20:00'}];
  const r=H.simulate(s);assert.equal(r.assignments.length,2);assert.equal(new Set(r.assignments.map(q=>q.aircraft)).size,1);
  assert.equal(H.nightPublication(s,r.assignments).ready,false);
