@@ -1,4 +1,4 @@
-Warning: truncated output (original token count: 6744)
+Warning: truncated output (original token count: 6733)
 Total output lines: 332
 
 (function(root){
@@ -122,7 +122,7 @@ function priorityAssignment(state,q,a,requests,assignments){
  if(q.aircraft===a.id)return {allowed:true,competing,idle:false};
  const order=aircraftOrder(state,typeOf(q)).map(other=>other.id),rank=order.indexOf(a.id),requestedRank=order.indexOf(q.aircraft);
  const higher=rank>=0&&requestedRank>rank;
- const idle= higher&&Number.isFinite(a.idleDays)&&a.idleDays>=PRIORITY_IDLE_DAYS&&!assignments.some(f=>f.aircraft===a.id);
+ const idle=higher&&Number.isFinite(a.idleDays)&&a.idleDays>=PRIORITY_IDLE_DAYS;
  return {allowed:higher&&(competing||idle),competing,idle};
 }
 function compatible(state,q,a){
@@ -140,7 +140,8 @@ function normalizeRequest(state,q){
 }
 function typeHint(state,type){return (flightTypes[type]?.label||'Tipo no válido')+': '+(allowedForType(state,type).join(' → ')||'sin aeronaves asignadas')+(type==='charter'?' · solo director · agenda fija':type==='multi'?' · orden de referencia manual · pilotos: solo HP880BL':' · prioridad por tipo; solo se redistribuyen monomotores');}
 function flightDataError(state,q){
- if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la…1744 tokens truncated… if(JSON.stringify(from)===JSON.stringify(to))return null;
+ if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la lista o deja la casilla en blanco.';
+ if(…1733 tokens truncated… if(JSON.stringify(from)===JSON.stringify(to))return null;
  const recipients=new Map();
  for(const flight of [from,to].filter(Boolean)){
   if(flight.pilot)recipients.set('pilot:'+flight.pilot,{kind:'pilot',id:flight.pilot});
