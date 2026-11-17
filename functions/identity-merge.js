@@ -50,6 +50,7 @@ function combine(a,b,path=''){
 }
 function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(),primaryKey=''){
  const selected=groups(root).find(g=>g.members.map(x=>x.key).sort().join('|')===[...memberKeys].sort().join('|'));if(!selected)throw Error('La coincidencia cambió. Vuelve a consultar.');
+ if(require('./identity-distinct').preventsMerge(root,memberKeys))throw Error('Hay una decisión vigente de personas distintas. Revisa la identidad; este grupo no se puede unificar.');
  const out=clone(root),accounts=out.accountRequests||{},data=JSON.parse(out.dashboard.payload),members=selected.members;
  const ranked=[...selected.uids].sort((a,b)=>{if(a===rootDirector)return -1;if(b===rootDirector)return 1;const rank=uid=>ROLES.indexOf(accounts[uid]?.assignedAt?accounts[uid].role:'Estudiante');return rank(a)-rank(b)||a.localeCompare(b);});
  const uid=ranked[0]||null;if(ranked.some(u=>!accounts[u]?.verified))throw Error('Todos los correos de las cuentas deben estar verificados antes de unificar.');

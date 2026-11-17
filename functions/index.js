@@ -19,11 +19,15 @@ const {matchRecord}=require('./record-link');
 const selfProfile=require('./self-profile');
 const audit=require('./audit');
 const dossiers=require('./account-dossiers');
+const distinct=require('./identity-distinct');
 const SYNC_VERSION=5;
 async function syncAccount(db,u,account,marker,readRoot){
  if(account?.mergedInto||!u.emailVerified||!u.email)return account||{};
- if(account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===SYNC_VERSION&&account.syncedRole===(u.uid===DIRECTOR?'Director':account.role||'Estudiante'))return account;
- let root=await readRoot();
+ let root,reviewAccounts;
+ if(account?.identityDistinctDecisions){reviewAccounts=(await db.ref('accountRequests').get()).val()||{};root=await readRoot();}
+ const reviewInvalidated=reviewAccounts&&distinct.invalidated({dashboard:root,accountRequests:reviewAccounts},u.uid);
+ if(!reviewInvalidated&&account?.verified&&account.email===u.email&&marker&&account.syncedOperation===marker&&account.syncVersion===SYNC_VERSION&&account.syncedRole===(u.uid===DIRECTOR?'Director':account.role||'Estudiante'))return account;
+ root ||= await readRoot();
  if(account?.verified&&account.email&&account.email.toLowerCase()!==u.email.toLowerCase()&&account.recordId){
   let failure='';const moved=await db.ref('dashboard').transaction(current=>{
    if(!current)return current;try{const next=selfProfile.migrateEmail(JSON.parse(current.payload),u,account);return next?audit.attach(current,{...current,payload:JSON.stringify(next),operation:randomUUID(),revision:(current.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:u.uid},null,'dashboard','Sincronización de correo verificado'):current;}catch(e){failure=e.message;return;}
@@ -54,8 +58,8 @@ async function syncAccount(db,u,account,marker,readRoot){
  const synced=await ref.transaction(old=>{
   if(old===null&&account)return old; // Retry an empty cache for an existing account.
   // A concurrent Director merge invalidates this account snapshot.
-  if(old?.mergedInto||old?.mergedAt!==account?.mergedAt)return;
-  const identityReviewPending=!!old?.identityReviewPending||match.status==='duplicate-identity';
+  if(old?.mergedInto||old?.mergedAt!==account?.mergedAt||old?.identityReviewVersion!==account?.identityReviewVersion)return;
+  const identityReviewPending=!!old?.identityReviewPending||match.status==='duplicate-identity'||!!(reviewAccounts&&distinct.invalidated({dashboard:root,accountRequests:reviewAccounts},u.uid));
   return audit.attach(old,{...old,...patch,identityReviewPending,syncStatus:identityReviewPending?'duplicate-identity':match.status},null,'account','Sincronización de expediente y correo verificado',u.uid);
  });
  if(!synced.committed)throw Error('No se pudo sincronizar la identidad. Actualiza e intenta nuevamente.');
@@ -89,11 +93,45 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(req.body.export===true&&prospectScope.export===false){res.status(403).json({error:'No tienes permiso para exportar interesados.'});return;}
   res.json(await require('./prospects').handle(db,action,req.body,{...actor,prospectArea:prospectScope.area}));return;
  }
+ if(action==='identity-distinct-preview'||action==='identity-distinct-confirm'){
+  if(!isDirector||!user.emailVerified){res.status(403).json({error:'Solo el Director con correo verificado puede revisar homónimos.'});return;}
+  const body=req.body,targetUid=body.targetUid;
+  if(typeof targetUid!=='string'||!targetUid||targetUid.length>128||body.counterpartKey!==undefined&&typeof body.counterpartKey!=='string'){res.status(400).json({error:'Selecciona una cuenta y una contraparte válidas.'});return;}
+  if(action==='identity-distinct-confirm'&&(
+   typeof body.counterpartKey!=='string'||!body.counterpartKey||body.counterpartKey.length>250||
+   typeof body.revision!=='string'||!/^[0-9a-f]{64}$/i.test(body.revision)||
+   typeof body.requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId)||
+   body.confirm!==true||body.verifiedIndependently!==true||
+   typeof body.reason!=='string'||body.reason.trim().length<10||body.reason.trim().length>1000
+  )){res.status(400).json({error:'Confirma la verificación independiente, escribe un motivo y vuelve a consultar la pareja antes de guardar.'});return;}
+  let target;
+  try{target=await getAuth().getUser(targetUid);}catch{res.status(409).json({error:'La cuenta cambió. Vuelve a consultar la revisión.'});return;}
+  if(!target.emailVerified||target.disabled){res.status(409).json({error:'La cuenta debe verificar su correo y estar habilitada antes de revisar la coincidencia.'});return;}
+  const canReview=root=>user.uid===DIRECTOR||root.accountRequests?.[user.uid]?.role==='Director'&&!!root.accountRequests[user.uid].assignedAt&&!root.accountRequests[user.uid].mergedInto;
+  const targetCurrent=root=>root.accountRequests?.[targetUid]&&!root.accountRequests[targetUid].mergedInto&&identities.email(root.accountRequests[targetUid].email)===identities.email(target.email);
+  if(action==='identity-distinct-preview'){
+   const [dash,accounts]=await Promise.all([db.ref('dashboard').get(),db.ref('accountRequests').get()]);
+   const current={dashboard:dash.val(),accountRequests:accounts.val()||{}};
+   if(!canReview(current)){res.status(403).json({error:'El permiso de Director cambió.'});return;}
+   if(!targetCurrent(current)){res.status(409).json({error:'Los datos de la cuenta cambiaron. Vuelve a consultar.'});return;}
+   res.json({...distinct.preview(current,targetUid,body.counterpartKey||''),requestId:randomUUID()});return;
+  }
+  let failure='',failureStatus=409,applied;const at=new Date().toISOString();
+  const result=await db.ref().transaction(root=>{
+   failure='';failureStatus=409;applied=null;if(!root?.dashboard?.payload)return root;
+   if(!canReview(root)){failure='El permiso de Director cambió.';failureStatus=403;return;}
+   if(!targetCurrent(root)){failure='Los datos de la cuenta cambiaron. Vuelve a consultar.';return;}
+   try{applied=distinct.confirm(root,body,{...actor,role:'Director',rootDirector:user.uid===DIRECTOR},at);return applied.root;}
+   catch(error){failure=error.message;return;}
+  },undefined,false);
+  if(!result.committed||failure||!applied){res.status(failureStatus).json({error:failure||'No se confirmó la decisión. Vuelve a consultar.'});return;}
+  res.json({ok:true,targetUid:applied.targetUid,decisionId:applied.decisionId,remaining:applied.remaining,resolved:applied.resolved,deduplicated:applied.deduplicated});return;
+ }
  if(action==='identity-preview'||action==='identity-merge'){
   if(!isDirector){res.status(403).json({error:'Solo Directores pueden unificar identidades.'});return;}
   const [dash,requests]=await Promise.all([db.ref('dashboard').get(),db.ref('accountRequests').get()]);
   const current={dashboard:dash.val(),accountRequests:requests.val()||{}};
-  if(action==='identity-preview'){res.json({operation:current.dashboard?.operation,groups:identities.groups(current).map(g=>({...g,revision:identities.revision(current,g),role:g.uids.includes(DIRECTOR)?'Director':g.role})),roles:identities.ROLES});return;}
+  if(action==='identity-preview'){res.json({operation:current.dashboard?.operation,groups:identities.groups(current).map(g=>({...g,revision:identities.revision(current,g),role:g.uids.includes(DIRECTOR)?'Director':g.role,reviewTargets:g.uids.filter(uid=>current.accountRequests[uid]?.identityReviewPending),distinctProtected:distinct.preventsMerge(current,g.members.map(m=>m.key))})),roles:identities.ROLES});return;}
   if(req.body.confirm!==true||!Array.isArray(req.body.members)||!req.body.members.length)throw Error('Confirma la coincidencia antes de unificar.');
   const candidate=identities.groups(current).find(g=>g.members.map(x=>x.key).sort().join('|')===[...req.body.members].sort().join('|'));if(!candidate)throw Error('La coincidencia cambió. Actualiza.');
   for(const uid of candidate.uids){const u=await getAuth().getUser(uid);if(u.disabled||!u.emailVerified||identities.email(u.email)!==identities.email(current.accountRequests[uid]?.email))throw Error('Verifica y actualiza todas las cuentas antes de unificarlas.');}
@@ -212,12 +250,12 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
    const key=identities.identity(profile.identity);
    const data=root.dashboard?.payload?JSON.parse(root.dashboard.payload):{};
    const nameKey=identities.personName(profile.name);
-   const accountCollision=Object.entries(requests).some(([uid,a])=>uid!==user.uid&&!a.mergedInto&&((key&&identities.identity(a.profile?.identity)===key)||(nameKey&&identities.personName(a.profile?.name)===nameKey)));
+   const accountCollision=Object.entries(requests).some(([uid,a])=>uid!==user.uid&&!a.mergedInto&&((key&&identities.identity(a.profile?.identity)===key)||(nameKey&&identities.personName(a.profile?.name)===nameKey&&!distinct.approved(root,user.uid,'user:'+uid,{profile,email:user.email}))));
    const dossierCollision=dossiers.recordRows(data).some(({record:r,kind})=>{
     if(r.authUid===user.uid)return false;
     const recordName=kind==='pilot'?r.nombre:r.name;
     const sameIdentity=key&&identities.identity(r.identity)===key&&(identities.email(r.email)!==identities.email(user.email)||!!r.authUid);
-    const sameName=nameKey&&identities.personName(recordName)===nameKey&&(identities.email(r.email)!==identities.email(user.email)||!!r.authUid);
+    const sameName=nameKey&&identities.personName(recordName)===nameKey&&(identities.email(r.email)!==identities.email(user.email)||!!r.authUid)&&!distinct.approved(root,user.uid,kind+':'+r.id,{profile,email:user.email});
     return !!(sameIdentity||sameName);
    });
    const identityReviewPending=!!(old?.identityReviewPending||accountCollision||dossierCollision);
