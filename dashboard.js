@@ -788,7 +788,7 @@ function renderMaintList(idx, items) {
     mainRow.style = `display:grid;grid-template-columns:1fr 150px 60px auto auto${director ? ' auto' : ''};gap:8px;align-items:center;margin-bottom:6px`;
     mainRow.innerHTML = `
       <input type="text" class="maint-input" placeholder="Tarea de mantenimiento" value="${m.nombre||''}" onchange="updateMaint(${idx},${mi},'nombre',this.value)">
-      <input type="date" class="maint-input" aria-label="Fecha de inicio de la tarea" title="Fecha de inicio" value="${m.fecha||''}" onchange="updateMaint(${idx},${mi},'fecha',this.value);renderMaintList(${idx},state[${idx}].mantenimiento)">
+      <input type="date" class="maint-input" aria-label="Fecha de inicio de la tarea" title="Fecha de inicio" value="${isoFecha(m.fecha)||''}" onchange="updateMaint(${idx},${mi},'fecha',this.value);renderMaintList(${idx},state[${idx}].mantenimiento)">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);font-weight:700;text-align:center">${dias !== null ? dias + 'd' : '—'}</span>
       <button onclick="togglePiezas(${idx},${mi})" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:transparent;border:1px solid var(--border);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--muted)">🔩 Piezas</button>
       <button onclick="resolverTarea(${idx},${mi})" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(0,119,68,0.1);border:1px solid var(--ok);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--ok)">✓ Resuelto</button>
@@ -1007,7 +1007,7 @@ function renderSeguimiento(idx) {
 async function resolverTarea(idx, mi) {
   const before=structuredClone(state[idx]);
   const reg=fleet[idx].reg;
-  const today = fechaVista(panamaISO());
+  const today = panamaISO();
   state[idx].mantenimiento[mi].resuelto = true;
   state[idx].mantenimiento[mi].fecha_resuelto = today;
   const draftKey='aircraft:'+reg;
@@ -1054,10 +1054,10 @@ function renderBitacora(idx, items) {
     const director = isDirectorView();
     const dates = director ? `
       <label style="display:flex;flex-direction:column;gap:2px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">CREADO
-        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del mantenimiento" value="${m.fecha||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha',this.value)" style="font-size:10px;min-width:0;width:118px">
+        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del mantenimiento" value="${isoFecha(m.fecha)||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha',this.value)" style="font-size:10px;min-width:0;width:118px">
       </label>
       <label style="display:flex;flex-direction:column;gap:2px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">RESUELTO
-        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de cierre del mantenimiento" value="${m.fecha_resuelto||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha_resuelto',this.value)" style="font-size:10px;min-width:0;width:118px">
+        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de cierre del mantenimiento" value="${isoFecha(m.fecha_resuelto)||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha_resuelto',this.value)" style="font-size:10px;min-width:0;width:118px">
       </label>` : `
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">Inicio: ${fechaVista(m.fecha)||'—'}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ok);font-weight:700">✓ ${fechaVista(m.fecha_resuelto)||'—'}</span>`;
@@ -1175,7 +1175,7 @@ function updateDoc(idx, di, key, val) {
 }
 
 function addMaintRow(idx) {
-  state[idx].mantenimiento.push({ nombre: '', fecha: '', resuelto: false, piezas: [] });
+  state[idx].mantenimiento.push({ nombre: '', fecha: panamaISO(), resuelto: false, piezas: [] });
   renderMaintList(idx, state[idx].mantenimiento);
 }
 function addDocRow(idx) {
