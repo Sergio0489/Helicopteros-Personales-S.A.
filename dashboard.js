@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 53622)
+Total output lines: 3589
+
 'use strict';
 (function(root){
  const iso=v=>{const s=String(v||'');if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);return m?`${m[3]}-${m[2]}-${m[1]}`:'';};
@@ -1552,267 +1555,7 @@ async function savePanelLegacy(idx) {
     const a50 = document.getElementById('acum50-' + idx);
     const a100 = document.getElementById('acum100-' + idx);
     if (a50) a50.textContent = parseFloat(d.horas_acum_50).toFixed(2) + ' HV';
-  {const edit=document.getElementById('edit-acum50-'+idx);if(edit)edit.value=Number(d.horas_acum_50||0).toFixed(2);}
-    if (a100) a100.textContent = parseFloat(d.horas_acum_100).toFixed(2) + ' HV';
-    const pb50 = document.getElementById('pb-50-' + idx);
-    const pb100 = document.getElementById('pb-100-' + idx);
-    if (pb50) { pb50.style.width = Math.min(100, parseFloat(d.horas_acum_50)/50*100) + '%'; pb50.className = 'progress-fill ' + (inspectionFill(d.horas_acum_50, 50)); }
-    if (pb100) { pb100.style.width = Math.min(100, parseFloat(d.horas_acum_100)/100*100) + '%'; pb100.className = 'progress-fill ' + (inspectionFill(d.horas_acum_100, 100)); }
-    renderBitacoraHoras(idx, d.bitacora_horas);
-  }
-  d.horas_totales = d.horas_acum_50 || '';
-  d.horas_limite  = d.horas_acum_100 || '';
-  d.fecha_50      = state[idx].fecha_50 || d.fecha_50 || '';
-  d.fecha_100     = state[idx].fecha_100 || d.fecha_100 || '';
-  // Daily hours for motor+helices (+ helice1/helice2 for HP-880BL)
-  const hvVencDia = parseFloat(document.getElementById('horas-venc-dia-' + idx)?.value || 0);
-  if (hvVencDia > 0) {
-    const fechaV = getFechaPanama();
-    const horaV = getHoraPanama();
-    const isHP880 = isMultimotor(fleet[idx].reg);
-    const vencTipos = isHP880 ? ['motor','helices','helice1','helice2'] : ['motor','helices'];
-    vencTipos.forEach(tipo => {
-      const map = VENC_FIELD_MAP[tipo];
-      d[map.dataField] = (parseFloat(d[map.dataField] || 0) + hvVencDia).toFixed(2);
-      const fechaFieldName = tipo === 'motor' ? 'fecha_motor' : tipo === 'helices' ? 'fecha_helices' : 'fecha_' + tipo;
-      d[fechaFieldName] = fechaV + ' ' + horaV;
-      const acumEl = document.getElementById(map.acumId + idx);
-      if (acumEl) acumEl.textContent = parseFloat(d[map.dataField]||0).toFixed(2);
-      updateVencBar(tipo, idx, d[map.dataField], getLimite(tipo, idx));
-      const fEl = document.getElementById('fecha-' + tipo + '-' + idx);
-      if (fEl) fEl.textContent = fechaV;
-      const manualEl=document.getElementById(tipo+'-manual-'+idx);
-      if(manualEl)manualEl.value=d[map.dataField];
-      const hiddenEl = document.getElementById(map.hiddenId + idx);
-      if (hiddenEl) hiddenEl.value = d[map.dataField];
-    });
-    // Save ultimo registro
-    delete d.ultimo_venc_registry_id;
-    d.ultimo_venc_hv = hvVencDia.toFixed(2);
-    d.ultimo_venc_fecha = fechaV + ' ' + horaV;
-    const ulDiv = document.getElementById('ultimo-venc-' + idx);
-    if (ulDiv) {
-      ulDiv.style.display = 'flex';
-      ulDiv.querySelector('span:nth-child(2)').textContent = hvVencDia.toFixed(2) + ' HV';
-      ulDiv.querySelector('span:nth-child(3)').textContent = d.ultimo_venc_fecha;
-    }
-    // Clear input
-    const vencInp = document.getElementById('horas-venc-dia-' + idx);
-    if (vencInp) vencInp.value = '';
-  }
-  d.horas_desde_revision = getVal('horas_desde-' + idx);
-  d.horas_hasta_revision = getVal('horas_hasta-' + idx);
-  const notaEl = document.getElementById('estatus_nota-' + idx);
-  if (notaEl) d.estatus_nota = notaEl.value;
-  d.fecha_motor   = state[idx].fecha_motor   || d.fecha_motor   || '';
-  d.fecha_helices = state[idx].fecha_helices || d.fecha_helices || '';
-  d.limite_motor = getVal('limite-motor-' + idx) || (isMultimotor(ac.reg)?'':d.limite_motor||'2000');
-  d.limite_helice = getVal('limite-helices-' + idx) || (isMultimotor(ac.reg)?'':d.limite_helice||'2000');
-  if (isMultimotor(fleet[idx].reg)) {
-    d.fecha_helice1  = state[idx].fecha_helice1  || d.fecha_helice1  || '';
-    d.fecha_helice2  = state[idx].fecha_helice2  || d.fecha_helice2  || '';
-    d.helice1_limite = getVal('limite-helice1-' + idx) || '';
-    d.helice2_limite = getVal('limite-helice2-' + idx) || '';
-  }
-  collectEmergencyDates(idx,d);
-
-  // Update progress bars
-  const hp = pct(d.horas_totales, d.horas_limite);
-  const pb_h = document.getElementById('pb-horas-' + idx);
-  pb_h.style.width = (hp || 0) + '%';
-  pb_h.className = 'progress-fill ' + fillCls(hp);
-  document.getElementById('pct-horas-' + idx).textContent = hp !== null ? hp + '% del límite' : '—';
-
-  const cp = pct(d.ciclos_totales, d.ciclos_limite);
-  const pb_c = document.getElementById('pb-ciclos-' + idx);
-  pb_c.style.width = (cp || 0) + '%';
-  pb_c.className = 'progress-fill ' + fillCls(cp);
-  document.getElementById('pct-ciclos-' + idx).textContent = cp !== null ? cp + '% del límite' : '—';
-
-  // Update gauge
-  const gc = gaugeColor(d.horas_desde_revision, d.horas_hasta_revision);
-  const gw = document.getElementById('gauge-wrap-' + idx); if (gw) gw.innerHTML = buildGauge(d.horas_desde_revision, d.horas_hasta_revision, gc);
-  const gaugeVal = document.getElementById('gauge-val-' + idx);
-  if (gaugeVal) {
-    gaugeVal.textContent = d.horas_desde_revision && d.horas_hasta_revision
-      ? d.horas_desde_revision + ' / ' + d.horas_hasta_revision + ' HV' : '— / — HV';
-    gaugeVal.style.color = gc;
-  }
-
-  // Update sidebar badge
-  const badge = document.querySelector(`#sidebar-tabs .aircraft-tab[data-idx="${idx}"] .tab-badge`);
-  if (badge) {
-    badge.className = 'tab-badge ' + (d.status === 'operativo' ? 'badge-ok' : d.status === 'mantenimiento' ? 'badge-warn' : d.status === 'aog' ? 'badge-danger' : 'badge-empty');
-  }
-
-  const cleanData = structuredClone(d);
-
-  const ok = await saveData(ac.reg, cleanData);
-  if(ok) aircraftDirty.delete(idx);
-  updateUndoButtons();
-  updateSummary();
-
-  const msg = document.getElementById('save-msg-' + idx);
-  if (msg) {
-    msg.textContent = ok ? '✓ Guardado' : '✗ Error al guardar';
-    msg.style.color = ok ? 'var(--ok)' : 'var(--danger)';
-    msg.style.opacity = '1';
-    setTimeout(() => msg.style.opacity = '0', 2500);
-  }
-  return ok;
-}
-
-function updateSummary() {
-  let ok=0, maint=0, aog=0;
-  state.forEach(d => {
-    if (d.status === 'operativo') ok++;
-    else if (d.status === 'mantenimiento') maint++;
-    else if (d.status === 'aog') aog++;
-  });
-  document.getElementById('sum-total').textContent = fleet.length;
-  document.getElementById('sum-ok').textContent = ok || '—';
-  document.getElementById('sum-maint').textContent = maint || '—';
-  document.getElementById('sum-aog').textContent = aog || '—';
-}
-
-// Build everything
-const sidebarEl = document.getElementById('sidebar-tabs');
-const contentEl = document.getElementById('content-area');
-
-// RESUMEN tab at top
-const resumenTab = document.createElement('div');
-resumenTab.className = 'aircraft-tab active';
-resumenTab.innerHTML = '<div class="tab-reg" style="font-size:10px;color:var(--accent)">⚠️ PENDIENTES</div>';
-resumenTab.addEventListener('click', () => {
-  document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
-  resumenTab.classList.add('active');
-  document.getElementById('panel-resumen').classList.add('active');
-  buildResumen();
-});
-sidebarEl.insertBefore(resumenTab, sidebarEl.firstChild);
-
-// ESTADISTICAS tab below PENDIENTES
-const statsTab = document.createElement('div');
-statsTab.className = 'aircraft-tab';
-statsTab.innerHTML = '<div class="tab-reg" style="font-size:10px;color:var(--accent)">📊 ESTADÍSTICAS</div>';
-statsTab.addEventListener('click', () => {
-  document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
-  statsTab.classList.add('active');
-  document.getElementById('panel-estadisticas').classList.add('active');
-  buildEstadisticas();
-});
-sidebarEl.insertBefore(statsTab, resumenTab.nextSibling);
-
-fleet.forEach((ac, idx) => {
-  // Insert each category heading before its first aircraft.
-  const category = ac.type==='rotor'?'HELICÓPTERO':isMultimotor(ac.reg)?'MULTIMOTOR':'MONOMOTOR';
-  const prev = fleet[idx-1];
-  const previousCategory = !prev?'':prev.type==='rotor'?'HELICÓPTERO':isMultimotor(prev.reg)?'MULTIMOTOR':'MONOMOTOR';
-  if(category!==previousCategory){
-    const hdr=document.createElement('div');
-    hdr.className='sidebar-group-title';
-    hdr.textContent=category;
-    sidebarEl.appendChild(hdr);
-  }
-  const tab = document.createElement('div');
-  tab.className = 'aircraft-tab' + (idx === 0 ? ' active' : '');
-  tab.dataset.idx = idx;
-  const d = state[idx];
-  const badgeCls = d.status === 'operativo' ? 'badge-ok' : d.status === 'mantenimiento' ? 'badge-warn' : d.status === 'aog' ? 'badge-danger' : 'badge-empty';
-  tab.innerHTML = `
-    ${ac.img ? `<div style="width:100%;height:44px;margin-bottom:6px;overflow:hidden;position:relative">
-      <img src="${ac.img}" style="width:100%;height:100%;object-fit:cover;object-position:center;filter:brightness(0.9) contrast(1.1)">
-      <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,var(--panel) 100%)"></div>
-    </div>` : ''}
-    <div class="tab-reg">${ac.reg}</div>
-    <div class="tab-model">${ac.model}</div>
-    <div class="tab-badge ${badgeCls}"></div>
-  `;
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.aircraft-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + idx).classList.add('active');
-  });
-  sidebarEl.appendChild(tab);
-
-  const panel = buildPanel(ac, d, idx);
-  contentEl.appendChild(panel);
-  renderMaintList(idx, d.mantenimiento);
-  renderBitacora(idx, d.mantenimiento);
-  renderSeguimiento(idx);
-  renderBitacoraPedidos(idx);
-  renderBitacoraHoras(idx, d.bitacora_horas);
-  renderDocList(idx, d.documentos);
-  renderVencimientoLog(idx);
-  renderTACLogs(idx);
-});
-
-// Build Vigencia de pilotos panel
-const pilotosPanel = document.createElement('div');
-pilotosPanel.className = 'aircraft-panel';
-pilotosPanel.id = 'panel-pilotos';
-pilotosPanel.innerHTML = `
-  <div class="aircraft-header">
-    <div>
-      <div class="aircraft-reg" >👨‍✈️ PILOTOS</div>
-      <div class="aircraft-model-line">ADMINISTRATIVOS · LICENCIAS Y HABILITACIONES</div>
-    </div>
-  </div>
-  <div class="divider-label">✈ Pilotos</div>
-  <div class="card">
-    <div class="card-title">👨‍✈️ Registro de Vigencias</div>
-    <div style="overflow-x:auto">
-    <div class="pilotos-table-header" style="display:grid;grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,1.2fr)) repeat(2,minmax(0,1.45fr)) 18px;gap:6px;padding:8px 0;border-bottom:1px solid var(--dim);min-width:0;width:100%">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">NOMBRE DEL PILOTO</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">INSTRUCTOR DE VUELO</span>
-      <span style="font-size:9px;color:var(--muted)">INSTRUCTOR RPA</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">CERT. MÉDICO</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE ESCUELA</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">VERIFICACIONES DE CHÁRTER</span>
-      <span></span>
-    </div>
-    <div id="pilotos-list"></div>
-    </div>
-    <button class="add-row-btn" onclick="addPilotoRow()">+ Agregar piloto</button>
-  </div>
-`;
-const pilotTableStyle=document.createElement('style');pilotTableStyle.textContent=`
-#pilotos-list .pilot-vigency-row>*{min-width:0;max-width:100%;box-sizing:border-box;font-size:11px;line-height:1.5;overflow-wrap:break-word}
-#pilotos-list .maint-input{min-width:0;width:100%;box-sizing:border-box;font-size:11px!important}
-#pilotos-list small{font-size:10px;font-weight:500;display:block;margin-bottom:4px}
-#pilotos-list p{margin:5px 0;font-size:11px;line-height:1.5}
-#pilotos-list .pilot-vigency-row>span{font-size:10px;white-space:normal}
-#pilotos-list .pilot-vigency-row>button{justify-self:center}
-#pilotos-list .pilot-vigency-row{column-gap:4px!important}
-#panel-pilotos .pilotos-table-header{column-gap:4px!important}
-#panel-pilotos .pilotos-table-header>span{min-width:0;font-size:8px!important;overflow-wrap:anywhere}
-#pilotos-list .pilot-vigency-row .maint-input{font-size:10px!important;padding:4px;min-height:26px;border-radius:5px}
-#pilotos-list .pilot-vigency-row .app-date-input{background-size:12px;background-position:right 3px center;padding-right:17px!important;font-variant-numeric:tabular-nums}
-#pilotos-list .pilot-vigency-row small,#pilotos-list .pilot-vigency-row p{font-size:9px;line-height:1.35}
-#pilotos-list .pilot-vigency-row b{font-size:10px}
-#pilotos-list .pilot-vigency-row>span>span{font-size:9px!important;padding:2px!important;display:inline-block;max-width:100%;box-sizing:border-box}
-
-#pilotos-list .pilot-date-pair{display:flex;gap:3px;align-items:center;min-width:0;max-width:100%}
-#pilotos-list .pilot-date-pair .maint-input{flex:1 1 80px;width:80px;min-width:0;font-size:9px!important;padding:3px 2px;min-height:24px}
-#pilotos-list .pilot-date-pair .app-date-input{background-image:none;padding-right:2px!important}
-#pilotos-list .pilot-days-pill{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:999px;padding:3px 5px;font-size:9px;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:0 0 4px #0002}
-#pilotos-list .pilot-check-list{display:grid;gap:5px}
-#pilotos-list .pilot-check-item{padding:4px 0;border-bottom:1px solid var(--border)}
-#pilotos-list .pilot-vigency-card{padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
-#pilotos-list .pilot-vigency-card section{margin-top:10px}
-#pilotos-list .pilot-vigency-card .pilot-date-pair{max-width:230px}
-@media(max-width:1100px){#panel-pilotos .pilotos-table-header{display:none!important}}
-`;document.head.appendChild(pilotTableStyle);
-contentEl.appendChild(pilotosPanel);
-
-const pilotosData = [];
-function pilotExpiryBadge(date){const a=PilotValidity.alerts({instructorExpiry:date})[0];if(!a)return '';return '<span class="pilot-days-pill" style="background:'+({danger:'#ef3333',orange:'#ff9900',warn:'#ffc600',ok:'#07883e'})[a.level]+';color:'+(a.level==='danger'||a.level==='ok'?'white':'#111')+'" title="'+(a.expired?'Vencido':a.days+' días restantes')+'">'+a.days+'d</span>';}
-function sortedPilotEntries(rows=pilotosData){return rows.map((p,i)=>({p,i})).sort((a,b)=>{const x=String(a.p.nombre||'').trim(),y=String(b.p.nombre||'').trim();return (!x)-(!y)||x.localeCompare(y,'es',{sensitivity:'base',numeric:true})||a.i-b.i;});}
-function renderPilotos(){
- const container=document.getElementById('pilotos-list');container.innerHTML='';const mobile=window.innerWidth<=1100;
+  {const edit=document.getElementById('edit-acum50-'+idx);if(edit)edit.value=Number(d.horas_acum_50||0).toFixe…3622 tokens truncated…t container=document.getElementById('pilotos-list');container.innerHTML='';const mobile=window.innerWidth<=1100;
  sortedPilotEntries().forEach(({p,i})=>{
   const dateCell=(date,code)=>'<div class="pilot-date-pair"><input type="date" data-preserve-empty class="maint-input" value="'+escapeRecord(date==='na'?'':date||'')+'" onchange="'+code+';renderPilotos();savePilotos()">'+pilotExpiryBadge(date)+'</div>';
   const direct=(key)=>dateCell(p[key], 'pilotosData['+i+'].'+key+'='+(key==='medico'?'PilotValidity.monthEnd(this.value.slice(0,7))':'this.value'));
@@ -2412,6 +2155,15 @@ itinerariosTab.addEventListener('click', () => {
   renderCalendar();
 });
 sidebarEl.appendChild(itinerariosTab);
+
+const practiceItineraryTab=document.createElement('div');
+practiceItineraryTab.className='aircraft-tab';
+practiceItineraryTab.setAttribute('role','button');
+practiceItineraryTab.tabIndex=0;
+practiceItineraryTab.innerHTML='<div class="tab-reg" style="font-size:10px">🧪 ITINERARIO DE PRÁCTICA</div>';
+practiceItineraryTab.addEventListener('click',()=>window.RolePortal?.open('itinerario-practica'));
+practiceItineraryTab.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();practiceItineraryTab.click();}});
+sidebarEl.appendChild(practiceItineraryTab);
 
 // ===== ITINERARIOS PANEL =====
 const itinerariosPanel = document.createElement('div');
@@ -3519,7 +3271,7 @@ function organizeSidebar(){
   if(node.matches('.aircraft-tab[data-idx]')||(node.classList.contains('sidebar-group-title')&&['MONOMOTOR','MULTIMOTOR','HELICÓPTERO'].includes(node.textContent.trim())))items.appendChild(node);
  });
  adminHdr.remove();
- sidebarEl.replaceChildren(dailyScheduleTab,resumenTab,group,pilotosTab,itinerariosTab,escuelaTab,empresaTab,statsTab);
+ sidebarEl.replaceChildren(dailyScheduleTab,resumenTab,group,pilotosTab,itinerariosTab,practiceItineraryTab,escuelaTab,empresaTab,statsTab);
  // Students inserts its tab immediately after Itinerario when its module loads.
 }
 organizeSidebar();
