@@ -18,7 +18,7 @@
   const cfg=window.ROLE_VIEW,has=a=>cfg.areas[a]===true;
   cfg.policy ||= HPBoxes.normalize({[cfg.page]:{actions:{view:true},areas:cfg.areas}});
   const send=(action,page)=>parent.postMessage({channel:cfg.channel,action,page},'*');
-  window.addEventListener('error',event=>{const inline=[...document.querySelectorAll('script[data-role-source]')].at(-1);send('load-error',(event.message||'Error al cargar la página.')+(event.filename?' ['+event.filename+':'+event.lineno+']':'')+(inline?' [paquete '+inline.dataset.roleSource+']':''));});
+  window.addEventListener('error',event=>{const inline=[...document.querySelectorAll('script[data-role-source]')].at(-1),localFrame=/^http:\/\/127\.0\.0\.1(?::|\/)/.test(document.referrer),sourceLine=localFrame&&event.filename==='about:srcdoc'?document.documentElement.outerHTML.split('\n')[event.lineno-1]?.trim().slice(0,400):'';send('load-error',(event.message||'Error al cargar la página.')+(event.filename?' ['+event.filename+':'+event.lineno+']':'')+(inline?' [paquete '+inline.dataset.roleSource+']':'')+(sourceLine?' :: '+sourceLine:''));});
   window.addEventListener('unhandledrejection',event=>send('load-error',event.reason?.message||'Error al cargar la página.'));
   const blocked=()=>{throw Error('Esta sesión es de consulta.');};
   let baseline,writeBusy=false,writeUncertain=false;const pending=new Map();
