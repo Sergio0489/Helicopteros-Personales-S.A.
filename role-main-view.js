@@ -18,7 +18,7 @@
   const cfg=window.ROLE_VIEW,has=a=>cfg.areas[a]===true;
   cfg.policy ||= HPBoxes.normalize({[cfg.page]:{actions:{view:true},areas:cfg.areas}});
   const send=(action,page)=>parent.postMessage({channel:cfg.channel,action,page},'*');
-  window.addEventListener('error',event=>send('load-error',(event.message||'Error al cargar la página.')+(event.filename?' ['+event.filename+':'+event.lineno+']':'')));
+  window.addEventListener('error',event=>{const inline=[...document.querySelectorAll('script[data-role-source]')].at(-1);send('load-error',(event.message||'Error al cargar la página.')+(event.filename?' ['+event.filename+':'+event.lineno+']':'')+(inline?' [paquete '+inline.dataset.roleSource+']':''));});
   window.addEventListener('unhandledrejection',event=>send('load-error',event.reason?.message||'Error al cargar la página.'));
   const blocked=()=>{throw Error('Esta sesión es de consulta.');};
   let baseline,writeBusy=false,writeUncertain=false;const pending=new Map();
@@ -226,7 +226,8 @@
   const draftScope='role:'+result.role+':'+page+':';
   const draftEntries=Object.fromEntries(Object.entries(window.DraftRecovery?.list()||{}).filter(([k,v])=>k.startsWith(draftScope)&&result.native.editable&&v.revision===String(result.native.operation??'')&&v.policy===JSON.stringify(result.native.policy)).map(([k,v])=>[k.slice(draftScope.length),v]));
   const cfg={...result.native,home:!!result.home,searchTarget:result.searchTarget,draftEntries,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
-  const add=code=>{const s=doc.createElement('script');s.textContent=code;doc.body.appendChild(s);};
+  let roleScriptIndex=0;
+  const add=code=>{const s=doc.createElement('script');s.dataset.roleSource=String(++roleScriptIndex);s.textContent=code;doc.body.appendChild(s);};
   add(boxesScript);add(draftScript);add(homeModel);add(homeUI);
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
