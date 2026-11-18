@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 34101)
+Total output lines: 1064
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -265,321 +268,7 @@
     .cal-day-num { font-size:9px; }
     .form-grid { grid-template-columns:1fr; }
   }
-  .pendientes-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
-  .alert-row { display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:7px 12px; border-bottom:1px solid var(--border); }
-  .alert-row:last-child { border-bottom:none; }
-  .maint-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .maint-row:last-child { border-bottom: none; }
-  .maint-input {
-    background: var(--panel2); border: 1px solid var(--dim); border-radius: var(--radius-sm);
-    color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 11px;
-    padding: 5px 8px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; width: 100%;
-  }
-  .maint-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,89,179,0.12); }
-  .maint-input::placeholder { color: var(--dim); }
-  .maint-date { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
-  .days-badge {
-    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
-    padding: 3px 9px; border-radius: 99px; white-space: nowrap; min-width: 44px; text-align: center;
-  }
-  .days-ok { background: rgba(0,229,153,0.1); color: var(--ok); }
-  .days-warn { background: rgba(255,170,0,0.1); color: var(--warn); }
-  .days-danger { background: rgba(255,68,85,0.1); color: var(--danger); }
-  .days-empty { background: var(--dim); color: var(--muted); }
-
-  /* Doc rows */
-  .doc-status-badge-inner { display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700; }
-  .dot { width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0; }
-  .doc-row { display: grid; grid-template-columns: 1fr 160px 110px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .doc-row:last-child { border-bottom: none; }
-  .doc-name-input {
-    background: transparent; border: none; border-bottom: 1px solid var(--dim);
-    color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 11px;
-    padding: 3px 0; outline: none; width: 100%;
-  }
-  .doc-name-input:focus { border-bottom-color: var(--accent); }
-  .doc-date-input {
-    background: var(--panel2); border: 1px solid var(--dim); border-radius: var(--radius-sm);
-    color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 10px;
-    padding: 4px 6px; outline: none; width: 100%;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  .doc-date-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,89,179,0.12); }
-  .doc-status-sel {
-    background: var(--panel2); border: 1px solid var(--dim);
-    color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 9px;
-    padding: 4px 6px; border-radius: var(--radius-sm); cursor: pointer; outline: none;
-    letter-spacing: 1px;
-  }
-  .add-row-btn {
-    margin-top: 10px; padding: 5px 12px;
-    background: transparent; border: 1px dashed var(--dim);
-    color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 10px;
-    letter-spacing: 1px; cursor: pointer; border-radius: var(--radius-sm); width: 100%;
-    transition: all 0.15s;
-  }
-  .add-row-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-  .save-btn {
-    margin-top: 24px; padding: 10px 24px;
-    background: linear-gradient(135deg, var(--accent2), var(--accent));
-    border: none; border-radius: var(--radius-sm);
-    color: #fff; font-family: 'Orbitron', sans-serif; font-size: 11px;
-    font-weight: 700; letter-spacing: 2px; cursor: pointer;
-    transition: opacity 0.15s, box-shadow 0.15s;
-    box-shadow: 0 3px 12px rgba(0,60,160,0.3);
-  }
-  .save-btn:hover { opacity: 0.9; box-shadow: 0 5px 18px rgba(0,60,160,0.4); }
-  .save-msg { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ok); margin-left: 12px; opacity: 0; transition: opacity 0.3s; }
-
-  /* Gauge */
-  .gauge-wrap { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; padding: 6px 0; }
-  .gauge-svg { width: 120px; height: 70px; }
-  .gauge-label { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--muted); text-align: center; }
-  .gauge-val { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; text-align: center; }
-
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 99px; }
-
-  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
-
-  /* Equipos de Emergencia */
-  .emerg-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .emerg-title {
-    font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 2px;
-    text-transform: uppercase; color: var(--accent2); margin-bottom: 8px;
-    display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
-  }
-  .emerg-title:hover { color: var(--accent); }
-  .emerg-body { display: block; }
-  .emerg-row { display: grid; grid-template-columns: 1fr 160px 110px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
-  .emerg-row:last-child { border-bottom: none; }
-  .emerg-label { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 700; color: var(--text); }
-
-  /* ===== HAMBURGER BUTTON (solo móvil) ===== */
-  .hamburger-btn {
-    display: none;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 12px;
-    flex-direction: column;
-    gap: 5px;
-    justify-content: center;
-    align-items: center;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-    position: relative;
-    z-index: 200;
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .hamburger-btn span {
-    display: block;
-    width: 24px;
-    height: 2px;
-    background: #fff;
-    border-radius: 2px;
-    pointer-events: none;
-  }
-
-  /* Overlay oscuro para cerrar el drawer */
-  .drawer-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 999;
-  }
-  .drawer-overlay.active { display: block; }
-
-  /* ===== MOBILE RESPONSIVE ===== */
-  @media (max-width: 768px) {
-    .hamburger-btn { display: flex; }
-
-    .summary-bar { flex-wrap: wrap; }
-    .summary-item { flex: 1 1 45%; padding: 10px 12px; }
-    .summary-value { font-size: 18px; }
-
-    .main { flex-direction: column; height: auto; }
-
-    /* Drawer lateral deslizante */
-    .sidebar {
-      position: fixed !important;
-      top: 0; left: 0;
-      width: 260px !important;
-      min-width: 0 !important;
-      height: 100vh !important;
-      max-height: 100vh !important;
-      z-index: 1000;
-      border-right: 1px solid var(--border);
-      box-shadow: 4px 0 24px rgba(0,0,0,0.25);
-      padding: 16px 0;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow-y: auto;
-      overflow-x: hidden;
-      white-space: normal;
-      transform: translateX(-100%);
-      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
-    }
-    .sidebar.open { transform: translateX(0); }
-
-    .sidebar-title { display: block; padding-top: 48px; }
-    .sidebar-group-title { display: block; }
-    .aircraft-tab {
-      display: block;
-      padding: 11px 16px;
-      border-left: 3px solid transparent;
-      border-bottom: none;
-      white-space: normal;
-    }
-    .aircraft-tab.active {
-      border-left-color: var(--accent);
-      border-bottom: none;
-    }
-    .tab-model { display: block; }
-    .tab-badge { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
-
-    .drawer-close-btn {
-      position: absolute;
-      top: 10px; right: 10px;
-      background: transparent;
-      border: none;
-      color: var(--muted);
-      font-size: 22px;
-      cursor: pointer;
-      padding: 4px 8px;
-      line-height: 1;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-
-    /* Pilotos: ocultar header de tabla en móvil (usamos tarjetas) */
-    .pilotos-table-header { display: none !important; }
-
-    /* Pendientes: 1 columna en móvil, filas verticales */
-    .pendientes-grid { grid-template-columns: 1fr !important; }
-    .alert-row {
-      grid-template-columns: 1fr !important;
-      gap: 6px;
-      padding: 10px 12px;
-    }
-    .alert-row > span { justify-self: start; }
-
-    /* Contenido sin scroll horizontal */
-    .content { padding: 10px; width: 100%; max-width: 100%; overflow-x: hidden; }
-    .card { padding: 10px; overflow: hidden; }
-    .aircraft-header { flex-direction: column; gap: 8px; }
-    .aircraft-reg { font-size: 18px; }
-
-    /* Grids de sección a una columna */
-    .section-grid { grid-template-columns: 1fr !important; }
-    .section-grid-2 { grid-template-columns: 1fr !important; }
-
-    /* Filas de mantenimiento: nombre arriba, fecha + badge abajo */
-    .maint-row {
-      grid-template-columns: 1fr auto !important;
-      grid-template-rows: auto auto;
-      gap: 4px;
-    }
-    .maint-row .maint-input:first-child { grid-column: 1 / -1; }
-
-    /* Filas de documentos: nombre arriba, fecha + badge abajo */
-    .doc-row {
-      grid-template-columns: 1fr auto !important;
-      grid-template-rows: auto auto;
-      gap: 4px;
-    }
-    .doc-row .doc-name-input { grid-column: 1 / -1; }
-    .doc-row .doc-date-input { min-width: 0; }
-
-    /* Filas emergencia */
-    .emerg-row { grid-template-columns: 1fr auto !important; gap: 4px; }
-    .emerg-row .emerg-label { font-size: 10px; }
-
-    /* Badges compactos */
-    .doc-status-badge { min-width: 0 !important; }
-    .doc-status-badge-inner { font-size: 8px !important; }
-    .days-badge { font-size: 9px !important; padding: 2px 6px !important; min-width: 36px; }
-
-    /* Inputs flexibles */
-    .doc-date-input, .maint-input, .doc-name-input { min-width: 0 !important; max-width: 100%; box-sizing: border-box; }
-
-    /* Header compacto */
-    .logo-sub { display: none; }
-    .logo-icon { width: 28px !important; height: 28px !important; font-size: 12px !important; }
-    .logo-text { font-size: 9px !important; letter-spacing: 1px !important; }
-    .clock { font-size: 12px !important; letter-spacing: 0 !important; font-weight: 700; }
-    .date-line { display: none; }
-    .status-dot { width: 7px !important; height: 7px !important; }
-    header { padding: 0 8px; gap: 6px; height: 52px !important; }
-    .header-right { gap: 6px; flex: 0 0 auto; }
-    header > .hamburger-btn { flex: 0 0 44px; padding: 10px; }
-    header > .logo { flex: 1 1 0; min-width: 0; gap: 0; }
-    header > .logo img { display: block; width: 100%; height: auto !important; max-height: 42px; object-fit: contain; margin-left: 0 !important; }
-    .clock { white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
-    .header-right .status-dot { flex-shrink: 0; }
-  }
-
-  @media (max-width: 480px) {
-    .summary-item { flex: 1 1 100%; }
-    .aircraft-reg { font-size: 16px; }
-    .section-grid { grid-template-columns: 1fr !important; }
-    .section-grid-2 { grid-template-columns: 1fr !important; }
-  }
-
-/* Uniform cards and wrapping labels */
-.section-grid,.section-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;grid-auto-rows:1fr}
-.section-grid>.card,.section-grid-2>.card{margin-top:0!important;height:100%;min-width:0;box-sizing:border-box;overflow:visible}
-.card-title{font-size:11px;white-space:normal;overflow-wrap:anywhere;line-height:1.5;min-height:30px}
-.field-label{white-space:normal;line-height:1.5;overflow-wrap:anywhere}
-.field-row{flex-wrap:wrap}.field-row>*{min-width:0}
-.card input,.card select,.status-select-wrap input{box-sizing:border-box;max-width:100%;min-width:0}
-.aircraft-header>*{min-width:0}.aircraft-reg{overflow-wrap:anywhere}
-.record-entry{padding:12px 0;border-bottom:1px solid var(--border);font-size:11px;overflow-wrap:anywhere}
-.record-heading,.record-actions,.inspection-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.inspection-controls{margin-bottom:12px}.inspection-controls>*{flex:1;min-width:120px}
-.record-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px}
-.record-grid small{display:block;font-size:10px;color:var(--muted);margin-bottom:5px}.record-grid b{font-size:12px}
-.record-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--accent);cursor:pointer;white-space:normal}
-.record-audit{padding:8px;margin:8px 0;background:var(--panel2);font-size:11px;overflow-wrap:anywhere}.record-entry summary{cursor:pointer;padding:8px 0;color:var(--accent)}
-.record-empty{font-size:11px;color:var(--muted)}
-.record-dialog{box-sizing:border-box;width:min(560px,calc(100% - 24px));max-height:90vh;overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);padding:20px}
-.record-dialog::backdrop{background:rgba(0,0,0,.45)}.record-dialog h3{font-size:16px;margin:0 0 18px}
-.record-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.record-form label{font-size:11px;color:var(--muted)}
-.record-form input,.record-form select,.record-form textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:9px;font-size:14px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text)}
-.record-form textarea{min-height:80px}.full-field{grid-column:1/-1}.record-error{color:var(--danger);font-size:12px;margin:12px 0}.record-actions{justify-content:flex-end}
-@media(max-width:1000px){.section-grid,.section-grid-2{grid-template-columns:1fr;grid-auto-rows:auto}.aircraft-header{flex-wrap:wrap}.status-select-wrap{width:100%}}
-@media(max-width:600px){.record-grid,.record-form{grid-template-columns:1fr}.record-dialog{padding:16px}.record-form input,.record-form select,.record-form textarea{font-size:16px}.field-row .field-label{flex-basis:100%}.card [style*="grid-template-columns:1fr 150px"]{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}.card{padding:14px}.record-btn{min-height:44px}}
-
-/* Compact aircraft dashboard: requested four-row order. */
-.aircraft-layout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch;margin-bottom:18px}
-.aircraft-layout>.card{min-width:0;margin:0!important;padding:12px;box-sizing:border-box}
-.aircraft-layout>.card[data-section="maintenance"]{grid-column:span 2}
-.aircraft-layout>.card[data-section="documents"]{grid-column:1 / -1}
-.emergency-equipment-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.equipment-dates{display:grid;gap:8px;margin-top:8px}.equipment-date{display:grid;grid-template-columns:1fr;gap:4px}.equipment-date label{font-size:10px}.equipment-date input{width:100%}
-@media(max-width:700px){.emergency-equipment-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:450px){.emergency-equipment-grid{grid-template-columns:1fr}}
-.aircraft-layout .card-title{font-size:10px;min-height:24px;margin-bottom:10px;line-height:1.5}
-.aircraft-layout input,.aircraft-layout textarea{box-sizing:border-box;min-width:0;max-width:100%}
-.aircraft-layout .field-row{gap:6px}
-.aircraft-layout .field-label{font-size:10px;line-height:1.4}
-.aircraft-layout .inspection-controls{gap:6px;flex-wrap:wrap}
-.aircraft-layout .record-grid{grid-template-columns:1fr;gap:6px}
-.aircraft-layout [id^="estatus-badge-"]{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;font-size:12px!important;padding:8px!important}
-.compact-table-scroll{overflow-x:auto;max-width:100%;padding-bottom:4px}
-.compact-table-content{min-width:440px}
-.aircraft-layout [data-section="flight"] .compact-table-content{min-width:320px}
-.aircraft-layout [data-section="orders"] .compact-table-content{min-width:580px}
-.aircraft-layout [id^="tac-log-"],.aircraft-layout [id^="inspection-log-"]{max-height:350px;overflow-y:auto;overflow-wrap:anywhere}
-.aircraft-layout [data-section="venc"] .field-row{flex-wrap:wrap}
-.aircraft-layout [data-section="venc"] [style*="display:flex"]{flex-wrap:wrap;gap:4px}
-@media(max-width:1000px){.aircraft-layout{grid-template-columns:1fr}.aircraft-layout>.card[data-section="maintenance"]{grid-column:auto}}
-
-.workshop-row{grid-column:1 / -1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}
+  .pendientes-grid { display:grid; gri…4101 tokens truncated…lumn:1 / -1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}
 .workshop-row>.card{margin:0!important;min-width:0;padding:12px;box-sizing:border-box}
 .equipment-column{display:flex;flex-direction:column;min-width:0}
 .equipment-column>.add-row-btn{margin-top:auto;padding-top:12px}
@@ -981,8 +670,8 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 .box-permissions-dialog [data-box-matrix]{min-height:0;overflow:auto;flex:1}.permission-page{border:1px solid #cbd9e7;border-radius:9px;margin:12px 0;overflow:hidden}.permission-page>summary{padding:13px;background:#edf4fb;color:#163a64;font-weight:700;cursor:pointer}.permission-page small{font-weight:400;color:#597189;margin-left:8px}.permission-page-mode{padding:12px}.permission-page-mode label{display:flex;align-items:center;justify-content:space-between;gap:12px}.permission-box-table{border-collapse:collapse;width:100%;font-size:12px}.permission-box-table th,.permission-box-table td{padding:8px 12px;border-top:1px solid #dae4ed;text-align:left}.permission-box-table td:last-child{width:180px}.permission-box-table select{width:100%;min-height:38px}.box-permission-help{font-size:12px;color:#536a7e;line-height:1.5}.box-permissions-dialog .role-footer{position:sticky;bottom:-22px;background:#fff;padding:12px;border-top:1px solid #d1dce5}.box-permissions-dialog [data-save]{background:#0059b3;color:white}.box-permissions-dialog [data-status]{font-size:12px}.permission-box-table select:disabled{opacity:.55}@media(max-width:600px){.permission-box-table td{padding:7px}.permission-box-table td:last-child{width:135px}.permission-box-table select{font-size:13px}.box-permissions-dialog .role-footer{bottom:-12px}}
 </style><style>.permission-aircraft{margin:12px;padding:12px;border:1px solid #cbd5e1;border-radius:8px;min-width:0}.permission-aircraft legend{font-size:12px;font-weight:700}.permission-aircraft label{font-size:12px;display:flex;align-items:center;gap:6px}.permission-aircraft input{width:16px;height:16px;flex:none}.permission-aircraft small{display:block;margin-top:10px;line-height:1.4}</style>
 <link rel="stylesheet" href="itinerary.css?v=20261118-practice-itinerary-1">
-<script defer src="functions/itinerary-engine.js?v=20261118-practice-clock-1"></script>
-<script defer src="itinerary-ui.js?v=20261118-practice-clock-2"></script>
+<script defer src="functions/itinerary-engine.js?v=20261118-honorarios-scheduling-1"></script>
+<script defer src="itinerary-ui.js?v=20261118-honorarios-scheduling-1"></script>
 </head>
 <body>
 <section id="access-screen"><div class="access-card"><img class="login-company-logo" src="receipt-logo.svg" width="360" height="115" alt="Helicópteros Personales S.A."><form id="login-form" hidden><label>Correo electrónico<input id="login-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required></label><button type="submit">Ingresar</button><button type="button" id="forgot-password">Olvidé mi contraseña</button><button type="button" id="create-account">Crear usuario</button></form><p id="access-message" role="status">Cargando tu sesión…</p><div id="import-panel" hidden><h2>Cargar el respaldo inicial</h2><p>Selecciona el archivo JSON descargado desde la versión de revisión.</p><input id="backup-file" type="file" accept="application/json,.json"><p id="import-summary"></p><button id="import-confirm" disabled>Importar respaldo y abrir el panel</button></div><button id="access-logout" hidden>Cerrar sesión</button></div></section>
@@ -1039,7 +728,7 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="functions/boxes.js?v=itinerary-1-20261020-profile-output-1"></script>
+<script src="functions/boxes.js?v=honorarios-20261118-1"></script>
 <script src="functions/monthly-winners.js?v=20261015-pilot-sort-1"></script>
 <script src="box-ui.js?v=20261015-pilot-sort-1"></script>
 <script src="functions/company.js?v=20261021-hour-configuration-1"></script>
@@ -1049,9 +738,10 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="home-search-model.js?v=20261021-hour-configuration-1"></script>
 <script src="home-ui.js?v=20261021-hour-configuration-1"></script>
 <script src="navigation-state.js?v=20261021-hour-configuration-1"></script>
-<script src="cloud.js?v=20261118-practice-itinerary-2"></script>
+<script src="cloud.js?v=20261118-honorarios-scheduling-2"></script>
+<script src="honorarios-ui.js?v=20261118-honorarios-4"></script>
 <script src="aircraft-report-recovery.js?v=20261104-report-recovery-1"></script>
-<script src="role-main-view.js?v=20261118-practice-clock-1"></script>
+<script src="role-main-view.js?v=20261118-honorarios-scheduling-2"></script>
 <script src="quotes-ui.js?v=20261117-charters-quotes-1"></script>
 <script src="role-portal.js?v=20261118-retired-practice-1"></script>
 <script src="registration.js?v=identity-review-20261111"></script>

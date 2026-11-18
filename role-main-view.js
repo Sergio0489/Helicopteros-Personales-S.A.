@@ -5,12 +5,12 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261118-practice-clock-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261118-honorarios-scheduling-3',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
  async function assets(page){
-  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js','functions/company.js','company-ui.js','functions/itinerary-engine.js','itinerary-ui.js','itinerary.css'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','honorarios-ui.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js','functions/company.js','company-ui.js','functions/itinerary-engine.js','itinerary-ui.js','itinerary.css'].map(asset)).catch(e=>{bundle=null;throw e;});
   if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
   return [...await bundle,page==='estadisticas'?await chartBundle:''];
  }
@@ -37,6 +37,9 @@
   const itineraryPending=new Map();
   window.itineraryRequest=(action,payload={})=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{itineraryPending.delete(id);reject(Error('No se pudo confirmar. Actualiza el itinerario antes de repetir el guardado.'));},35000);itineraryPending.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'itinerary-api',id,method:action,payload},'*');});
   window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='itinerary-result')return;const p=itineraryPending.get(e.data.id);if(!p)return;clearTimeout(p.timer);itineraryPending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.result);});
+  const schoolPending=new Map();
+  window.schoolRequest=(method,payload={})=>new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{schoolPending.delete(id);reject(Error('No se pudo confirmar. Actualiza la página antes de repetir la operación.'));},30000);schoolPending.set(id,{resolve,reject,timer});parent.postMessage({channel:cfg.channel,action:'school-api',id,method,payload},'*');});
+  window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==cfg.channel||e.data.action!=='school-result')return;const p=schoolPending.get(e.data.id);if(!p)return;clearTimeout(p.timer);schoolPending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.result);});
   const aircraftReports=new Map();
   // Correlate each attempt separately; mount keeps the report's backend idempotency key stable.
   window.reportAircraft=(aircraft,description,{signal,reportId,isNew=false,onPrepared}={})=>new Promise((resolve,reject)=>{
@@ -83,9 +86,10 @@
   document.getElementById('profile-menu')?.remove();document.getElementById('readonly-profile').onclick=()=>send('profile');document.getElementById('readonly-reason').onclick=()=>send('audit-reason');
   window.addEventListener('message',e=>{if(e.source===parent&&e.data?.channel===cfg.channel&&e.data.action==='profile-updated'){cfg.name=e.data.name;document.getElementById('readonly-name').textContent=cfg.name+' · '+cfg.role;document.getElementById('readonly-refresh').textContent='Actualizar datos';}});
   document.getElementById('readonly-refresh').onclick=()=>send('refresh');document.getElementById('readonly-logout').onclick=()=>{if(!window.hasDraftChanges?.()||confirm('Hay cambios pendientes. Cerrar sesión eliminará los borradores de este usuario en este dispositivo. ¿Continuar?'))send('logout');};
-  const safeAction=new Set(['select','statement','view']);
+  const safeAction=new Set(['select','statement','view','no-show-accept','no-show-remove']);
   function readonlyControl(e){
    if(e.matches('[data-pilot-aircraft-report]')||e.closest('[data-itinerary-control]'))return true;
+   if(e.matches('[data-honorarios-date]'))return true;
    const output=outputFor(e);if(output)return !!mayOutput(output);
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
@@ -158,15 +162,15 @@
   window.finishRoleView=()=>{
    cfg.pages=window.HomeSearchModel.sidebarOrdered(cfg.pages);
    document.getElementById('drawerCloseBtn').onclick=()=>closeDrawer();
-   const tabs={horario:dailyScheduleTab,pendientes:resumenTab,pilotos:pilotosTab,itinerario:itinerariosTab,escuela:escuelaTab,charter:empresaTab,estadisticas:statsTab};
-   const panels={horario:'panel-horario-dia',pendientes:'panel-resumen',pilotos:'panel-pilotos',itinerario:'panel-itinerarios',escuela:'panel-escuela',charter:'panel-empresa',estadisticas:'panel-estadisticas',estudiantes:'panel-estudiantes',bitacora:'panel-registro',pagos:'panel-registro-pago',saldos:'panel-alerta-saldos'};
+   const tabs={horario:dailyScheduleTab,pendientes:resumenTab,pilotos:pilotosTab,itinerario:itinerariosTab,escuela:escuelaTab,charter:empresaTab,estadisticas:statsTab,honorarios:document.getElementById('tab-honorarios')};
+   const panels={horario:'panel-horario-dia',pendientes:'panel-resumen',pilotos:'panel-pilotos',itinerario:'panel-itinerarios',escuela:'panel-escuela',charter:'panel-empresa',estadisticas:'panel-estadisticas',honorarios:'panel-honorarios',estudiantes:'panel-estudiantes',bitacora:'panel-registro',pagos:'panel-registro-pago',saldos:'panel-alerta-saldos'};
    if(tabs[cfg.page])tabs[cfg.page].click();
    document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.toggle('active',p.id===(panels[cfg.page]||'panel-0')));
    const sidebar=document.getElementById('sidebar-tabs'),aircraftGroup=document.getElementById('sidebar-aircraft-group');
    sidebar.replaceChildren();
    for(const p of cfg.pages){
     if(p.id==='aeronaves'&&cfg.page==='aeronaves'){sidebar.appendChild(aircraftGroup);aircraftGroup.open=true;continue;}
-    const b=document.createElement('div');b.className='aircraft-tab'+(p.id===cfg.page?' active':'');b.innerHTML='<div class="tab-reg"></div>';b.firstChild.textContent=({horario:'🕒 ',pendientes:'⚠️ ',aeronaves:'✈️ ',pilotos:'👨‍✈️ ',itinerario:'🗓️ ',estudiantes:'🎓 ',escuela:'🎓 ',charter:'🚁 ',estadisticas:'📊 ',saldos:'🚨 ',bitacora:'📋 ',pagos:'💳 '}[p.id]||'')+p.name.toLocaleUpperCase('es');b.tabIndex=0;b.setAttribute('role','button');b.onclick=()=>send('page',p.id);b.onkeydown=e=>{if(e.key==='Enter')b.click();};sidebar.appendChild(b);
+    const b=document.createElement('div');b.className='aircraft-tab'+(p.id===cfg.page?' active':'');b.innerHTML='<div class="tab-reg"></div>';b.firstChild.textContent=({horario:'🕒 ',pendientes:'⚠️ ',aeronaves:'✈️ ',pilotos:'👨‍✈️ ',itinerario:'🗓️ ',estudiantes:'🎓 ',escuela:'🎓 ',charter:'🚁 ',estadisticas:'📊 ',honorarios:'💵 ',saldos:'🚨 ',bitacora:'📋 ',pagos:'💳 '}[p.id]||'')+p.name.toLocaleUpperCase('es');b.tabIndex=0;b.setAttribute('role','button');b.onclick=()=>send('page',p.id);b.onkeydown=e=>{if(e.key==='Enter')b.click();};sidebar.appendChild(b);
    }
    document.querySelector('.summary-bar').hidden=cfg.page!=='aeronaves'||!has('Información y estatus');
    if(cfg.notice){const p=document.getElementById(panels[cfg.page]);p.replaceChildren();const c=document.createElement('div');c.className='card';c.textContent=cfg.notice;p.appendChild(c);}
@@ -212,7 +216,7 @@
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,companyModel,companyUI,itineraryEngine,itineraryUI,itineraryCSS,chart]=await assets(page);
+  const [html,dashboard,students,registro,honorariosUI,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,companyModel,companyUI,itineraryEngine,itineraryUI,itineraryCSS,chart]=await assets(page);
   const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
   const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS+'\n'+itineraryCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
@@ -227,7 +231,7 @@
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
-  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
+  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(honorariosUI);add('window.HonorariosUI.install();');add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HonorariosUI.installPersonalApproval();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
   let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0,reportStore,stopReportAuth=()=>{},reportQueue=Promise.resolve();const aircraftReportResponseKeys=new Map();
   const assertReportUser=()=>{if(!cfg.uid||window.firebase?.auth?.()?.currentUser?.uid!==cfg.uid)throw Error('La sesión cambió. Abre la aplicación con tu usuario antes de recuperar o enviar reportes.');};
   const reports=()=>{assertReportUser();if(!window.AircraftReportRecovery)throw Error('Actualiza la aplicación para recuperar reportes pendientes.');return reportStore||=window.AircraftReportRecovery.createStore({uid:cfg.uid});};
@@ -282,6 +286,10 @@
    if(!settled||!['itinerary-read','itinerary-calendar','itinerary-command','itinerary-notices'].includes(e.data.method))return;
     const method=e.data.method;
     Promise.resolve().then(()=>{if(!window.AccountRegistration?.api)throw Error('La conexión del itinerario aún no está disponible.');return window.AccountRegistration.api(method,e.data.payload);}).then(result=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,error:error.message},'*'));return;
+   }
+   if(e.data.action==='school-api'){
+    if(!settled||!['honorarios-read','honorarios-rates-save','no-show-own-read','no-show-accept','no-show-remove'].includes(e.data.method))return;
+    Promise.resolve().then(()=>window.AccountRegistration.api(e.data.method,e.data.payload||{})).then(result=>frame.contentWindow?.postMessage({channel,action:'school-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'school-result',id:e.data.id,error:error.message},'*'));return;
    }
    if(e.data.action==='aircraft-report-list'){
     if(!settled||result.role!=='Piloto')return;
