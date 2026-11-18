@@ -50,12 +50,16 @@
     if(event.action==='logout'){window.DraftRecovery?.clearUser();await firebase.auth().signOut();location.reload();}
     if(event.action==='load-error'&&!shell.querySelector('[data-view-error]')){const note=document.createElement('div');note.dataset.viewError='true';note.setAttribute('role','alert');note.textContent=event.message;actions(note);shell.prepend(note);}
    });
+   if(firebase.auth().currentUser?.uid===ADMIN_UID&&page==='itinerario-practica'){
+    const back=document.createElement('button');back.type='button';back.textContent='← Volver a la aplicación';back.style.cssText='margin:12px 16px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);cursor:pointer';
+    back.onclick=()=>{dispose?.();dispose=null;shell.hidden=true;document.getElementById('dashboard-app').hidden=false;};shell.prepend(back);
+   }
    prospectEntry(result);
    window.PageMemory?.rememberRole(home?'inicio':page);
   }catch(e){msg.textContent='No se pudo abrir el diseño principal: '+e.message;shell.replaceChildren(msg);actions(shell);}
   finally{busy=false;}
  }
- async function open(){const previous=document.getElementById('role-legacy-portal');if(previous)previous.hidden=true;if(firebase.auth().currentUser?.uid===ADMIN_UID)return;document.getElementById('dashboard-app').hidden=true;document.getElementById('access-screen').hidden=true;const waiting=document.getElementById('account-waiting');if(waiting)waiting.hidden=true;await load(selected);}
+ async function open(page=''){const previous=document.getElementById('role-legacy-portal');if(previous)previous.hidden=true;const director=firebase.auth().currentUser?.uid===ADMIN_UID;if(director&&page!=='itinerario-practica')return;document.getElementById('dashboard-app').hidden=true;document.getElementById('access-screen').hidden=true;const waiting=document.getElementById('account-waiting');if(waiting)waiting.hidden=true;await load(page||selected);}
  window.RolePortal={open};
 })();
 
