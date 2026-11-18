@@ -69,12 +69,13 @@ function storeFlights(data,state){
 }
 function notice(data,event,now,id){if(!event)return;const s=setup(data);s.notices ||= [];if(s.notices.some(n=>n.id===id))return;s.notices.push({...copy(event),id,createdAt:now});s.notices=s.notices.slice(-500);}
 function changeNotice(data,before,after,published,now,id,all=false){const n=E.publishedChange(before,after,published);if(n){if(all)n.recipients=[{kind:'group',id:'all'}];notice(data,n,now,id);}}
-function cleanFlight(input,id,now){
+function cleanFlight(input,id,now,allowEmptyNote=false){
  if(!input||typeof input!=='object'||Array.isArray(input))error('Vuelo no válido.');
- for(const [field,label,max]of [['aircraft','Aeronave',40],['pilot','Piloto',200],['start','Hora de inicio',5],['end','Hora de culminación',5],['flightType','Tipo de vuelo',40],['route','Ruta o destino',200],['note','Observaciones',1000]]){
+ for(const [field,label,max]of [['aircraft','Aeronave',40],['pilot','Piloto',200],['start','Hora de inicio',5],['end','Hora de culminación',5],['flightType','Tipo de vuelo',40],['route','Ruta o destino',200],...allowEmptyNote?[]:[['note','Observaciones',1000]]]){
   if(typeof input[field]!=='string'||!input[field].trim())error('Completa el campo '+label+'.');
   if(input[field].trim().length>max)error(label+': máximo '+max+' caracteres.');
  }
+ if(allowEmptyNote&&input.note!=null&&(typeof input.note!=='string'||input.note.trim().length>1000))error('Observaciones: máximo 1000 caracteres.');
  if(!Object.hasOwn(E.flightTypes,input.flightType))error('Vuelo no válido.');
  return {id,aircraft:key(input.aircraft),pilot:String(input.pilot||''),studentId:String(input.studentId||''),start:String(input.start||''),end:String(input.end||''),slot:String(input.slot||'b1'),flightType:String(input.flightType||'privado'),socioName:String(input.socioName||'').trim().slice(0,120),route:input.route.trim(),note:String(input.note||'').trim().slice(0,1000),created:Date.parse(now)};
 }
@@ -118,7 +119,7 @@ function apply(data,actor,body,now){
  }else if(action==='request'){
   if(!rights.request)error(rights.role==='pilot'&&!rights.pilot?'Vincula tu usuario con un expediente de piloto.':'El director debe habilitar «Solicitudes de vuelos» para tu cargo.');
   const old=d.requests.find(q=>q.id===body.id);if(body.id&&(!old||old.pilot!==rights.pilot||old.status==='approved'||d.cancelled.includes(old.id)))error('No puedes modificar esta solicitud.');
-  let q=cleanFlight({...body.flight,pilot:rights.pilot},old?.id||'request-'+body.actionId,now);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
+  let q=cleanFlight({...body.flight,pilot:rights.pilot},old?.id||'request-'+body.actionId,now,true);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
   q=E.normalizeRequest(state,q);const reason=E.requestError(state,q);if(reason)error(reason);assertPilot(data,q,dte,now);q.sourceSlots=E.sourceSnapshot(state.aircraft.find(a=>a.id===q.aircraft),q);
   d.requests=d.requests.filter(x=>x.id!==q.id);d.requests.push(q);
  }else if(action==='cancel-request'){
