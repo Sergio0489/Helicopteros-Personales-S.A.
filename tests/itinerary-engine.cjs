@@ -218,7 +218,9 @@ test('manual multi and helicopter flights are published unchanged and protect pi
  {id:'manual-heli',aircraft:'HP11BL',pilot:'d',start:'08:00',end:'09:00',flightType:'general',fixed:true}
  ];s.requests=[request('q1','a'),{...request('q2','d'),start:'08:00',end:'10:00'}];
  const before=structuredClone(s.confirmed),r=H.simulate(s);
- assert.deepEqual(r.assignments,before);assert.ok(r.results.every(q=>q.status==='waiting'));
+ assert.deepEqual(r.assignments.filter(q=>q.fixed),before);assert.ok(r.results.every(q=>q.status==='assigned'));
+ for(const fixed of before)for(const scheduled of r.assignments.filter(q=>!q.fixed&&q.pilot===fixed.pilot))assert.equal(H.overlaps(scheduled,fixed),false);
+ assert.ok(r.results.every(q=>H.minutes(q.end)-H.minutes(q.start)>=H.MIN_ASSIGNMENT_MINUTES));
 });
 
 test('eleven requested flight types are available in the specified order',()=>{
