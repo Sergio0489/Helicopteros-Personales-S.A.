@@ -77,6 +77,9 @@ function applyChanges(current,before,after,policy,account){
  const check=(path,context)=>{if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
    const pilot=root.pilotos?.[path[1]];
    if(!pilot||account.syncStatus!=='matched'||account.recordKind!=='pilot'||pilot.id!==account.recordId)throw Error('Solo puedes modificar tu expediente de piloto autorizado.');
+  }if(account.role==='Administrativo'&&path[0]==='school'&&path[1]==='personnel'){
+   const person=root.school?.personnel?.[path[2]];
+   if(context.creating||account.syncStatus!=='matched'||account.recordKind!=='personnel'||person?.id!==account.recordId||person?.authUid!==account.uid)throw Error('Solo puedes consultar o modificar tu propio expediente de personal.');
   }if(account.role==='Estudiante'){
    const student=path[0]==='school'&&path[1]==='students',client=path[0]==='school'&&path[1]==='registry'&&path[2]==='clients';
    const person=student?root.school?.students?.[path[2]]:client?root.school?.registry?.clients?.[path[3]]:null;

@@ -1005,14 +1005,33 @@ function renderSeguimiento(idx) {
 }
 
 async function resolverTarea(idx, mi) {
-  const previous = structuredClone(state[idx]);
+  const before=structuredClone(state[idx]);
+  const reg=fleet[idx].reg;
   const today = fechaVista(panamaISO());
   state[idx].mantenimiento[mi].resuelto = true;
   state[idx].mantenimiento[mi].fecha_resuelto = today;
-  const saved = await savePanel(idx);
-  if (!saved) state[idx] = previous;
+  const draftKey='aircraft:'+reg;
+  let saved=false;
+  try{
+    window.DraftRecovery?.capture(draftKey);
+    saved=await saveData(reg,structuredClone(state[idx]));
+    if(saved)await window.DraftRecovery?.clear(draftKey);
+  }catch(e){showCloudError(e);}
+  if(!saved){
+    state[idx]=before;
+    refreshPanel(idx);
+    const msg=document.getElementById('save-msg-'+idx);
+    if(msg){msg.textContent='✗ Error al guardar';msg.style.color='var(--danger)';msg.style.opacity='1';}
+    return false;
+  }
+  aircraftDirty.delete(idx);
   renderMaintList(idx, state[idx].mantenimiento);
   renderBitacora(idx, state[idx].mantenimiento);
+  const msg=document.getElementById('save-msg-'+idx);
+  if(msg){msg.textContent='✓ Guardado';msg.style.color='var(--ok)';msg.style.opacity='1';setTimeout(()=>msg.style.opacity='0',2500);}
+  updateUndoButtons();
+  updateSummary();
+  return true;
 }
 
 function renderBitacora(idx, items) {

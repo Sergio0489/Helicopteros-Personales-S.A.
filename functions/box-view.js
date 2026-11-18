@@ -27,6 +27,7 @@ function boxView(data,account,rawPolicy,page){
   const own=account.syncStatus==='matched'&&account.recordKind==='pilot'?account.recordId:null;
   sources.pilotos=(sources.pilotos||[]).filter(p=>own&&p.id===own);
  }
+ if(account.role==='Administrativo'&&sources.school){sources.school.personnel=(sources.school.personnel||[]).filter(p=>account.syncStatus==='matched'&&account.recordKind==='personnel'&&p.id===account.recordId&&p.authUid===account.uid);}
  if(account.role==='Estudiante'){
   sources.school ||= {};sources.school.students=(sources.school.students||[]).filter(p=>account.recordKind==='student'&&account.syncStatus==='matched'&&p.id===account.recordId);
   sources.pilotos=[];sources.itinerarios=[];
