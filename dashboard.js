@@ -2413,15 +2413,6 @@ itinerariosTab.addEventListener('click', () => {
 });
 sidebarEl.appendChild(itinerariosTab);
 
-const practiceItineraryTab=document.createElement('div');
-practiceItineraryTab.className='aircraft-tab';
-practiceItineraryTab.setAttribute('role','button');
-practiceItineraryTab.tabIndex=0;
-practiceItineraryTab.innerHTML='<div class="tab-reg" style="font-size:10px">🧪 ITINERARIO DE PRÁCTICA</div>';
-practiceItineraryTab.addEventListener('click',()=>window.RolePortal?.open('itinerario-practica'));
-practiceItineraryTab.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();practiceItineraryTab.click();}});
-sidebarEl.appendChild(practiceItineraryTab);
-
 // ===== ITINERARIOS PANEL =====
 const itinerariosPanel = document.createElement('div');
 itinerariosPanel.className = 'aircraft-panel';
@@ -3528,7 +3519,7 @@ function organizeSidebar(){
   if(node.matches('.aircraft-tab[data-idx]')||(node.classList.contains('sidebar-group-title')&&['MONOMOTOR','MULTIMOTOR','HELICÓPTERO'].includes(node.textContent.trim())))items.appendChild(node);
  });
  adminHdr.remove();
- sidebarEl.replaceChildren(dailyScheduleTab,resumenTab,group,pilotosTab,itinerariosTab,practiceItineraryTab,escuelaTab,empresaTab,statsTab);
+ sidebarEl.replaceChildren(dailyScheduleTab,resumenTab,group,pilotosTab,itinerariosTab,escuelaTab,empresaTab,statsTab);
  // Students inserts its tab immediately after Itinerario when its module loads.
 }
 organizeSidebar();
