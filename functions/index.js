@@ -140,7 +140,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(report.status){res.status(report.status).json({error:report.error});return;}
   res.json(report);return;
  }
- if(String(action||'').startsWith('itinerary-practice-')){res.json(await require('./itinerary-practice').handle(db,{user,account:actorAccount,director:isDirector},req.body));return;}
+ if(String(action||'').startsWith('itinerary-practice-')){res.status(410).json({error:'El itinerario de práctica ya no está disponible.'});return;}
  if(String(action||'').startsWith('itinerary-')){res.json(await require('./itinerary-service').handle(db,{user,account:actorAccount,director:isDirector},req.body));return;}
  if(action==='director-save'){
   if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}
@@ -179,14 +179,8 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(account?.identityReviewPending||account?.syncStatus==='duplicate-identity'){res.status(403).json({error:'Tu identidad está pendiente de revisión por el Director. Podrás entrar cuando confirme el expediente.'});return;}
   if(account?.syncedOperation&&root?.operation!==account.syncedOperation)root=(await db.ref('dashboard').get()).val();
   const data=root?.payload?JSON.parse(root.payload):{};
-  const policy=policyFor(data,account),practicePage={id:'itinerario-practica',name:'Itinerario de práctica'},pages=[...visiblePages(policy),practicePage],isPractice=req.body.page==='itinerario-practica';
+  const policy=policyFor(data,account),pages=visiblePages(policy);
   if(req.body.page&&!pages.some(p=>p.id===req.body.page)){res.status(403).json({error:'No tienes permiso para consultar esta página.'});return;}
-  if(isPractice&&req.body.layout==='main'){
-   const practicePolicy=structuredClone(policy);practicePolicy.itinerario={actions:{view:true,edit:false},areas:{Calendario:true,'Programación de vuelos':true},boxes:{planner:{view:true,edit:false},calendar:{view:true,edit:false},flights:{view:true,edit:false},requests:{view:true,edit:false},create:{view:true,edit:false}}};
-   const native={...boxView(data,account,practicePolicy,'itinerario'),operation:root.operation,uid:user.uid,practice:true};
-   res.json({prospectAccess:prospectScope,mode:'box-permissions',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native});return;
-  }
-  if(isPractice){res.status(403).json({error:'Abre el itinerario temporal desde la aplicación.'});return;}
   res.json({prospectAccess:prospectScope,mode:'box-permissions',role:account?.role||'Estudiante',name:account?.profile?.name||user.displayName||'',pages,native:req.body.page&&req.body.layout==='main'?{...boxView(data,account,policy,req.body.page),operation:root.operation,uid:user.uid}:null,page:req.body.page&&req.body.layout!=='main'?projectPage(boxView(data,account,policy,req.body.page).data,account,policy,req.body.page):null});return;
  }
  if(action==='box-save'){

@@ -59,7 +59,7 @@
   }catch(e){msg.textContent='No se pudo abrir el diseño principal: '+e.message;shell.replaceChildren(msg);actions(shell);}
   finally{busy=false;}
  }
- async function open(page=''){const previous=document.getElementById('role-legacy-portal');if(previous)previous.hidden=true;const director=firebase.auth().currentUser?.uid===ADMIN_UID;if(director&&page!=='itinerario-practica')return;document.getElementById('dashboard-app').hidden=true;document.getElementById('access-screen').hidden=true;const waiting=document.getElementById('account-waiting');if(waiting)waiting.hidden=true;await load(page||selected);}
+ async function open(page=''){const previous=document.getElementById('role-legacy-portal');if(previous)previous.hidden=true;if(firebase.auth().currentUser?.uid===ADMIN_UID)return;document.getElementById('dashboard-app').hidden=true;document.getElementById('access-screen').hidden=true;const waiting=document.getElementById('account-waiting');if(waiting)waiting.hidden=true;await load(page||selected);}
  window.RolePortal={open};
 })();
 
