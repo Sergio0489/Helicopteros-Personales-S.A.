@@ -18,13 +18,15 @@ function items(root){
  return [...Object.entries(root.accountRequests||{}).filter(([,a])=>!a.mergedInto).map(([uid,a])=>({key:'user:'+uid,uid,name:a.profile?.name||'',email:a.email||'',identity:a.profile?.identity||'',role:a.role||'Estudiante',assigned:!!a.assignedAt})),...rows(data).map(({kind,record:r},index)=>({key:kind+':'+(r.id||'index-'+index),kind,id:r.id,index,personKey:personKey(data,kind,r.id),uid:r.authUid||'',name:r.nombre||r.name||'',email:r.email||'',identity:r.identity||''}))];
 }
 function groups(root){
- const all=items(root),parents=all.map((_,i)=>i),find=i=>parents[i]===i?i:parents[i]=find(parents[i]);const seen=new Map();
- all.forEach((x,i)=>{for(const key of [x.personKey&&'p:'+x.personKey,x.uid&&'u:'+x.uid,email(x.email)&&'e:'+email(x.email),identity(x.identity)&&'i:'+identity(x.identity),personName(x.name)&&'n:'+personName(x.name)].filter(Boolean)){if(seen.has(key))parents[find(i)]=find(seen.get(key));else seen.set(key,i);}});
+ const data=JSON.parse(root.dashboard?.payload||'{}'),all=items(root),parents=all.map((_,i)=>i),find=i=>parents[i]===i?i:parents[i]=find(parents[i]);const seen=new Map();
+ all.forEach((x,i)=>{for(const key of [x.personKey&&'p:'+x.personKey,x.uid&&'u:'+x.uid,email(x.email)&&'e:'+email(x.email),identity(x.identity)&&'i:'+identity(x.identity)].filter(Boolean)){if(seen.has(key))parents[find(i)]=find(seen.get(key));else seen.set(key,i);}});
  const grouped=new Map();all.forEach((x,i)=>{const k=find(i);if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(x);});
  return [...grouped.values()].filter(g=>{const records=g.filter(x=>x.kind),uids=new Set(g.filter(x=>x.key.startsWith('user:')).map(x=>x.uid));
   const oneOwner=records.length&&records.every(x=>x.uid&&x.uid===records[0].uid),onePerson=records.length&&records.every(x=>x.personKey&&x.personKey===records[0].personKey);
   const different=g.some(x=>x.kind)&&['name','email','identity'].some(key=>new Set(g.map(x=>key==='identity'?identity(x[key]):email(x[key]).replace(/\s+/g,' ')).filter(Boolean)).size>1);
-  return different||uids.size>1||records.some(x=>!x.uid)&&uids.size>0||records.length>1&&!oneOwner&&!onePerson||['student','pilot','personnel','client'].some(k=>records.filter(x=>x.kind===k).length>1);
+  const uid=records.length&&records[0].uid,account=uid&&root.accountRequests?.[uid],desiredKind=account?.role==='Piloto'?'pilot':account?.role==='Estudiante'?'student':'personnel',pointer=uid&&data.school?.userProfiles?.[uid]?.dossier;
+  const hasDesiredRecord=records.some(x=>x.kind===desiredKind),pointerMismatch=!!uid&&records.length>1&&(!pointer||hasDesiredRecord&&pointer.kind!==desiredKind||!records.some(x=>x.kind===pointer.kind&&x.id===pointer.id));
+  return different||uids.size>1||records.some(x=>!x.uid)&&uids.size>0||records.length>1&&!onePerson||pointerMismatch||['student','pilot','personnel','client'].some(k=>records.filter(x=>x.kind===k).length>1);
  }).map(g=>({members:g,uids:[...new Set(g.filter(x=>x.key.startsWith('user:')).map(x=>x.uid))],role:g.some(x=>x.key.startsWith('user:'))?highest(g.filter(x=>x.key.startsWith('user:')&&x.assigned).map(x=>x.role)):null}));
 }
 function revision(root,group){
@@ -65,7 +67,7 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
  const mappings=[];for(const kind of ['student','pilot','personnel','client']){
   const source=originals.filter(x=>x.kind===kind).sort((a,b)=>uid?(b.record.authUid===uid)-(a.record.authUid===uid):(b.key===primary.key)-(a.key===primary.key));if(!source.length)continue;
   let target=clone(source[0].record);for(const {record:r}of source.slice(1)){for(const [key,value]of Object.entries(r)){if(personal.has(key)){if(!target[key])target[key]=clone(value);}else target[key]=key in target?combine(target[key],value,kind+'.'+key):clone(value);}mappings.push({kind,from:r.id,to:target.id});}
-  if(uid){target.authUid=uid;target.directoryKind=role==='Piloto'?'pilot':role==='Estudiante'?'student':'personnel';}target.email=principalEmail;linkedIds.add(kind+':'+target.id);
+  if(uid){target.authUid=uid;target.directoryKind=kind;}target.email=principalEmail;linkedIds.add(kind+':'+target.id);
   const list=kind==='pilot'?data.pilotos:kind==='student'?data.school.students:kind==='personnel'?data.school.personnel:data.school.registry.clients;
   const ids=new Set(source.map(x=>x.record.id));const at=list.findIndex(x=>ids.has(x.id));list.splice(at,1,target);for(let i=list.length-1;i>=0;i--)if(i!==at&&ids.has(list[i].id))list.splice(i,1);
  }
@@ -90,7 +92,7 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
  }
  for(const u of ranked){accounts[u].syncedOperation=null;if(u!==uid){accounts[u].mergedInto=uid;accounts[u].mergedAt=now;accounts[u].mergedBy=actorUid;accounts[u].role='Estudiante';accounts[u].assignedAt=null;}}
  if(uid)Object.assign(accounts[uid],{role,profile,syncedOperation:null,identityReviewPending:false,mergedAt:now});
- data.school ||= {};data.school.userProfiles ||= {};for(const u of ranked)if(u!==uid)delete data.school.userProfiles[u];if(uid)delete data.school.userProfiles[uid]?.dossier;
+ data.school ||= {};data.school.userProfiles ||= {};for(const u of ranked)if(u!==uid)delete data.school.userProfiles[u];if(uid){const desiredKind=role==='Piloto'?'pilot':role==='Estudiante'?'student':'personnel',preferred=linked.find(x=>x.kind===desiredKind)||linked.find(x=>x.kind===primary?.kind&&x.record.id===primary?.id)||linked[0];data.school.userProfiles[uid]={...data.school.userProfiles[uid],dossier:preferred?{kind:preferred.kind,id:preferred.record.id}:undefined};if(!preferred)delete data.school.userProfiles[uid].dossier;}
  data.school.identityLinks ||= {};const selectedRefs=new Set(originals.map(x=>x.kind+':'+x.record.id));for(const [key,value]of Object.entries(data.school.identityLinks))if((value.records||[]).some(r=>selectedRefs.has(r.kind+':'+r.id)))delete data.school.identityLinks[key];
  data.school.identityLinks[personId]={records:linked.map(x=>({kind:x.kind,id:x.record.id})),mergedAt:now};
  out.dashboard.payload=JSON.stringify(data);
