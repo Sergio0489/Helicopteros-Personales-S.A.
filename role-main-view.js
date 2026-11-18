@@ -18,7 +18,7 @@
   const cfg=window.ROLE_VIEW,has=a=>cfg.areas[a]===true;
   cfg.policy ||= HPBoxes.normalize({[cfg.page]:{actions:{view:true},areas:cfg.areas}});
   const send=(action,page)=>parent.postMessage({channel:cfg.channel,action,page},'*');
-  window.addEventListener('error',event=>send('load-error',event.message||'Error al cargar la página.'));
+  window.addEventListener('error',event=>send('load-error',(event.message||'Error al cargar la página.')+(event.filename?' ['+event.filename+':'+event.lineno+']':'')));
   window.addEventListener('unhandledrejection',event=>send('load-error',event.reason?.message||'Error al cargar la página.'));
   const blocked=()=>{throw Error('Esta sesión es de consulta.');};
   let baseline,writeBusy=false,writeUncertain=false;const pending=new Map();
@@ -288,7 +288,8 @@
     Promise.resolve().then(()=>{if(!window.AccountRegistration?.api)throw Error('La conexión del itinerario aún no está disponible.');return window.AccountRegistration.api(method,e.data.payload);}).then(result=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'itinerary-result',id:e.data.id,error:error.message},'*'));return;
    }
    if(e.data.action==='school-api'){
-    if(!settled||!['honorarios-read','honorarios-rates-save','no-show-own-read','no-show-accept','no-show-remove'].includes(e.data.method))return;
+    const readOnly=['honorarios-read','no-show-own-read'].includes(e.data.method);
+    if((!settled&&!readOnly)||!['honorarios-read','honorarios-rates-save','no-show-own-read','no-show-accept','no-show-remove'].includes(e.data.method))return;
     Promise.resolve().then(()=>window.AccountRegistration.api(e.data.method,e.data.payload||{})).then(result=>frame.contentWindow?.postMessage({channel,action:'school-result',id:e.data.id,result},'*')).catch(error=>frame.contentWindow?.postMessage({channel,action:'school-result',id:e.data.id,error:error.message},'*'));return;
    }
    if(e.data.action==='aircraft-report-list'){

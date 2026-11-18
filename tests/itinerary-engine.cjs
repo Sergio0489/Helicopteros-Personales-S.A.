@@ -361,7 +361,7 @@ test('night rule uses 18:30 boundary and preserves whole mixed and late director
 });
 test('night minimum is checked after aircraft assignment, not based on requested aircraft',()=>{
  const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.nightEnabled=true;s.aircraft.forEach(a=>a.night=true);
- s.requests=[{...request('q1','a','privado','HP1907','b5'),start:'18:30',end:'19:00'},{...request('q2','b','privado','HP1819','b5'),start:'19:00',end:'20:00'}];
+ s.requests=[{...request('q1','a','privado','HP1907'),start:'17:00',end:'18:30'},{...request('q2','b','privado','HP1819'),start:'18:30',end:'20:00'}];
  const r=H.simulate(s);assert.equal(r.assignments.length,2);assert.equal(new Set(r.assignments.map(q=>q.aircraft)).size,1);
  assert.equal(H.nightPublication(s,r.assignments).ready,false);
 });
