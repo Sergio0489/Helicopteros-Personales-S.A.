@@ -9,6 +9,10 @@ const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 
 async function recipients(publication,accounts,auth,directorUid){
  const found=new Set(),add=value=>{const valid=address(value);if(valid)found.add(valid);};
+ if(publication.practice===true){
+  let next=null;do{const page=await auth.listUsers(1000,next);next=page.pageToken||null;for(const user of page.users)if(!user.disabled&&user.emailVerified)add(user.email);}while(next);
+  return [...found].sort();
+ }
  for(const value of publication.pilotRecipients||[])add(value);
  const eligible=Object.entries(accounts||{}).filter(([uid,account])=>!account?.mergedInto&&(uid===directorUid||!!account?.assignedAt&&['Director','Administrativo','Piloto'].includes(account.role)));
  const userIds=new Set(eligible.map(([uid])=>uid));if(directorUid)userIds.add(directorUid);
@@ -20,18 +24,19 @@ async function recipients(publication,accounts,auth,directorUid){
 function message(publication,from,to){
  const date=String(publication.date||''),match=date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
  if(!match)throw Error('Fecha de publicación no válida.');
- const dateLabel=match[3]+'/'+match[2]+'/'+match[1],title='Horario de vuelo publicado · '+dateLabel;
+ const dateLabel=match[3]+'/'+match[2]+'/'+match[1],title=(publication.practice?'SIMULACIÓN · Horario de práctica publicado · ':'Horario de vuelo publicado · ')+dateLabel;
  const flights=(publication.flights||[]).map(f=>({start:clean(f.start,5),end:clean(f.end,5),aircraft:clean(f.aircraft,40),pilot:clean(f.pilot,160),student:clean(f.student,160),type:clean(f.type,80),route:clean(f.route,200),notes:clean(f.notes,500)})).sort((a,b)=>a.start.localeCompare(b.start)||a.aircraft.localeCompare(b.aircraft));
  const rows=flights.map((f,i)=>`${i+1}. ${f.start||'—'}–${f.end||'—'} · ${f.aircraft||'Aeronave sin indicar'}\n   Piloto: ${f.pilot||'—'} · Tipo: ${f.type||'—'}${f.student?' · Estudiante/cliente: '+f.student:''}${f.route?'\n   Ruta: '+f.route:''}${f.notes?'\n   Observaciones: '+f.notes:''}`);
- const intro=title+'\n\n'+(rows.length?rows.join('\n\n'):'No hay vuelos programados para este día.')+'\n\nConsulta el horario en la app: '+APP_URL;
+ const intro=title+'\n\n'+(publication.practice?'Ejercicio temporal de reunión. No es un horario oficial y no reserva vuelos.\n\n':'')+(rows.length?rows.join('\n\n'):'No hay vuelos programados para este día.')+'\n\nConsulta el horario en la app: '+APP_URL;
  const table=flights.length?`<table style="width:100%;border-collapse:collapse"><thead><tr>${['Hora','Aeronave','Piloto','Estudiante/cliente','Tipo','Ruta','Observaciones'].map(x=>`<th style="text-align:left;padding:9px;border-bottom:2px solid #dce5ef">${x}</th>`).join('')}</tr></thead><tbody>${flights.map(f=>`<tr>${[`${f.start||'—'}–${f.end||'—'}`,f.aircraft||'—',f.pilot||'—',f.student||'—',f.type||'—',f.route||'—',f.notes||'—'].map(x=>`<td style="vertical-align:top;padding:9px;border-bottom:1px solid #e4eaf1">${escape(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p>No hay vuelos programados para este día.</p>';
  const domain=String(from).split('@')[1]||'localhost',deliveryKey=hash(publication.id+'|'+address(to)).slice(0,24);
- return {from:{name:'Helicópteros Personales',address:from},to,subject:title,messageId:`<hp-itinerary-${deliveryKey}@${domain}>`,text:intro,html:`<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#172b4d;margin:0;padding:24px"><main style="max-width:960px;margin:auto"><h1 style="font-size:22px">${escape(title)}</h1>${table}<p><a href="${APP_URL}">Abrir horario en la app</a></p></main></body></html>`,disableFileAccess:true,disableUrlAccess:true};
+ const banner=publication.practice?'<p style="padding:12px;background:#fff3cd;border:1px solid #edcf6e"><b>SIMULACIÓN DE REUNIÓN</b> · Temporal; no es oficial y no reserva vuelos.</p>':'';
+ return {from:{name:'Helicópteros Personales'+(publication.practice?' · SIMULACIÓN':''),address:from},to,subject:title,messageId:`<hp-itinerary-${deliveryKey}@${domain}>`,text:intro,html:`<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#172b4d;margin:0;padding:24px"><main style="max-width:960px;margin:auto">${banner}<h1 style="font-size:22px">${escape(title)}</h1>${table}<p><a href="${APP_URL}">Abrir horario en la app</a></p></main></body></html>`,disableFileAccess:true,disableUrlAccess:true};
 }
 
 async function deliver({db,event,from,recipients:targets,send,report=()=>{},now=()=>Date.now()}){
  const publication=event.data?.val(),id=event.params?.publicationId;
- if(!publication||publication.id!==id||!/^publication-\d{4}-\d{2}-\d{2}$/.test(id)||!/^\d{4}-\d{2}-\d{2}$/.test(publication.date)||!Array.isArray(publication.flights))throw Error('Evento de publicación del horario no válido.');
+ if(!publication||publication.id!==id||!(/^(publication-\d{4}-\d{2}-\d{2}|practice-\d{4}-\d{2}-\d{2}-[a-zA-Z0-9-]{12,100})$/.test(id))||!/^\d{4}-\d{2}-\d{2}$/.test(publication.date)||!Array.isArray(publication.flights)||publication.practice===true&&!id.startsWith('practice-'))throw Error('Evento de publicación del horario no válido.');
  const unique=[...new Set((targets||[]).map(address).filter(Boolean))],deliveryRoot='itineraryEmailDeliveries/'+id;
  if(!unique.length){report('recipients-empty',id);return;}
  let retry=false;
