@@ -6,7 +6,11 @@ const M=require('./itinerary-model');
 const {normalize}=require('./boxes');
 const audit=require('./audit');
 const clone=v=>structuredClone(v);
-const empty=()=>({version:1,revision:0,aircraftStatus:{},itinerary:{version:1,config:{},days:{},notices:[]},flights:[]});
+const empty=()=>({version:1,revision:0,simulatedTime:null,aircraftStatus:{},itinerary:{version:1,config:{},days:{},notices:[]},flights:[]});
+function clockNow(practice,realNow=new Date().toISOString()){
+ const time=practice?.simulatedTime;if(typeof time!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))return realNow;
+ return M.E.panamaClock(realNow).date+'T'+time+':00-05:00';
+}
 function practiceData(data,practice,account){
  const copy=clone(data),store=copy.school ||= {};
  store.accessConfiguration ||= {};store.accessConfiguration.roles ||= {};
@@ -31,13 +35,13 @@ async function handle(db,ctx,body){
  if(body.action==='itinerary-practice-read'){
   const root=(await ref.get()).val();if(!root?.payload)throw Error('El dashboard no contiene datos.');
   const data=JSON.parse(root.payload),stored=data.itineraryPractice||empty(),expired=stored.expiresAt&&Date.parse(stored.expiresAt)<Date.now(),p=expired?empty():stored,sandbox=practiceData(data,p,ctx.account);
-  const now=new Date().toISOString(),date=body.date||M.E.panamaClock(now).tomorrow;
+  const now=clockNow(p),date=body.date||M.E.panamaClock(now).tomorrow;
   const view=M.view(sandbox,{...ctx,director},date,now),full=M.stateFor(sandbox,date,now);
   const operational=new Set(full.aircraft.filter(a=>a.status==='operativo').map(a=>a.id));
   view.state.aircraft=full.aircraft.map(a=>({...a,pilots:[]}));view.state.confirmed=full.confirmed.filter(q=>operational.has(q.aircraft));
   const pilots=new Set(view.state.confirmed.map(q=>q.pilot)),students=new Set(view.state.confirmed.map(q=>q.studentId).filter(Boolean));
   view.state.pilots=full.pilots.filter(p=>pilots.has(p.id));view.state.students=full.students.filter(p=>students.has(p.id));view.practice=true;
-  view.rights={role:director?'director':ctx.account?.role==='Piloto'?'pilot':'reader',view:true,request:ctx.account?.role==='Piloto'&&view.rights.request,pilot:view.rights.pilot||null,create:false,edit:false,settings:director,boxes:{planner:true,flights:true,requests:true}};
+  view.rights={role:director?'director':ctx.account?.role==='Piloto'?'pilot':'reader',view:true,request:ctx.account?.role==='Piloto'&&view.rights.request,pilot:view.rights.pilot||null,create:false,edit:false,settings:director,boxes:{planner:true,flights:true,requests:true}};view.simulatedTime=p.simulatedTime||null;
   return view;
  }
  if(body.action==='itinerary-practice-calendar'){
@@ -54,7 +58,11 @@ async function handle(db,ctx,body){
   failure='';out=null;if(!root?.payload){failure='El dashboard no contiene datos.';return;}
   try{
    const data=JSON.parse(root.payload),stored=data.itineraryPractice||empty(),p=stored.expiresAt&&Date.parse(stored.expiresAt)<Date.now()?empty():stored,sandbox=practiceData(data,p,ctx.account);
-   if(body.action==='itinerary-practice-status'){
+   if(body.action==='itinerary-practice-clock'){
+    if(!director)throw Error('Solo el Director puede cambiar la hora de práctica.');
+    const time=body.time===null?null:body.time;if(time!==null&&(typeof time!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)))throw Error('Selecciona una hora válida.');
+    p.simulatedTime=time;p.revision++;p.expiresAt||=new Date(Date.now()+48*60*60*1000).toISOString();data.itineraryPractice=p;
+   }else if(body.action==='itinerary-practice-status'){
     if(!director)throw Error('Solo el Director puede cambiar la disponibilidad de aeronaves.');
     const id=M.key(body.aircraft),status=body.status;
     if(!M.E.fleet.some(row=>row[0]===id)||!['operativo','mantenimiento','grounded'].includes(status))throw Error('Aeronave o estado no válido.');
@@ -65,8 +73,8 @@ async function handle(db,ctx,body){
     if(body.command==='publish'){
      const day=sandbox.itinerary.days?.[body.date];
      if(day?.published)throw Error('Este horario de práctica ya fue publicado.');
-     M.apply(sandbox,{...ctx,director:true},{...body,command:'publish'},new Date().toISOString());
-    }else M.apply(sandbox,{...ctx,director},{...body},new Date().toISOString());
+     M.apply(sandbox,{...ctx,director:true},{...body,command:'publish'},clockNow(p));
+    }else M.apply(sandbox,{...ctx,director},{...body},clockNow(p));
     p.itinerary=sandbox.itinerary;p.flights=sandbox.itinerarios;p.revision++;p.expiresAt||=new Date(Date.now()+48*60*60*1000).toISOString();
     data.itineraryPractice=p;
    }else throw Error('Operación de práctica no válida.');
@@ -75,7 +83,7 @@ async function handle(db,ctx,body){
      const flights=(p.flights||[]).filter(f=>f.fecha===body.date).map(f=>({aircraft:f.aeronave,pilot:f.piloto,student:f.estudiante||'',start:f.horaInicio||'',end:f.horaFin||'',type:f.tipo||'',route:f.ruta||'',notes:f.observaciones||''}));
      mailPayload={id,date:body.date,publishedAt:new Date().toISOString(),pilotRecipients:[],flights,practice:true};
     }
-    const next=audit.attach(root,{...root,payload:JSON.stringify(data),operation,revision:(root.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:ctx.user.uid},actor,'dashboard','Itinerario de práctica: '+(body.command||'estado de aeronave'));
+    const next=audit.attach(root,{...root,payload:JSON.stringify(data),operation,revision:(root.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:ctx.user.uid},actor,'dashboard','Itinerario de práctica: '+(body.action==='itinerary-practice-clock'?'reloj simulado':body.command||'estado de aeronave'));
     if(mailPayload){next.itineraryEmailOutbox ||= {};next.itineraryEmailOutbox[mailPayload.id]=mailPayload;}
     out={saved:true};return next;
   }catch(e){failure=e.message;return;}
