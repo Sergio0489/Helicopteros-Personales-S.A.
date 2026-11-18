@@ -123,7 +123,9 @@ async function openDashboard(data){
  for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
  const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
- window.HPItineraryUI?.install({onChange:()=>window.syncItineraryCloud?.()});window.HonorariosUI?.install();window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ window.HPItineraryUI?.install({onChange:()=>window.syncItineraryCloud?.()});window.HonorariosUI?.install();window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();
+ const sidebar=el('sidebar-tabs');if(sidebar){const honorarios=sidebar.querySelector('#tab-honorarios'),cotizaciones=[...sidebar.children].find(tab=>tab.querySelector('.tab-reg')?.textContent.trim()==='COTIZACIONES');if(honorarios)sidebar.append(honorarios);if(cotizaciones)sidebar.append(cotizaciones);}
+ appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
