@@ -181,9 +181,9 @@ function directorFlightError(state,q,excludeId,role='director'){
  if(!p||!p.valid||!p.categories.includes(a.category))return 'El piloto no está habilitado para esta aeronave.';
  if(!canChooseFlightType(state,typeOf(q),role,a))return typeOf(q)==='charter'?'Chárter solo está disponible para director en multimotor o helicóptero.':'La aeronave no corresponde al tipo de vuelo seleccionado.';
  if(!validWindow(q))return 'La hora final debe ser posterior a la inicial, dentro del mismo día.';
+ if(state.confirmed.some(x=>x.id!==excludeId&&(x.aircraft===q.aircraft||x.pilot===q.pilot)&&overlaps(x,q)))return 'El horario se cruza con otro vuelo de la aeronave o del piloto.';
  if(minutes(q.end)-minutes(q.start)<MIN_ASSIGNMENT_MINUTES)return 'El vuelo debe durar al menos 1 hora y 30 minutos.';
  if(role!=='director'&&!covers(a,q,state.date))return 'El intervalo completo debe estar habilitado. Revisa horarios base, previsión y bloque nocturno.';
- if(state.confirmed.some(x=>x.id!==excludeId&&(x.aircraft===q.aircraft||x.pilot===q.pilot)&&overlaps(x,q)))return 'El horario se cruza con otro vuelo de la aeronave o del piloto.';
  return '';
 }
 function requestError(state,q){

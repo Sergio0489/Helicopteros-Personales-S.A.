@@ -221,8 +221,8 @@ test('manual multi and helicopter flights are published unchanged and protect pi
  assert.deepEqual(r.assignments,before);assert.ok(r.results.every(q=>q.status==='waiting'));
 });
 
-test('nine requested flight types are available in the specified order',()=>{
- assert.deepEqual(Object.values(H.flightTypes).map(t=>t.label),['Privado','Vuelo solo','XC','Maniobras comercial','IFR','Multi','Grob','Chárter','Socio']);
+test('eleven requested flight types are available in the specified order',()=>{
+ assert.deepEqual(Object.values(H.flightTypes).map(t=>t.label),['Privado','Vuelo solo','XC','Ley 89','Conversión','Maniobras comercial','IFR','Multi','Grob','Chárter','Socio']);
 });
 test('director per-type assignments constrain automatic monomotor selection',()=>{
  const s=base();s.typeRules.privado=['HP1907'];s.requests=[request('q1','a','privado','HP1784')];
