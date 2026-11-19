@@ -16,12 +16,12 @@ function nativeView(data,account,policy,page){
  const personKeys='directoryKind peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
  const moneyKeys='expenses extraPayments registryFlights deletedCourses';
  const courseKeys='id type status state startDate endDate licenseDate licenseNumber createdAt';
- const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 voidedAt deletedAt createdAt';
+ const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 tacPrevious100 tacCurrent100 aircraftHours100 tacLeftPrevious100 tacLeftCurrent100 tacLeftHours100 tacRightPrevious100 tacRightCurrent100 tacRightHours100 hobbsPrevious100 hobbsCurrent100 hobbsHours100 voidedAt deletedAt createdAt';
  if(page==='aeronaves'){
   const groups={
    'Información y estatus':'status serial year voltaje estatus_nota horas_desde_revision horas_hasta_revision',
    'Motores y hélices':'motor_fabricante motor_modelo motor_serie motor_fabricante_izq motor_modelo_izq motor_serie_izq motor_fabricante_der motor_modelo_der motor_serie_der helice_fabricante helice_modelo helice_serie helice_fabricante_izq helice_modelo_izq helice_serie_izq helice_fabricante_der helice_modelo_der helice_serie_der component_schema_v2',
-   'Horas e inspecciones':'tac_anterior tac_actual horas_diarias horas_acum_50 horas_acum_100 horas_totales horas_limite fecha_50 fecha_100 ciclos_totales ciclos_limite limite_motor limite_helice fecha_motor fecha_helices helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_helice1 fecha_helice2 bitacora_horas bitacora_vencimientos bitacora_tac bitacora_tacometros proxima_inspeccion bitacora_inspecciones tacometros inspecciones tac_log inspection_log ultimo_venc_hv ultimo_venc_fecha',
+   'Horas e inspecciones':'tac_anterior tac_actual tac_izq_anterior tac_izq_actual tac_der_anterior tac_der_actual hobbs_anterior hobbs_actual horas_diarias horas_acum_50 horas_acum_100 horas_totales horas_limite fecha_50 fecha_100 ciclos_totales ciclos_limite limite_motor limite_helice fecha_motor fecha_helices helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_helice1 fecha_helice2 bitacora_horas bitacora_vencimientos bitacora_tac bitacora_tacometros proxima_inspeccion bitacora_inspecciones tacometros inspecciones tac_log inspection_log ultimo_venc_hv ultimo_venc_fecha',
    'Mantenimiento y taller':'mantenimiento',
    'Documentos y emergencia':'emerg_salvavidas emerg_extintor emerg_flares emerg_botiquin emerg_salvavidas_fechas emerg_extintor_fechas emerg_flares_fechas emerg_botiquin_fechas documentos salvavidas extintores flares botiquin salvavidas_fechas extintores_fechas flares_fechas botiquin_fechas',
    'Pedidos':'pedidos bitacora_pedidos seguimiento_pedidos'
@@ -57,7 +57,7 @@ function nativeView(data,account,policy,page){
    out.school.registry.clients=clients.map(p=>pick(p,'id name identity'));
   }
   const info=page==='estadisticas'||has('Vuelos e instructores')||has('Historial de registros');
-  out.school.registry.entries=entries.map(e=>({...pick(e,info?entryKeys:'id date aircraft book voidedAt'),...(page==='bitacora'&&has('Tacómetros y horas')?pick(e,'tacPrevious100 tacCurrent100 aircraftHours100 hours100'):{}),...(page==='bitacora'&&has('Cargos por servicios')?pick(e,'personName rateCents costCents charge'): {})}));
+  out.school.registry.entries=entries.map(e=>({...pick(e,info?entryKeys:'id date aircraft book voidedAt'),...(page==='bitacora'&&has('Tacómetros y horas')?pick(e,'tacPrevious100 tacCurrent100 aircraftHours100 tacLeftPrevious100 tacLeftCurrent100 tacLeftHours100 tacRightPrevious100 tacRightCurrent100 tacRightHours100 hobbsPrevious100 hobbsCurrent100 hobbsHours100 hours100'):{}),...(page==='bitacora'&&has('Cargos por servicios')?pick(e,'personName rateCents costCents charge'): {})}));
  }
  if(page==='pagos'){
   const receipts=list(s.paymentReceipts).filter(r=>account.role!=='Estudiante'||ids.has(r.personKey));
