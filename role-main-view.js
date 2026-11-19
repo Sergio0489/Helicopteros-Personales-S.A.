@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261118-honorarios-scheduling-3',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261118-honorarios-scheduling-4',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -227,12 +227,14 @@
   const draftEntries=Object.fromEntries(Object.entries(window.DraftRecovery?.list()||{}).filter(([k,v])=>k.startsWith(draftScope)&&result.native.editable&&v.revision===String(result.native.operation??'')&&v.policy===JSON.stringify(result.native.policy)).map(([k,v])=>[k.slice(draftScope.length),v]));
   const cfg={...result.native,home:!!result.home,searchTarget:result.searchTarget,draftEntries,savedAircraft:window.PageMemory?.read()?.aircraft,page,pages:result.pages,name:result.name,role:result.role,channel};
   let roleScriptIndex=0;
-  const add=code=>{const s=doc.createElement('script');s.dataset.roleSource=String(++roleScriptIndex);s.textContent=code;doc.body.appendChild(s);};
+  const encodeRoleScript=code=>{const bytes=new TextEncoder().encode(code),parts=[];for(let i=0;i<bytes.length;i+=0x8000)parts.push(String.fromCharCode(...bytes.subarray(i,i+0x8000)));return btoa(parts.join(''));};
+  const add=code=>{const payload=doc.createElement('div');payload.hidden=true;payload.dataset.roleSource=String(++roleScriptIndex);payload.dataset.roleCode=encodeRoleScript(code);doc.body.appendChild(payload);};
   add(boxesScript);add(draftScript);add(homeModel);add(homeUI);
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
   add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(honorariosUI);add('window.HonorariosUI.install();');add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HonorariosUI.installPersonalApproval();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
+  const scriptLoader=doc.createElement('script');scriptLoader.textContent="for(const node of [...document.querySelectorAll('[data-role-code]')]){const bytes=Uint8Array.from(atob(node.dataset.roleCode),char=>char.charCodeAt(0)),script=document.createElement('script');script.dataset.roleSource=node.dataset.roleSource;script.textContent=new TextDecoder().decode(bytes);node.remove();document.body.appendChild(script)}";doc.body.appendChild(scriptLoader);
   let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0,reportStore,stopReportAuth=()=>{},reportQueue=Promise.resolve();const aircraftReportResponseKeys=new Map();
   const assertReportUser=()=>{if(!cfg.uid||window.firebase?.auth?.()?.currentUser?.uid!==cfg.uid)throw Error('La sesión cambió. Abre la aplicación con tu usuario antes de recuperar o enviar reportes.');};
   const reports=()=>{assertReportUser();if(!window.AircraftReportRecovery)throw Error('Actualiza la aplicación para recuperar reportes pendientes.');return reportStore||=window.AircraftReportRecovery.createStore({uid:cfg.uid});};
