@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261119-exam-flight-priority-2',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261119-aircraft-report-context-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -179,7 +179,7 @@
    function restrict(){
     HPBoxUI.annotate();
     if(cfg.page==='aeronaves'&&cfg.role==='Piloto'&&HPBoxes.permissions(cfg.policy,'aeronaves','status').view){
-     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const idx=Number(panel.id.slice(7)),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>openAircraftReport(aircraft);const header=panel.querySelector('.aircraft-header');header?.after(button);});
+     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const match=panel.id.match(/^panel-(\d+)$/);if(!match)return;const idx=Number(match[1]),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>openAircraftReport(aircraft);const header=panel.querySelector('.aircraft-header');header?.after(button);});
     }
     document.querySelectorAll('[data-permission-box]').forEach(e=>{
      const rights=HPBoxes.permissions(cfg.policy||{},e.dataset.permissionPage,e.dataset.permissionBox);
