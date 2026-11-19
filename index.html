@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- v=20260521-2 -->
+  <!-- v=20261119-mobile-flight-log-1 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Helicópteros Personales</title>
 
@@ -586,6 +586,22 @@
 .equipment-column>.equipment-dates{margin-bottom:12px}
 .aircraft-layout [data-section="flight"]>div[style*="grid-template-columns"],.aircraft-layout [id^="bitacora-horas-"]>div[style*="grid-template-columns"]{grid-template-columns:minmax(0,1.4fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 18px!important;gap:4px!important}
 .aircraft-layout [data-section="flight"] span{min-width:0;overflow-wrap:anywhere;line-height:1.5}
+.aircraft-layout [data-flight-log="dual"] .flight-log-help{font-size:12px;line-height:1.45;color:var(--muted);margin:0 0 8px}
+.flight-log-list-dual{display:grid;gap:8px}
+.flight-log-entry-dual{min-width:0;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel);overflow:hidden}
+.flight-log-entry-dual.flight-log-entry-latest{border-color:var(--accent);background:rgba(0,102,204,.045)}
+.flight-log-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.flight-log-summary-label,.flight-log-reading-label{display:block;font-size:9px;line-height:1.35;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
+.flight-log-summary-value{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.flight-log-meters{display:grid;gap:2px;margin-top:5px}
+.flight-log-meter{display:grid;grid-template-columns:minmax(125px,1.3fr) repeat(3,minmax(0,1fr));gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)}
+.flight-log-meter:last-child{border-bottom:0}
+.flight-log-meter-name{font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.flight-log-reading-value{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.4;white-space:nowrap}
+.flight-log-legacy{font-size:10px;line-height:1.5;color:var(--muted);padding:7px 0}
+.flight-log-delete{display:flex;justify-content:flex-end;margin-top:5px}
+.flight-log-delete button{min-height:34px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--danger);font-size:10px;cursor:pointer}
+@media(max-width:600px){.flight-log-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.flight-log-meter{grid-template-columns:minmax(94px,1.1fr) repeat(3,minmax(0,1fr));gap:5px}.flight-log-meter-name{font-size:10px}.flight-log-reading-label{font-size:8px}.flight-log-reading-value{font-size:10px}}
 .workshop-row [data-section="pending"]>.card-title+div{display:none!important}
 .workshop-row .workshop-task-row{grid-template-columns:minmax(0,1fr) 45px auto auto!important;gap:6px!important}
 .workshop-row .workshop-task-row-director{grid-template-columns:minmax(0,1fr) 45px auto auto auto!important}
@@ -1049,10 +1065,10 @@ header>.logo .hp-brand-logo{display:block;width:126px!important;height:64px!impo
 <script src="home-search-model.js?v=20261021-hour-configuration-1"></script>
 <script src="home-ui.js?v=20261021-hour-configuration-1"></script>
 <script src="navigation-state.js?v=20261021-hour-configuration-1"></script>
-<script src="cloud.js?v=20261118-honorarios-scheduling-4"></script>
+<script src="cloud.js?v=20261119-mobile-flight-log-1"></script>
 <script src="honorarios-ui.js?v=20261119-honorarios-pilot-report-1"></script>
 <script src="aircraft-report-recovery.js?v=20261104-report-recovery-1"></script>
-<script src="role-main-view.js?v=20261118-honorarios-scheduling-4"></script>
+<script src="role-main-view.js?v=20261119-mobile-flight-log-1"></script>
 <script src="quotes-ui.js?v=20261117-charters-quotes-1"></script>
 <script src="role-portal.js?v=20261119-hp880-dual-tac-1"></script>
 <script src="registration.js?v=identity-review-20261111"></script>
