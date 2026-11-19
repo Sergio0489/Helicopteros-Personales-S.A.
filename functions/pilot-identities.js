@@ -26,6 +26,19 @@ function uniquePairs(oldRows,newRows){
  }
  return {pairs,oldLeft,newLeft};
 }
+function pilotReferences(oldRows,oldToId){
+ const ids=new Map(),names=new Map();
+ const add=(map,key,id)=>{if(!key||!id)return;const values=map.get(key)||new Set();values.add(String(id));map.set(key,values);};
+ for(let i=0;i<oldRows.length;i++){
+  const pilot=oldRows[i],id=oldToId.get(i)||(!legacyId(pilot?.id)?String(pilot?.id||''):'');
+  if(!id)continue;
+  add(ids,String(pilot?.id||'legacy-pilot-'+i),id);if(!pilot?.id)add(ids,'legacy-pilot-'+i,id);
+ }
+ for(let i=0;i<oldRows.length;i++){const name=normalized(oldRows[i]?.nombre||oldRows[i]?.name,'name');if(name){if(!names.has(name))names.set(name,[]);names.get(name).push(i);}}
+ const pilotIdMap=Object.fromEntries([...ids].filter(([,values])=>values.size===1).map(([ref,values])=>[ref,[...values][0]])),pilotNameMap={};
+ for(const [name,indices]of names)if(indices.length===1){const i=indices[0],id=oldToId.get(i)||(!legacyId(oldRows[i]?.id)?String(oldRows[i]?.id||''):'');if(id)pilotNameMap[name]=id;}
+ return {pilotIdMap,pilotNameMap};
+}
 function pilotIdentity(before,after,makeId=randomUUID){
  const oldRows=list(before.pilotos),newRows=list(after.pilotos);assertUniqueIds(oldRows,'anteriores');assertUniqueIds(newRows,'actuales');
  const oldStable=new Map(oldRows.map((p,i)=>[String(p?.id||''),i]).filter(([id])=>id&&!legacyId(id)));
@@ -72,6 +85,7 @@ function pilotIdentity(before,after,makeId=randomUUID){
  const refs=after.school?.userProfiles||{};for(const [uid,profile]of Object.entries(refs))if(profile?.dossier?.kind==='pilot'&&legacyId(profile.dossier.id)){
   const matches=newRows.filter(p=>String(p.authUid||'')===String(uid));if(matches.length===1)profile.dossier.id=String(matches[0].id);
  }
- return {changed:JSON.stringify(oldRows)!==JSON.stringify(newRows),pilots:newRows};
+ return {changed:JSON.stringify(oldRows)!==JSON.stringify(newRows),pilots:newRows,...pilotReferences(oldRows,oldToId)};
 }
 module.exports={pilotIdentity,legacyId,normalized};
+
