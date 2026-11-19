@@ -5,7 +5,7 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261119-mobile-flight-log-2',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261119-honorarios-role-print-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
@@ -75,6 +75,7 @@
    if(e.matches('[data-action="print-student"],[data-action="blank-registration"]'))return ['estudiantes','personal','print'];
    if(e.matches('[data-print],[data-own-statement-print]'))return cfg.page==='saldos'?(statementScope||['saldos','students','print']):['estudiantes','account','print'];
    if(e.matches('[data-receipt-print]'))return ['pagos','receipts','print'];
+   if(e.matches('[data-print-report]')&&e.closest('#panel-honorarios'))return ['honorarios','report','print'];
    if(e.matches('[data-aac-download]'))return ['estadisticas','aac','export'];
    if(e.matches('[data-hp-download]'))return ['estadisticas','company','export'];
    return null;
@@ -90,6 +91,7 @@
   function readonlyControl(e){
    if(e.matches('[data-pilot-aircraft-report]')||e.closest('[data-itinerary-control]'))return true;
    if(e.matches('[data-honorarios-date]'))return true;
+   if(e.matches('[data-pilot]')&&e.closest('#panel-honorarios'))return HPBoxes.permissions(cfg.policy,'honorarios','report').view;
    const output=outputFor(e);if(output)return !!mayOutput(output);
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
