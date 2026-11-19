@@ -10,7 +10,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this);
 
 function isMultimotor(reg){return ['HP-880BL','HP-18BLM','HP-1805BLM','HP1186'].includes(reg);}
-function isDualTAC(reg){return ['HP880BL','HP1186','HP1805BLM'].includes(String(reg||'').replace(/-/g,'').toUpperCase());}
+function isDualTAC(reg){return ['HP880BL'].includes(String(reg||'').replace(/-/g,'').toUpperCase());}
 const DUAL_TAC_METERS=[
  {key:'left',label:'TAC motor izquierdo',previous:'tac_izq_anterior',current:'tac_izq_actual',previousLog:'tacLeftPrevious100',currentLog:'tacLeftCurrent100',hoursLog:'tacLeftHours100'},
  {key:'right',label:'TAC motor derecho',previous:'tac_der_anterior',current:'tac_der_actual',previousLog:'tacRightPrevious100',currentLog:'tacRightCurrent100',hoursLog:'tacRightHours100'},
@@ -174,7 +174,7 @@ function defaultAc(ac) {
   return {
     status: "",
     serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "", limite_helice: "", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
-    tac_izq_anterior:"",tac_izq_actual:"",tac_der_anterior:"",tac_der_actual:"",hobbs_anterior:"",hobbs_actual:"",
+    ...(isDualTAC(ac.reg)?{tac_izq_anterior:"",tac_izq_actual:"",tac_der_anterior:"",tac_der_actual:"",hobbs_anterior:"",hobbs_actual:""}:{}),
     horas_totales: "", horas_limite: "", fecha_50: "", fecha_100: "",
     ciclos_totales: "", ciclos_limite: "",
     helice1_ciclos: "", helice1_limite: "", fecha_helice1: "",

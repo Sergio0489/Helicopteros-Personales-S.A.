@@ -88,7 +88,7 @@ const isSim=reg=>reg==='Simulador';
 const isVirtual=reg=>isRPA(reg)||isSim(reg);
 const equipmentName=reg=>isRPA(reg)?'RPA (Drone)':reg;
 const isMono=reg=>fleet.some(a=>a.reg===reg&&a.type==='fixed')&&!isMultimotor(reg);
-const isDualTAC=reg=>['HP880BL','HP1186','HP1805BLM'].includes(String(reg||'').replace(/-/g,'').toUpperCase());
+const isDualTAC=reg=>['HP880BL'].includes(String(reg||'').replace(/-/g,'').toUpperCase());
 const dualMeters=[
  {key:'left',label:'TAC motor izquierdo',previous:'tacLeftPrevious',current:'tacLeftCurrent',stored:'tac_izq_anterior',previous100:'tacLeftPrevious100',current100:'tacLeftCurrent100',hours100:'tacLeftHours100'},
  {key:'right',label:'TAC motor derecho',previous:'tacRightPrevious',current:'tacRightCurrent',stored:'tac_der_anterior',previous100:'tacRightPrevious100',current100:'tacRightCurrent100',hours100:'tacRightHours100'},
