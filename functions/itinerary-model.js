@@ -19,7 +19,7 @@ function pilots(data){return arr(data.pilotos).map((p,i)=>({id:String(p.id||'leg
 function hasPendingNoShow(student){return arr(student?.expenses).some(e=>e?.noShowId&&!e.voidedAt&&!e.acceptance?.acceptedAt);}
 function students(data){return [...arr(data.school?.students).map(p=>({id:'student:'+p.id,name:p.name,blockedForFlights:hasPendingNoShow(p)})),...arr(data.school?.registry?.clients).map(p=>({id:'client:'+p.id,name:p.name,blockedForFlights:false}))].sort((a,b)=>a.name.localeCompare(b.name,'es'));}
 function legacyId(f){return f.id==null?'legacy-'+hash(f):String(f.id);}
-function fromFlight(f,ps){return {...f.schedule,publicationStatus:'published',id:legacyId(f),date:iso(f.fecha),aircraft:key(f.aeronave),pilot:f.schedule?.pilot||ps.find(p=>p.name===f.piloto)?.id||'legacy-name:'+f.piloto,studentName:f.estudiante||'',studentId:f.personId&&f.personKind?f.personKind+':'+f.personId:f.schedule?.studentId||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',flightType:f.schedule?.flightType||'privado',note:f.observaciones||f.schedule?.note||'',route:f.ruta||f.schedule?.route||'',fixed:true,legacy:!f.schedule};}
+function fromFlight(f,ps){return {...f.schedule,publicationStatus:'published',id:legacyId(f),date:iso(f.fecha),aircraft:key(f.aeronave),pilot:f.schedule?.pilot||f.pilotId||(f.pilotIdentityUnresolved?'legacy-name:'+f.piloto:ps.find(p=>p.name===f.piloto)?.id||'legacy-name:'+f.piloto),studentName:f.estudiante||'',studentId:f.personId&&f.personKind?f.personKind+':'+f.personId:f.schedule?.studentId||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',flightType:f.schedule?.flightType||'privado',note:f.observaciones||f.schedule?.note||'',route:f.ruta||f.schedule?.route||'',fixed:true,legacy:!f.schedule};}
 function idleDays(data,id,targetDate){
  const entry=Object.entries(data.fleet||{}).find(([registration])=>key(registration)===id)?.[1]||{};
  const logs=Array.isArray(entry.bitacora_horas)?entry.bitacora_horas:Object.values(entry.bitacora_horas||{});
@@ -184,9 +184,51 @@ function apply(data,actor,body,now){
 }
 function timeFromMinutes(value){return String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0');}
 // Preserve server-owned requests/config and reject bypass through the legacy generic saver.
-function protect(before,after){
- if(before.itinerary?.version){if(!eq(before.itinerarios||[],after.itinerarios||[]))error('Actualiza el itinerario desde la nueva página para conservar las reglas y los avisos.');after.itinerary=copy(before.itinerary);}
- else delete after.itinerary;
+function pilotNameKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');}
+function pilotReference(value,migration){
+ if(typeof value!=='string')return value;
+ const id=migration?.pilotIdMap?.[value];if(id)return id;
+ if(value.startsWith('legacy-name:')&&migration?.changed)return migration?.pilotNameMap?.[pilotNameKey(value.slice(12))]||value;
+ return value;
+}
+function remapPilotReferences(value,migration){
+ if(Array.isArray(value))return value.map(item=>remapPilotReferences(item,migration));
+ if(!value||typeof value!=='object')return value;
+ const out={};
+ for(const [field,item]of Object.entries(value)){
+  if((field==='pilot'||field==='pilotId')&&typeof item==='string'){
+   const mapped=value.pilotIdentityUnresolved===true?item:pilotReference(item,migration);out[field]=mapped;
+   if(migration?.changed&&item.startsWith('legacy-name:')&&mapped===item)out.pilotIdentityUnresolved=true;
+  }else if(field==='pilots'&&Array.isArray(item))out[field]=item.map(id=>pilotReference(id,migration));
+  else if(field==='id'&&value.kind==='pilot'&&typeof item==='string'){
+   const mapped=value.pilotIdentityUnresolved===true?item:pilotReference(item,migration);out[field]=mapped;
+   if(migration?.changed&&item.startsWith('legacy-name:')&&mapped===item)out.pilotIdentityUnresolved=true;
+  }else out[field]=remapPilotReferences(item,migration);
+ }
+ return out;
+}
+function remapFlights(rows,migration){
+ const dates=new Set(),flights=arr(rows).map(row=>{
+  const flight=remapPilotReferences(row,migration);
+  if(migration?.changed&&!flight.schedule?.pilot&&!flight.pilotId&&flight.pilotIdentityUnresolved!==true&&String(flight.piloto||'').trim()){
+   const id=migration?.pilotNameMap?.[pilotNameKey(flight.piloto)];if(id)flight.pilotId=id;else flight.pilotIdentityUnresolved=true;
+  }
+  if(!eq(row,flight)){if(row.id==null)flight.id=legacyId(row);const date=iso(row.fecha);if(date)dates.add(date);}
+  return flight;
+ });
+ return {flights,dates};
+}
+function protect(before,after,migration={}){
+ if(before.itinerary?.version){
+  if(!eq(before.itinerarios||[],after.itinerarios||[]))error('Actualiza el itinerario desde la nueva página para conservar las reglas y los avisos.');
+  const mapped=remapFlights(before.itinerarios,migration),itinerary=remapPilotReferences(before.itinerary,migration);
+  after.itinerarios=mapped.flights;
+  const oldConfig=before.itinerary.config||{},newConfig=itinerary.config||{};
+  if(!eq(oldConfig,newConfig)){itinerary.config ||= {};itinerary.config.revision=(Number(oldConfig.revision)||0)+1;}
+  for(const date of mapped.dates){const old=before.itinerary.days?.[date],next=itinerary.days?.[date];if(next)next.revision=(Number(old?.revision)||0)+1;}
+  for(const [date,old]of Object.entries(before.itinerary.days||{})){const next=itinerary.days?.[date];if(next&&!mapped.dates.has(date)&&!eq(old,next))next.revision=(Number(old.revision)||0)+1;}
+  after.itinerary=itinerary;
+ }else{delete after.itinerary;after.itinerarios=remapFlights(after.itinerarios,migration).flights;}
 }
 function reconcile(before,data,now){
  let changed=false;
@@ -256,3 +298,4 @@ function calendar(data,actor,year,now){
  return {version:1,year,days};
 }
 module.exports={E,date,key,day,setup,stateFor,scope,view,calendar,apply,publish,publicationEmail,queueModifiedEmail,flushModifiedEmail,protect,reconcile,operational,visibleNotices,storeFlights,assertPilot};
+

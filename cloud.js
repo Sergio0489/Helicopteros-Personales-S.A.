@@ -84,6 +84,7 @@ window.cloudWrite=async function(data){
  try{
   const result=await AccountRegistration.api('director-save',{payload,operation:cloudOperation,reason:motive});
   if(result.schoolSync?.school)data.school=result.schoolSync.school;
+  if(result.pilotSync?.pilotos)data.pilotos=result.pilotSync.pilotos;
   if(result.itinerarySync)Object.assign(data,result.itinerarySync);
   window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=JSON.stringify(data);cloudVersion=result.revision;cloudOperation=result.operation;
   cloudBlocked=false;
@@ -343,3 +344,4 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
