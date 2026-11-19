@@ -26,7 +26,7 @@
  add('saldos','students','Alertas de saldos: estudiantes','Estudiantes','[data-balance-person^="student:"]');add('saldos','clients','Alertas de saldos: clientes','Clientes','[data-balance-person^="client:"]');
  add('interesados','contacts','Contactos y consultas de Charters y Escuela','Interesados y consultas','#panel-interesados');
  add('usuarios','directory','Usuarios y cargos','Usuarios','#panel-usuarios .users-table');
- const outputs={interesados:{contacts:['export']},pilotos:{dossier:['print'],licenses:['print']},estudiantes:{personal:['print'],account:['print']},pagos:{receipts:['print']},saldos:{students:['print'],clients:['print']},estadisticas:{aac:['export'],company:['export']}};
+ const outputs={interesados:{contacts:['export']},pilotos:{dossier:['print'],licenses:['print']},estudiantes:{personal:['print'],account:['print']},pagos:{receipts:['print']},saldos:{students:['print'],clients:['print']},estadisticas:{aac:['export'],company:['export']},honorarios:{report:['print']}};
  for(const [page,boxes]of Object.entries(catalog))for(const b of boxes)b.outputs=outputs[page]?.[b.id]||[];
  function outputAllowed(policy,page,id,kind){return ['print','export'].includes(kind)&&catalog[page]?.find(b=>b.id===id)?.outputs.includes(kind)&&permissions(policy,page,id).view&&policy[page].actions?.[kind]===true&&policy[page].boxes?.[id]?.[kind]===true;}
  function permissions(policy,page,id){const box=catalog[page]?.find(b=>b.id===id),p=policy?.[page];if(!box||!p?.actions?.view)return {view:false,edit:false};const v=p.boxes?.[id];const view=v?v.view===true:p.areas?.[box.area]===true;return {view,edit:view&&box.editable&&p.actions?.edit===true&&v?.edit===true};}

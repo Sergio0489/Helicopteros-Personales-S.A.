@@ -290,18 +290,35 @@ const ROLE_PAGES=[
  {id:'escuela',name:'Escuela',areas:['Información y documentos','Cursos y fechas','Tarifas de servicios'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'charter',name:'HP CHARTER',areas:['Información de la empresa','Documentos y vencimientos','Personal de la empresa','Servicios'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'estadisticas',name:'Estadísticas',areas:['Estadísticas generales','Estadísticas para AAC','Estadísticas Helicópteros Personales'],actions:['view','print','export']},
- {id:'honorarios',name:'Honorarios',areas:['Honorarios de pilotos'],actions:['view']},
+ {id:'honorarios',name:'Honorarios',areas:['Honorarios de pilotos'],actions:['view','print']},
  {id:'saldos',name:'Alerta de saldos',areas:['Estudiantes','Clientes'],actions:['view','edit','print','export']}
 ];
 function suggestedRolePolicy(role){
  const read={Gerente:ROLE_PAGES.map(p=>p.id),Administrativo:['horario','pendientes','aeronaves','pilotos','bitacora','pagos','itinerario','estudiantes','escuela','charter','estadisticas','saldos'],Piloto:['horario','pendientes','aeronaves','pilotos','bitacora','itinerario','honorarios'],Estudiante:[],Mecánico:['pendientes','aeronaves'],Contabilidad:['pagos','estudiantes','escuela','charter','estadisticas','honorarios','saldos']}[role]||[];
  const edit={Gerente:['aeronaves','pilotos','bitacora','pagos','itinerario','estudiantes','escuela','charter','saldos'],Administrativo:['pilotos','bitacora','pagos','itinerario','estudiantes'],Piloto:['bitacora'],Estudiante:[],Mecánico:['aeronaves'],Contabilidad:['pagos']}[role]||[];
- return Object.fromEntries(ROLE_PAGES.map(page=>{const full=role==='Director',view=full||read.includes(page.id),write=edit.includes(page.id);const actions=Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,page.actions.includes(action)&&(full||(view&&(action==='view'||(write&&['create','edit'].includes(action))||(['Gerente','Administrativo','Contabilidad'].includes(role)&&['print','export'].includes(action)))))]));const areas=Object.fromEntries(page.areas.map(area=>[area,view]));if(role==='Mecánico'&&page.id==='aeronaves')areas.Tarifas=false;if(role==='Contabilidad'&&page.id==='estudiantes')for(const area of page.areas)areas[area]=['Estado de cuenta y abonos','Cursos y licencias'].includes(area);return [page.id,{actions,areas}];}));
+ return Object.fromEntries(ROLE_PAGES.map(page=>{
+  const full=role==='Director',view=full||read.includes(page.id),write=edit.includes(page.id);
+  const actions=Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>{
+   const suggestedOutput=page.id!=='honorarios'&&['Gerente','Administrativo','Contabilidad'].includes(role)&&['print','export'].includes(action);
+   return [action,page.actions.includes(action)&&(full||(view&&(action==='view'||(write&&['create','edit'].includes(action))||suggestedOutput)))];
+  }));
+  const areas=Object.fromEntries(page.areas.map(area=>[area,view]));
+  if(role==='Mecánico'&&page.id==='aeronaves')areas.Tarifas=false;
+  if(role==='Contabilidad'&&page.id==='estudiantes')for(const area of page.areas)areas[area]=['Estado de cuenta y abonos','Cursos y licencias'].includes(area);
+  return [page.id,{actions,areas}];
+ }));
 }
 function normalizeRolePolicy(role,policy){
  if(role==='Director')return suggestedRolePolicy(role);
  if(!STAFF_ROLES.includes(role))throw Error('Cargo no válido.');
- return Object.fromEntries(ROLE_PAGES.map(page=>{const input=policy?.[page.id]||{},view=!!input.actions?.view;return [page.id,{actions:Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,view&&page.actions.includes(action)&&!!input.actions?.[action]])),areas:Object.fromEntries(page.areas.map(area=>[area,view&&!!input.areas?.[area]]))}];}));
+ return Object.fromEntries(ROLE_PAGES.map(page=>{
+  const input=policy?.[page.id]||{},view=!!input.actions?.view;
+  const actions=Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,view&&page.actions.includes(action)&&!!input.actions?.[action]]));
+  const areas=Object.fromEntries(page.areas.map(area=>[area,view&&!!input.areas?.[area]]));
+  if(page.id!=='honorarios')return [page.id,{actions,areas}];
+  const reportView=areas['Honorarios de pilotos']===true;
+  return [page.id,{actions,areas,boxes:{report:{view:reportView,edit:false,print:reportView&&actions.print===true}}}];
+ }));
 }
 function saveRoleConfiguration(data,role,policy,actorUid){
  if(!isDirectorUser()||actorUid!==firebase.auth().currentUser.uid)throw Error('Solo el Director puede administrar los permisos.');
