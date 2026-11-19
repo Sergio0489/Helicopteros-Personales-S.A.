@@ -50,7 +50,12 @@ function nativeView(data,account,policy,page){
   if(finance)out.school.registry.entries=entries.map(e=>pick(e,entryKeys+' costCents rateCents charge'));
  }
  if(page==='estadisticas'&&has('Estadísticas generales')){for(const [id,ac]of Object.entries(data.fleet||{}))out.fleet[id]=pick(ac,'bitacora_horas');}
+ if(page==='honorarios')out.school.honorarios={};
  if(page==='bitacora'||page==='estadisticas'){
+  if(page==='bitacora'){
+   out.school.students=students.map(p=>pick(p,'id name identity'));
+   out.school.registry.clients=clients.map(p=>pick(p,'id name identity'));
+  }
   const info=page==='estadisticas'||has('Vuelos e instructores')||has('Historial de registros');
   out.school.registry.entries=entries.map(e=>({...pick(e,info?entryKeys:'id date aircraft book voidedAt'),...(page==='bitacora'&&has('Tacómetros y horas')?pick(e,'tacPrevious100 tacCurrent100 aircraftHours100 hours100'):{}),...(page==='bitacora'&&has('Cargos por servicios')?pick(e,'personName rateCents costCents charge'): {})}));
  }

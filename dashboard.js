@@ -362,7 +362,6 @@ function buildPanel(ac, data, idx) {
           <option value="mantenimiento" ${data.status==='mantenimiento'?'selected':''}>🔧 Mantenimiento</option>
           <option value="aog" ${data.status==='aog'?'selected':''}>🔴 GROUNDED</option>
         </select>
-        <!-- Aeronave info grid -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">N.º DE SERIE</div>
@@ -378,7 +377,6 @@ function buildPanel(ac, data, idx) {
           </div>
         </div>
         ${isMultimotor(ac.reg) ? componentInfoMultimotor('motor', data, idx) : `
-        <!-- Motor info -->
         <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--accent2);letter-spacing:2px;margin-bottom:6px">${componentIcon('motor')} MOTOR</div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -398,7 +396,6 @@ function buildPanel(ac, data, idx) {
         </div>
         `}
         ${isMultimotor(ac.reg) ? componentInfoMultimotor('helice', data, idx) : `
-        <!-- Helice info -->
         <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--accent2);letter-spacing:2px;margin-bottom:6px">${componentIcon('helice')} HÉLICE</div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -431,7 +428,6 @@ function buildPanel(ac, data, idx) {
         </div>
         <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">Ingresa ambos TAC para calcular las horas.</div>
         <div class="inspection-controls"><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,50)">✓ Resuelto · 50 horas</button><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,100)">✓ Resuelto · 100 horas</button></div>
-        <!-- Daily hours input -->
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -458,7 +454,6 @@ function buildPanel(ac, data, idx) {
             <div id="pb-100-${idx}" class="progress-fill ${inspectionFill(data.horas_acum_100, 100)}" style="width:${Math.min(100,parseFloat(data.horas_acum_100||0)/100*100)}%"></div>
           </div>
         </div>
-        <!-- Hidden fields for compatibility -->
         <input type="hidden" id="horas_totales-${idx}" value="${data.horas_acum_50||''}">
         <input type="hidden" id="horas_limite-${idx}" value="${data.horas_acum_100||''}">
         <span id="fecha50-${idx}" style="display:none"></span>
@@ -467,7 +462,6 @@ function buildPanel(ac, data, idx) {
         <div id="pb-horas-${idx}" style="display:none"></div>
       </div>
 
-      <!-- Bitacora de horas -->
       <div class="card">
         <div class="card-title">📋 Bitácora de Horas de Vuelo</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 80px 80px 30px;gap:6px;padding:4px 0;border-bottom:1px solid var(--dim)">
@@ -484,7 +478,6 @@ function buildPanel(ac, data, idx) {
 
       <div class="card">
         <div class="card-title">⚙️ Vencimientos en Horas</div>
-        <!-- Daily hours input for motor+helices -->
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -501,14 +494,12 @@ function buildPanel(ac, data, idx) {
             ${vencItemHtml(idx, 'Hélice derecha', 'helice2', 'helice2-manual', data.helice2_ciclos, data.helice2_limite, data.fecha_helice2, data, true)}
           </div>` : ''}
         </div>
-        <!-- Hidden fields for compatibility -->
         <input type="hidden" id="ciclos_totales-${idx}" value="${data.ciclos_totales||''}">
         <input type="hidden" id="ciclos_limite-${idx}" value="${data.ciclos_limite||''}">
         ${isMultimotor(ac.reg) ? `
         <input type="hidden" id="helice1_ciclos-${idx}" value="${data.helice1_ciclos||''}">
         <input type="hidden" id="helice2_ciclos-${idx}" value="${data.helice2_ciclos||''}">` : ''}
         <div style="display:none"><div id="pb-ciclos-${idx}"></div><span id="pct-ciclos-${idx}"></span></div>
-        <!-- Ultimo registro -->
         <div id="ultimo-venc-${idx}" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;display:${data.ultimo_venc_hv?'flex':'none'};justify-content:space-between;align-items:center">
           <div>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ÚLTIMO REGISTRO: </span>
@@ -2426,7 +2417,6 @@ itinerariosPanel.innerHTML = `
   </div>
 
   <div class="section-grid-2">
-    <!-- Calendario -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <button onclick="changeMonth(-1)" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;padding:4px 12px;font-size:16px;-webkit-tap-highlight-color:transparent">‹</button>
@@ -2445,14 +2435,12 @@ itinerariosPanel.innerHTML = `
       <div class="cal-grid" id="cal-cells"></div>
     </div>
 
-    <!-- Detalle del día -->
     <div class="card">
       <div class="card-title" id="cal-day-title">Selecciona una fecha</div>
       <div id="cal-day-flights" style="margin-bottom:12px">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);text-align:center;padding:20px 0">Toca una fecha en el calendario</div>
       </div>
 
-      <!-- Formulario agregar vuelo -->
       <div class="add-flight-form">
         <div class="card-title" style="margin-bottom:10px">+ Agregar Vuelo</div>
         <div class="form-grid">

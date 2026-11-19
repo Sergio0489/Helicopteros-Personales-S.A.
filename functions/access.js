@@ -1,6 +1,6 @@
 'use strict';
 const {normalize}=require('./boxes');
-const PAGES={horario:'Horario del día',pendientes:'Pendientes',aeronaves:'Aeronaves',pilotos:'Pilotos',bitacora:'Registro de bitácora',pagos:'Registro de pago',itinerario:'Itinerarios',estudiantes:'Estudiantes / Clientes',escuela:'Escuela',charter:'HP CHÁRTER',estadisticas:'Estadísticas',saldos:'Alerta de saldos'};
+const PAGES={horario:'Horario del día',pendientes:'Pendientes',aeronaves:'Aeronaves',pilotos:'Pilotos',bitacora:'Registro de bitácora',pagos:'Registro de pago',itinerario:'Itinerarios',estudiantes:'Estudiantes / Clientes',escuela:'Escuela',charter:'HP CHÁRTER',estadisticas:'Estadísticas',honorarios:'Honorarios',saldos:'Alerta de saldos'};
 const ROLES=['Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
 const arr=v=>Array.isArray(v)?v:[];
 const fields=(o,names)=>Object.fromEntries(names.split(' ').filter(k=>o?.[k]!=null&&typeof o[k]!=='object').map(k=>[k,o[k]]));
@@ -10,6 +10,8 @@ const flight='fecha aeronave piloto estudiante cliente destino origen hora horaI
 function policyFor(data,account){
  if(!account?.assignedAt||!ROLES.includes(account.role))return {};
  const policy=normalize(data.school?.accessConfiguration?.roles?.[account.role]||{});
+ const rolePolicy=data.school?.accessConfiguration?.roles?.[account.role]||{};
+ if(!rolePolicy.honorarios&&['Director','Gerente','Piloto','Contabilidad'].includes(account.role)){const page=policy.honorarios;page.actions.view=true;page.areas['Honorarios de pilotos']=true;page.boxes.report={view:true,edit:false};}
  if(account.role==='Mecánico'){
   const page=policy.aeronaves;page.actions.view=true;page.actions.edit=true;
   for(const id of ['status','pending','maintenance'])page.boxes[id]={view:true,edit:true};

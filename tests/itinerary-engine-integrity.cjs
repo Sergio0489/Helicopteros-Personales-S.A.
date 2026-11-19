@@ -11,8 +11,8 @@ test('the itinerary engine exposes its scheduling contract to both browsers and 
 });
 test('restored request gates retain tomorrow-only publication and Panama opening/closing boundaries',()=>{
  const E=require(engine),state=now=>({date:'2026-11-17',now,published:false});
- assert.match(E.reservationGate(state('2026-11-16T12:00:00-05:00')),/cerradas/);
- assert.equal(E.reservationGate(state('2026-11-16T12:01:00-05:00')),'');
+ assert.match(E.reservationGate(state('2026-11-16T05:59:00-05:00')),/cerradas/);
+ assert.equal(E.reservationGate(state('2026-11-16T06:00:00-05:00')),'');
  assert.equal(E.reservationGate(state('2026-11-16T19:59:00-05:00')),'');
  assert.match(E.reservationGate(state('2026-11-16T20:00:00-05:00')),/cerradas/);
  assert.match(E.reservationGate({...state('2026-11-16T13:00:00-05:00'),date:'2026-11-16'}),/mañana/);
