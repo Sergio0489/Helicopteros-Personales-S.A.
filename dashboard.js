@@ -474,7 +474,7 @@ function buildPanel(ac, data, idx) {
         <div class="card-title">📋 Bitácora de Horas de Vuelo</div>
         <div class="flight-log-help"${isDualTAC(ac.reg)?'':' hidden'}>Cada registro muestra por separado el TAC de ambos motores y el Hobbs.</div>
         <div class="flight-log-header"${isDualTAC(ac.reg)?' hidden':''} style="display:grid;grid-template-columns:1fr 1fr 65px 65px 1.6fr;gap:6px;padding:4px 0;border-bottom:1px solid var(--dim)">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">FECHA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HORA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HV DÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ACUM.</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">LECTURAS · TAC / HOBBS</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">FECHA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HORA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HV DÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ACUM.</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${isDualTAC(ac.reg)?'LECTURAS · TAC / HOBBS':' '}</span>
         </div>
         <div id="bitacora-horas-${idx}">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>
