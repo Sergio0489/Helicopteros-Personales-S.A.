@@ -198,6 +198,23 @@ test('deleting a 2h/1h dual reading reverses each component exactly once', () =>
   for (const field of ['ciclos_totales', 'ciclos_limite', 'helice1_ciclos', 'helice2_ciclos']) assert.equal(restored[field], '0.00', field);
 });
 
+test('deleting a conventional aircraft record still reverses its component hours', () => {
+  const ctx = registrationContext();
+  const source = {
+    audit_aircraft_reg: 'HP-1784', horas_acum_50: '10.00', horas_acum_100: '20.00',
+    ciclos_totales: '100.00', ciclos_limite: '200.00', bitacora_inspecciones: [],
+    bitacora_vencimientos: [],
+    bitacora_tac: [{ id: 'tac-single', registryId: 'single-1', hour_index: 0, fecha: '01/11/2026', hora: '09:00', hv: '2.00' }],
+    bitacora_horas: [{ fecha: '01/11/2026', hora: '09:00', hv: '2.00', acum: '20.00', registryId: 'single-1' }],
+  };
+  const entry = { id: 'single-1', aircraft: 'HP-1784', tacPrevious100: 10000, tacCurrent100: 10200, modifications: [] };
+  const restored = ctx.reverseAircraftRecord('HP-1784', source, entry, null);
+  assert.equal(restored.horas_acum_50, '8.00');
+  assert.equal(restored.horas_acum_100, '18.00');
+  assert.equal(restored.ciclos_totales, '98.00');
+  assert.equal(restored.ciclos_limite, '198.00');
+});
+
 function deletionFixture(componentBase = 0) {
   const base = {
     fleet: {}, undoFleet: { HP_880BL: [] }, school: { students: [{ id: 'student-fixture', registryFlights: [] }], registry: { entries: [], deletedEntries: [], clients: [] } },
