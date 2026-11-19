@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 30437)
-Total output lines: 770
-
 /* Student administration. All mutations commit through the existing authenticated cloud writer. */
 (function(){
 'use strict';
@@ -347,7 +344,14 @@ function logFlight(sid,cid,kind='vuelo'){
  const school=data(),student=studentById(school,sid),course=courseById(student,cid),sim=kind==='simulador',services=rateServices(school).filter(x=>sim?x.category==='simulador':['vuelo','rpa'].includes(x.category));
  const selectedService=sim?'Simulador':course.type==='rpa'?'RPA':'';
  const selector='<label>'+ (sim?'Servicio de simulador':'Aeronave / servicio')+'<select name="serviceId"'+(!sim?' required':'')+'><option value="">'+(sim?'Ingresar equipo y tarifa manualmente':'Seleccionar…')+'</option>'+services.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===selectedService?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>';
- modal(sim?'Registrar horas de simulador':course.type==='rpa'?'Registrar horas de RPA':'Registrar horas de vuelo / RPA',dateField('date','Fecha de la sesión',today(),true)+selector+(sim?input('equipment','Simulador / equipo','Simulador','text','required maxlength="160"'):'')+input('hours','Horas realizadas','','n…437 tokens truncated…"]').value)||0,r=cents(dialog.querySelector('[name="rate"]').value)||0;dialog.querySelector('#school-flight-estimate').textContent='Cargo: '+money(Math.round(h*r/100))+' · Saldo actual: '+money(paymentTotal(course,kind)-flightTotal(course,kind));};
+ modal(sim?'Registrar horas de simulador':course.type==='rpa'?'Registrar horas de RPA':'Registrar horas de vuelo / RPA',dateField('date','Fecha de la sesión',today(),true)+selector+(sim?input('equipment','Simulador / equipo','Simulador','text','required maxlength="160"'):'')+input('hours','Horas realizadas','','number','min="0.01" max="99999.99" step="0.01" inputmode="decimal" required')+amountField('rate','Tarifa por hora (USD)',school.rates[selectedService]?.cents)+'<p class="school-full school-muted" id="school-flight-estimate"></p>'+input('instructor','Instructor / referencia')+'<label class="school-full">Observación<textarea name="note" maxlength="2000"></textarea></label>',async f=>{
+  errorDate(f,[['date',true]]);const hours100=cents(f.hours),rate=cents(f.rate),service=services.find(x=>x.id===f.serviceId);
+  if(!hours100||rate===null)throw Error('Revisa las horas y la tarifa.');if(!sim&&!service)throw Error('Selecciona una aeronave o servicio.');if(sim&&!f.equipment.trim())throw Error('Ingresa el simulador o equipo.');if(rate===0&&!f.note.trim())throw Error('Explica en la observación por qué la sesión no tiene cargo.');
+  const costCents=Math.round(hours100*rate/100);if(!Number.isSafeInteger(costCents))throw Error('El importe excede el rango permitido.');const latest=courseById(studentById(data(),sid),cid),balance=paymentTotal(latest,kind)-flightTotal(latest,kind);
+  if(costCents>balance&&!window.confirm('El cargo es '+money(costCents)+' y el saldo disponible es '+money(balance)+'. ¿Registrar la sesión y dejar el saldo negativo?'))return;
+  await change(s=>courseById(studentById(s,sid),cid).flights.push({id:uid(),fee:kind,date:isoFecha(f.date),aircraft:sim?'Simulador':service.id==='RPA'?'RPA':service.name,serviceId:service?.id||'',equipmentKind:sim?'simulador':service.category,equipment:sim?f.equipment.trim():'',hours100,rateCents:rate,costCents,instructor:f.instructor.trim(),note:f.note.trim(),createdAt:new Date().toISOString()}));
+ },dialog=>{
+  const calc=()=>{const h=cents(dialog.querySelector('[name="hours"]').value)||0,r=cents(dialog.querySelector('[name="rate"]').value)||0;dialog.querySelector('#school-flight-estimate').textContent='Cargo: '+money(Math.round(h*r/100))+' · Saldo actual: '+money(paymentTotal(course,kind)-flightTotal(course,kind));};
   dialog.querySelector('[name="hours"]').addEventListener('input',calc);dialog.querySelector('[name="rate"]').addEventListener('input',calc);
   dialog.querySelector('[name="serviceId"]').onchange=e=>{const service=services.find(x=>x.id===e.target.value),rate=school.rates[service?.id]?.cents;dialog.querySelector('[name="rate"]').value=rate==null?'':numeric(rate);if(sim)dialog.querySelector('[name="equipment"]').value=service?.name||'';calc();};calc();
  });
