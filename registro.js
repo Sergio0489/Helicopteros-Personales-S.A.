@@ -185,8 +185,8 @@ function reverseAircraftRecord(reg,source,entry,baseline){
  const d=decodeAircraft(source),tac=arr(d.bitacora_tac).find(t=>t.registryId===entry.id);if(!tac)return d;
  const hi=arr(d.bitacora_horas).findIndex(h=>h.registryId===entry.id||h.tac_id===tac.id);if(hi<0)throw Error('Falta la bitácora de horas vinculada. No se eliminó el registro.');
  const amount=Number(tac.hv);if(!Number.isFinite(amount)||amount<0)throw Error('Revisa las horas del registro antes de eliminarlo.');tac.hour_index=hi;
- d.audit_aircraft_reg=reg;adjustRecordedHours(d,tac,-amount,{adjustComponents:false});delete d.audit_aircraft_reg;
- if(isDualTAC(reg)&&hasDualMeters(tac)){const left=Number(tac.tacLeftHours100??entry.tacLeftHours100??0),right=Number(tac.tacRightHours100??entry.tacRightHours100??0);applyDualComponentChange(d,-left,-right);}
+ const dual=isDualTAC(reg)&&hasDualMeters(tac);d.audit_aircraft_reg=reg;adjustRecordedHours(d,tac,-amount,{adjustComponents:!dual});delete d.audit_aircraft_reg;
+ if(dual){const left=Number(tac.tacLeftHours100??entry.tacLeftHours100??0),right=Number(tac.tacRightHours100??entry.tacRightHours100??0);applyDualComponentChange(d,-left,-right);}
  const contribution=(field,total,offset)=>{const starting=Number(baseline?.[field]);if(!Number.isFinite(starting))return amount;const following=arr(d.bitacora_horas).slice(hi+1,offset).reduce((n,h)=>n+Number(h.hv||0),0),candidates=[amount,...arr(entry.modifications).flatMap(m=>[m.before?.tacCurrent100,m.after?.tacCurrent100].filter(Number.isFinite).map(v=>(v-entry.tacPrevious100)/100)),...arr(entry.modifications).flatMap(m=>[m.before?.aircraftHours100,m.after?.aircraftHours100]).filter(Number.isFinite).map(v=>v/100)];return candidates.find(n=>Math.abs(starting+n+following-Number(total))<0.005)??amount;};
  let reset50=false,reset100=false;
  for(const inspection of arr(d.bitacora_inspecciones))if(inspection.hour_offset>hi){
