@@ -7,6 +7,7 @@
  let tab,panel,loaded=false,busy=false,report=null,canEdit=false,date=today();
  async function installPersonalApproval(){
   try{
+   if(!window.ROLE_VIEW||window.ROLE_VIEW.ownStatement||window.ROLE_VIEW.role!=='Estudiante')return;
    if(document.getElementById('no-show-approval-alert'))return;
    if(window.ROLE_VIEW?.ownStatement)return;
    const result=await request('no-show-own-read',{}),items=result.myNoShows||[];if(!items.length)return;
@@ -33,7 +34,7 @@
   document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();const button=e.currentTarget.querySelector('[type=submit]');button.disabled=true;try{const rates={};dialog.querySelectorAll('[data-aircraft]').forEach(row=>{const [flight,ground]=[...row.querySelectorAll('input')].map(x=>Math.round(Number(x.value)*100));rates[row.dataset.aircraft]={flightCents:flight,groundCents:ground};});const saved=await request('honorarios-rates-save',{rates});report.rates=saved.rates;if(!window.ROLE_VIEW&&window.refreshAccountDossiers&&!await window.refreshAccountDossiers())throw Error('Tarifas guardadas. Guarda los cambios pendientes y actualiza Honorarios para continuar.');dialog.close();render();}catch(error){dialog.querySelector('[role=alert]').textContent=error.message;}finally{button.disabled=false;}};dialog.showModal();
  }
  function install(){
-  if(!window.ROLE_VIEW)installPersonalApproval();if(panel)return;if(window.ROLE_VIEW&&!window.ROLE_VIEW.pages?.some(page=>page.id==='honorarios'))return;const sidebar=document.getElementById('sidebar-tabs'),content=document.getElementById('content-area');if(!sidebar||!content)return;
+  if(panel)return;if(window.ROLE_VIEW&&!window.ROLE_VIEW.pages?.some(page=>page.id==='honorarios'))return;const sidebar=document.getElementById('sidebar-tabs'),content=document.getElementById('content-area');if(!sidebar||!content)return;
   panel=document.createElement('div');panel.id='panel-honorarios';panel.className='aircraft-panel';content.appendChild(panel);
   tab=document.createElement('div');tab.id='tab-honorarios';tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px">💵 HONORARIOS</div>';const stats=[...sidebar.children].find(x=>x.textContent.toLocaleUpperCase('es').includes('ESTADÍSTICAS'));if(stats)stats.after(tab);else sidebar.appendChild(tab);
   tab.onclick=()=>{document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');if(loaded)load();else load();};

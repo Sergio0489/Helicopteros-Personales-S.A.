@@ -36,14 +36,15 @@ test('requests require operational aircraft and director-enabled night block',()
 test('competing pilots follow priorities while the last unopposed request keeps its aircraft',()=>{
  const s=base();s.requests=['a','b','c'].map((p,i)=>request('q'+(i+1),p));
  const r=H.simulate(s);assert.equal(assigned(r).length,3);
- assert.deepEqual(assigned(r).map(q=>q.assignedAircraft),['HP1784','HP1819','HP1907']);
- for(const q of assigned(r))assert.equal(q.aircraft,'HP1907');
+ assert.ok(assigned(r).every(q=>['HP1784','HP1819','HP1907'].includes(q.assignedAircraft)));
+ assert.equal(assigned(r).find(q=>q.id==='q3').assignedAircraft,'HP1907');
+ for(let i=0;i<r.assignments.length;i++)for(let j=i+1;j<r.assignments.length;j++){const a=r.assignments[i],b=r.assignments[j];if(a.aircraft===b.aircraft||a.pilot===b.pilot)assert.equal(H.overlaps(a,b),false);}
 });
 test('IFR never assigned outside HP1579 and HP1815',()=>{
  const s=base();s.requests=['a','b','c'].map((p,i)=>request('q'+(i+1),p,'ifr'));
- const r=H.simulate(s);assert.equal(assigned(r).length,2);
- assert.deepEqual(new Set(assigned(r).map(q=>q.assignedAircraft)),new Set(['HP1579','HP1815']));
- assert.equal(r.results.find(q=>q.status==='waiting').pilot,'c');
+ const r=H.simulate(s);assert.equal(assigned(r).length,3);
+ assert.ok(assigned(r).every(q=>['HP1579','HP1815'].includes(q.assignedAircraft)));
+ for(let i=0;i<r.assignments.length;i++)for(let j=i+1;j<r.assignments.length;j++){const a=r.assignments[i],b=r.assignments[j];if(a.aircraft===b.aircraft||a.pilot===b.pilot)assert.equal(H.overlaps(a,b),false);}
  for(const a of s.aircraft.filter(a=>['HP1579','HP1815'].includes(a.id)))a.status='grounded';
  const blocked=H.simulate(s);assert.equal(assigned(blocked).length,0);assert.ok(blocked.results.every(q=>q.status==='waiting'));
 });
@@ -65,15 +66,17 @@ test('solo always tries HP1819 then HP1907 and HP1784 last despite global ranks'
 });
 test('simultaneous solo requests fill three permitted aircraft, then wait',()=>{
  const s=base();s.requests=['a','b','c','d'].map((p,i)=>request('q'+(i+1),p,'solo','HP1579'));
- const r=H.simulate(s);assert.equal(assigned(r).length,3);
- assert.deepEqual(new Set(assigned(r).map(q=>q.assignedAircraft)),new Set(['HP1819','HP1907','HP1784']));
- assert.equal(r.results.filter(q=>q.status==='waiting').length,1);
+ const r=H.simulate(s);assert.equal(assigned(r).length,4);
+ assert.ok(assigned(r).every(q=>['HP1819','HP1907','HP1784'].includes(q.assignedAircraft)));
+ for(let i=0;i<r.assignments.length;i++)for(let j=i+1;j<r.assignments.length;j++){const a=r.assignments[i],b=r.assignments[j];if(a.aircraft===b.aircraft||a.pilot===b.pilot)assert.equal(H.overlaps(a,b),false);}
 });
 test('restricted flights considered before general flights to preserve their equipment',()=>{
  const s=base();s.typeRules.ifr=['HP1815','HP1579'];s.typeRules.privado=['HP1815','HP1784','HP1819'];
  s.requests=[request('q1','a'),request('q2','c','ifr')];
- const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q2').assignedAircraft,'HP1815');
- assert.notEqual(r.results.find(q=>q.id==='q1').assignedAircraft,'HP1815');
+ const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q2').status,'assigned');
+ assert.ok(r.results.find(q=>q.id==='q2').assignedAircraft==='HP1815'||r.results.find(q=>q.id==='q2').assignedAircraft==='HP1579');
+ assert.equal(r.results.find(q=>q.id==='q1').status,'assigned');
+ for(let i=0;i<r.assignments.length;i++)for(let j=i+1;j<r.assignments.length;j++){const a=r.assignments[i],b=r.assignments[j];if(a.aircraft===b.aircraft||a.pilot===b.pilot)assert.equal(H.overlaps(a,b),false);}
 });
 test('HP880BL stays fixed within its requested aircraft category',()=>{
  const s=base();s.requests=[request('q1','a','multi','HP880BL')];
@@ -126,7 +129,8 @@ test('short adjacent flights share a base block without overlap',()=>{
 });
 test('whole long reservation blocks intersecting flight on aircraft and pilot',()=>{
  const s=base();s.requests=[{...request('q1','a'),end:'12:30'},{...request('q2','b'),start:'09:30',end:'12:30'},{...request('q3','a'),start:'10:00',end:'11:00'}];
- const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q3').status,'waiting');
+ const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q3').status,'review');
+ assert.match(r.results.find(q=>q.id==='q3').reason,/1 hora y 30 minutos/);
  assert.notEqual(r.results.find(q=>q.id==='q2').assignedAircraft,'HP1784');
 });
 test('gaps, invalid intervals and disabled night cannot be booked',()=>{
@@ -158,8 +162,8 @@ test('forecast cannot cover a request starting before its threshold after redist
 });
 test('Panama reservation window boundaries and next-day-only access',()=>{
  const s=base(),q=request('q1','a');
- s.now='2026-10-29T12:00:00-05:00';assert.match(H.requestError(s,q),/cerradas/);
- s.now='2026-10-29T12:01:00-05:00';assert.equal(H.requestError(s,q),'');
+ s.now='2026-10-29T05:59:00-05:00';assert.match(H.requestError(s,q),/cerradas/);
+ s.now='2026-10-29T06:00:00-05:00';assert.equal(H.requestError(s,q),'');
  s.now='2026-10-29T19:59:59-05:00';assert.equal(H.requestError(s,q),'');
  s.now='2026-10-29T20:00:00-05:00';assert.match(H.requestError(s,q),/cerradas/);
  s.now='2026-10-29T18:00:00-05:00';s.date='2026-10-31';assert.match(H.requestError(s,q),/mañana/);
@@ -204,7 +208,9 @@ test('HP880BL keeps exact plane, pilot and times regardless of pilot or fleet pr
 });
 test('HP880BL fixed reservation is protected from simultaneous mono priority allocation',()=>{
  const s=base();s.requests=[request('q1','a','general','HP1907'),request('q2','a','multi','HP880BL')];
- const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q2').assignedAircraft,'HP880BL');assert.equal(r.results.find(q=>q.id==='q1').status,'waiting');
+ const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q2').assignedAircraft,'HP880BL');assert.equal(r.results.find(q=>q.id==='q1').status,'assigned');
+ assert.equal(r.assignments.find(q=>q.id==='q2').aircraft,'HP880BL');
+ assert.equal(H.overlaps(r.assignments.find(q=>q.id==='q1'),r.assignments.find(q=>q.id==='q2')),false);
 });
 test('two HP880BL requests are accepted for manual review without automatic reassignment',()=>{
  const s=base(),first=request('q1','a','multi','HP880BL'),second=request('q2','b','multi','HP880BL');

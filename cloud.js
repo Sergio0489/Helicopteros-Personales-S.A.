@@ -83,6 +83,7 @@ window.cloudWrite=async function(data){
  const motive=window.ChangeHistory?.getReason()||'';
  try{
   const result=await AccountRegistration.api('director-save',{payload,operation:cloudOperation,reason:motive});
+  if(result.schoolSync?.school)data.school=result.schoolSync.school;
   if(result.itinerarySync)Object.assign(data,result.itinerarySync);
   window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=JSON.stringify(data);cloudVersion=result.revision;cloudOperation=result.operation;
   cloudBlocked=false;

@@ -147,7 +147,7 @@ function apply(data,actor,body,now){
   const q={...old,...cleanFlight(body.flight,old?.id||'flight-'+body.actionId,now),fixed:true,createdByRole:rights.role};q.date=dte;
   assertPilot(data,q,dte,now);const reason=E.directorFlightError(state,q,oldDate===dte?old?.id:undefined,rights.role);if(reason)error(reason);
   const a=state.aircraft.find(a=>a.id===q.aircraft);if(a.status!=='operativo'&&!body.acknowledge)error('Confirma la alerta de la aeronave no operativa.');
-  if(oldDate!==dte){source.confirmed=source.confirmed.filter(f=>f.id!==old.id);storeFlights(data,source);day(data,oldDate).revision++;}
+  if(oldDate!==dte){source.confirmed=source.confirmed.filter(f=>f.id!==old.id);storeFlights(data,source);day(data,oldDate).revision++;if(source.published)queueModifiedEmail(data,oldDate,now);}
   state.confirmed=state.confirmed.filter(f=>f.id!==q.id);state.confirmed.push(q);storeFlights(data,state);
   changeNotice(data,old?{...old,date:oldDate}:null,q,state.published||source.published,now,receipt);
  }else if(action==='cancel-flight'){

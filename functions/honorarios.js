@@ -28,9 +28,9 @@ function addFlightPay(entry,rate){
 function activeStudents(data){return list(data.school?.students);}
 function applyNewEntries(before,after,account){
  const oldIds=new Set(list(before.school?.registry?.entries).map(e=>e.id));
- after.school ||= {};after.school.registry ||= {entries:[],clients:[],destinations:[]};after.school.honorarios ||= {};
- const records=after.school.honorarios.records ||= [],tariffs=rates(after);
- for(const entry of list(after.school.registry.entries)){
+ const tariffs=rates(after);let records;
+ const addRecord=record=>{after.school ||= {};after.school.honorarios ||= {};records ||= after.school.honorarios.records ||= [];records.push(record);};
+ for(const entry of list(after.school?.registry?.entries)){
   if(oldIds.has(entry.id))continue;
   const status=entry.bookStatus;
   if(!['flown','weather','maintenance','cancelled','no-show'].includes(status))throw Error('Selecciona el resultado de la bitácora.');
@@ -48,7 +48,7 @@ function applyNewEntries(before,after,account){
    const rateKey=aircraftKey(entry.aircraft);if(!AIRCRAFT.includes(rateKey))continue;
    const rate=tariffs[rateKey];if(!rate)throw Error('No hay tarifa configurada para '+entry.aircraft+'.');
    const pay=addFlightPay(entry,rate);entry.pilotHonorarium={...pay,createdAt:new Date().toISOString()};
-   records.push({id:'flight-'+entry.id,entryId:entry.id,pilotId:entry.pilotId,pilot:entry.pilot,date:entry.date,aircraft:entry.aircraft,kind:entry.operationType==='charter'?'charter':'flight',...pay,createdAt:entry.pilotHonorarium.createdAt});
+   addRecord({id:'flight-'+entry.id,entryId:entry.id,pilotId:entry.pilotId,pilot:entry.pilot,date:entry.date,aircraft:entry.aircraft,kind:entry.operationType==='charter'?'charter':'flight',...pay,createdAt:entry.pilotHonorarium.createdAt});
   }else if(status==='cancelled'&&!String(entry.cancellationReason||'').trim())throw Error('La cancelación requiere un motivo.');
   if(status==='no-show'){
    if(entry.personKind!=='student')throw Error('El no show debe vincularse al expediente de un estudiante.');
@@ -56,7 +56,7 @@ function applyNewEntries(before,after,account){
    student.expenses ||= [];const expenseId='no-show-'+entry.id;
    if(student.expenses.some(e=>e.noShowId===entry.id))throw Error('El cargo de no show ya existe.');
    student.expenses.push({id:expenseId,noShowId:entry.id,date:entry.date,cents:10000,description:'Cargo por no show',aircraft:entry.aircraft,source:'Bitácora '+(entry.book||entry.id),note:'Pendiente de aprobación del estudiante',createdAt:new Date().toISOString(),acceptance:null});
-   const instructorPay={id:'no-show-'+entry.id,entryId:entry.id,pilotId:entry.pilotId,pilot:entry.pilot,date:entry.date,aircraft:entry.aircraft,kind:'no-show',totalCents:3000,createdAt:new Date().toISOString()};records.push(instructorPay);entry.instructorHonorariumCents=3000;
+   const instructorPay={id:'no-show-'+entry.id,entryId:entry.id,pilotId:entry.pilotId,pilot:entry.pilot,date:entry.date,aircraft:entry.aircraft,kind:'no-show',totalCents:3000,createdAt:new Date().toISOString()};addRecord(instructorPay);entry.instructorHonorariumCents=3000;
   }
  }
 }
