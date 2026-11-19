@@ -64,15 +64,11 @@ test('grounded, aog and maintenance transitions notify authorized groups exactly
  assert.equal(M.reconcile(equivalent,d,now),false,'aog and grounded describe the same restriction');
  assert.equal(d.operationalNotices.length,1);
 });
-test('pilot flight requests allow optional observations while keeping all other scheduling fields required',()=>{
- for(const field of ['aircraft','pilot','start','end','flightType','route','note'])for(const value of ['', '   ',null]){
-  if(field==='note'){
-   if(value===null)continue;
-   const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);
-   continue;
-  }
+test('flight requests and director scheduling allow optional observations while requiring all other scheduling fields',()=>{
+ for(const field of ['aircraft','pilot','start','end','flightType','route'])for(const value of ['', '   ',null]){
   const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);
  }
+ const scheduled=fixture();apply(scheduled,director,'flight',{flight:flight('p1','HP1907',{note:''})});assert.equal(scheduled.itinerarios.length,1);assert.equal(scheduled.itinerarios[0].observaciones,'');
  const requested=fixture();apply(requested,pilot('p1'),'request',{flight:flight('p1','HP1907',{note:''})});assert.equal(requested.itinerary.days[date].requests[0].note,'');
  assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:''})}),/Completa el campo Ruta o destino/);
  const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP1907',{route:'  Chitré  ',studentId:''})});assert.equal(d.itinerarios[0].ruta,'Chitré');assert.equal(d.itinerarios[0].personId,'');

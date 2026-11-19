@@ -71,16 +71,16 @@ function storeFlights(data,state){
 }
 function notice(data,event,now,id){if(!event)return;const s=setup(data);s.notices ||= [];if(s.notices.some(n=>n.id===id))return;s.notices.push({...copy(event),id,createdAt:now});s.notices=s.notices.slice(-500);}
 function changeNotice(data,before,after,published,now,id,all=false){const n=E.publishedChange(before,after,published);if(n){if(all)n.recipients=[{kind:'group',id:'all'}];notice(data,n,now,id);}}
-function cleanFlight(input,id,now,allowEmptyNote=false){
+function cleanFlight(input,id,now){
  if(!input||typeof input!=='object'||Array.isArray(input))error('Vuelo no válido.');
- for(const [field,label,max]of [['aircraft','Aeronave',40],['pilot','Piloto',200],['start','Hora de inicio',5],['end','Hora de culminación',5],['flightType','Tipo de vuelo',40],['route','Ruta o destino',200],...allowEmptyNote?[]:[['note','Observaciones',1000]]]){
+ for(const [field,label,max]of [['aircraft','Aeronave',40],['pilot','Piloto',200],['start','Hora de inicio',5],['end','Hora de culminación',5],['flightType','Tipo de vuelo',40],['route','Ruta o destino',200]]){
   if(typeof input[field]!=='string'||!input[field].trim())error('Completa el campo '+label+'.');
   if(input[field].trim().length>max)error(label+': máximo '+max+' caracteres.');
  }
- if(allowEmptyNote&&input.note!=null&&(typeof input.note!=='string'||input.note.trim().length>1000))error('Observaciones: máximo 1000 caracteres.');
+ if(input.note!=null&&(typeof input.note!=='string'||input.note.trim().length>1000))error('Observaciones: máximo 1000 caracteres.');
  if(!Object.hasOwn(E.flightTypes,input.flightType))error('Vuelo no válido.');
  const flight={id,aircraft:key(input.aircraft),pilot:String(input.pilot||''),studentId:String(input.studentId||''),start:String(input.start||''),end:String(input.end||''),slot:String(input.slot||'b1'),flightType:String(input.flightType||'privado'),socioName:String(input.socioName||'').trim().slice(0,120),route:input.route.trim(),note:String(input.note||'').trim().slice(0,1000),created:Date.parse(now)};
- if(input.flightType==='examen')flight.delegationNumber=String(input.delegationNumber||'').trim().slice(0,30);
+ if(input.flightType==='examen')flight.delegationNumber=String(input.delegationNumber||'').trim();
  return flight;
 }
 function checkExpected(d,body){if(body.revision!==d.revision)error('El horario cambió. Actualiza y revisa antes de volver a guardar.');}
@@ -130,7 +130,7 @@ function apply(data,actor,body,now){
  }else if(action==='request'){
   if(!rights.request)error(rights.role==='pilot'&&!rights.pilot?'Vincula tu usuario con un expediente de piloto.':'El director debe habilitar «Solicitudes de vuelos» para tu cargo.');
   const old=d.requests.find(q=>q.id===body.id);if(body.id&&(!old||old.pilot!==rights.pilot||old.status==='approved'||d.cancelled.includes(old.id)))error('No puedes modificar esta solicitud.');
-  let q=cleanFlight({...body.flight,pilot:rights.pilot},old?.id||'request-'+body.actionId,now,true);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
+  let q=cleanFlight({...body.flight,pilot:rights.pilot},old?.id||'request-'+body.actionId,now);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
   q=E.normalizeRequest(state,q);const reason=E.requestError(state,q);if(reason)error(reason);assertPilot(data,q,dte,now);q.sourceSlots=E.sourceSnapshot(state.aircraft.find(a=>a.id===q.aircraft),q);
   d.requests=d.requests.filter(x=>x.id!==q.id);d.requests.push(q);
  }else if(action==='cancel-request'){
@@ -170,7 +170,7 @@ function apply(data,actor,body,now){
   if(!state.published)error('El horario todavía no está publicado.');
   const open=d.openSlots.find(x=>x.id===body.id);if(!open)error('Este espacio ya fue tomado. Actualiza el itinerario.');
   const clock=E.panamaClock(now);if(dte<clock.date||dte===clock.date&&E.minutes(open.start)<=E.minutes(clock.time))error('Este espacio ya inició o ya pasó.');
-  const flight=cleanFlight({...body.flight,pilot:rights.pilot,aircraft:open.aircraft,start:open.start,end:open.end},'claimed-'+body.actionId,now,true);flight.pilot=rights.pilot;flight.fixed=true;flight.createdByRole='pilot';flight.createdByUid=actor.user.uid;
+  const flight=cleanFlight({...body.flight,pilot:rights.pilot,aircraft:open.aircraft,start:open.start,end:open.end},'claimed-'+body.actionId,now);flight.pilot=rights.pilot;flight.fixed=true;flight.createdByRole='pilot';flight.createdByUid=actor.user.uid;
   const aircraft=state.aircraft.find(a=>a.id===open.aircraft);if(!aircraft||!E.bookable(aircraft,dte)||!E.canChooseFlightType(state,typeOf(flight),'pilot',aircraft)||!E.compatible(state,flight,aircraft))error('No estás habilitado para este tipo de vuelo o aeronave.');const metadataError=E.flightDataError(state,flight);if(metadataError)error(metadataError);
   if(E.minutes(flight.end)-E.minutes(flight.start)<E.MIN_ASSIGNMENT_MINUTES)error('El espacio debe durar al menos 1 hora y 30 minutos.');if(!E.flightAvailable(aircraft,flight,dte)||state.confirmed.some(q=>(q.aircraft===flight.aircraft||q.pilot===flight.pilot)&&E.overlaps(q,flight)))error('El espacio ya no está disponible para todo el intervalo.');assertPilot(data,flight,dte,now);
   state.confirmed.push(flight);d.openSlots=d.openSlots.filter(x=>x.id!==open.id);storeFlights(data,state);changeNotice(data,null,flight,state.published,now,receipt,true);
