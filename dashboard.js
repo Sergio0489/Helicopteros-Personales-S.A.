@@ -470,10 +470,11 @@ function buildPanel(ac, data, idx) {
         <div id="pb-horas-${idx}" style="display:none"></div>
       </div>
 
-      <div class="card">
+      <div class="card" data-flight-log="${isDualTAC(ac.reg)?'dual':'standard'}">
         <div class="card-title">📋 Bitácora de Horas de Vuelo</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 65px 65px 1.6fr;gap:6px;padding:4px 0;border-bottom:1px solid var(--dim)">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">FECHA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HORA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HV DÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ACUM.</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${isDualTAC(ac.reg)?'LECTURAS · TAC / HOBBS':' '}</span>
+        <div class="flight-log-help"${isDualTAC(ac.reg)?'':' hidden'}>Cada registro muestra por separado el TAC de ambos motores y el Hobbs.</div>
+        <div class="flight-log-header"${isDualTAC(ac.reg)?' hidden':''} style="display:grid;grid-template-columns:1fr 1fr 65px 65px 1.6fr;gap:6px;padding:4px 0;border-bottom:1px solid var(--dim)">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">FECHA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HORA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HV DÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ACUM.</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">LECTURAS · TAC / HOBBS</span>
         </div>
         <div id="bitacora-horas-${idx}">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>
@@ -1198,9 +1199,24 @@ function renderBitacoraHoras(idx, items) {
   if (!container) return;
   const registros = Array.isArray(items) ? items : [];
   if (!registros.length) {
+    container.classList.remove('flight-log-list-dual');
     container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
     return;
   }
+  if (isDualTAC(fleet[idx].reg)) {
+    const meterValue=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';
+    container.classList.add('flight-log-list-dual');
+    container.innerHTML=[...registros].reverse().map((r,ri)=>{
+      const origIdx=registros.length-1-ri,isLast=origIdx===registros.length-1;
+      const meters=hasDualTACLog(r)?DUAL_TAC_METERS.map(m=>{
+        const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';
+        return '<div class="flight-log-meter"><strong class="flight-log-meter-name">'+escapeRecord(m.label)+'</strong><div><small class="flight-log-reading-label">Anterior</small><b class="flight-log-reading-value">'+meterValue(r[stem+'Previous100'])+'</b></div><div><small class="flight-log-reading-label">Actual</small><b class="flight-log-reading-value">'+meterValue(r[stem+'Current100'])+'</b></div><div><small class="flight-log-reading-label">Horas</small><b class="flight-log-reading-value">'+meterValue(r[stem+'Hours100'])+' h</b></div></div>';
+      }).join(''):'<div class="flight-log-legacy">Registro histórico con TAC único</div>';
+      return '<article class="flight-log-entry-dual'+(isLast?' flight-log-entry-latest':'')+'"><div class="flight-log-summary">'+[['Fecha',r.fecha||'—'],['Hora',r.hora||'—'],['HV día',parseFloat(r.hv||0).toFixed(2)+' h'],['Acumulado',parseFloat(r.acum||0).toFixed(2)+' h']].map(([label,value])=>'<div><small class="flight-log-summary-label">'+label+'</small><b class="flight-log-summary-value">'+escapeRecord(value)+'</b></div>').join('')+'</div><div class="flight-log-meters">'+meters+'</div>'+(isLast?'<div class="flight-log-delete"><button type="button" onclick="eliminarHoraBitacora('+idx+','+origIdx+')" aria-label="Eliminar último registro del '+escapeRecord(r.fecha||'')+'" title="Eliminar último registro">Eliminar último registro</button></div>':'')+'</article>';
+    }).join('');
+    return;
+  }
+  container.classList.remove('flight-log-list-dual');
   // Show most recent first
   const lastIdx = registros.length - 1;
   const meterValue=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';
