@@ -8,6 +8,16 @@ const aircraftKey=value=>String(value||'').replace(/[^a-z0-9]/gi,'').toUpperCase
 const defaultRates=()=>Object.fromEntries(AIRCRAFT.map(id=>[id,{flightCents:['HP880BL','HP1805BLM'].includes(id)?5000:['HP18BLM','HP1186','HP11BL'].includes(id)?10000:3000,groundCents:id==='HP11BL'?10000:5000,noShowCents:3000}]));
 const list=v=>Array.isArray(v)?v:[];
 const cents=(value,label)=>{if(!Number.isSafeInteger(value)||value<0||value>100000000)throw Error('Revisa la tarifa de '+label+'.');return value;};
+const syntheticPilotId=key=>'legacy-name-'+createHash('sha256').update(key).digest('hex').slice(0,24);
+function pilotReportId(data,account={},authUid=''){
+ const pilots=list(data.pilotos),reportId=pilot=>{const id=String(pilot?.id||'');if(id&&!legacyId(id))return id;const key=normalized(pilot?.nombre||pilot?.name,'name');if(!key||pilots.filter(row=>normalized(row?.nombre||row?.name,'name')===key).length!==1)return '';return syntheticPilotId(key);};
+ const recordId=String(account.recordId||'');
+ if(recordId&&!legacyId(recordId)){const matches=pilots.filter(p=>String(p.id||'')===recordId);return matches.length===1?reportId(matches[0]):'';}
+ const uid=String(authUid||'');
+ if(uid){const matches=pilots.filter(p=>String(p.authUid||'')===uid);if(matches.length===1)return reportId(matches[0]);if(matches.length>1)return '';}
+ const name=normalized(account.recordName,'name');if(!name)return '';
+ const matches=pilots.filter(p=>normalized(p.nombre||p.name,'name')===name);return matches.length===1?reportId(matches[0]):'';
+}
 function rates(data){const defaults=defaultRates(),saved=data.school?.honorarios?.rates||{};return Object.fromEntries(AIRCRAFT.map(id=>[id,{...defaults[id],...(saved[id]||{})}]));}
 function validDate(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T12:00:00Z'))&&new Date(value+'T12:00:00Z').toISOString().slice(0,10)===value;}
 function utcDate(value){return new Date(value+'T12:00:00Z');}
@@ -66,19 +76,19 @@ function applyNewEntries(before,after,account){
 function report(data,pilotId,date){
  const selected=period(date),stored=rates(data),registryEntries=list(data.school?.registry?.entries),records=list(data.school?.honorarios?.records),basePilots=list(data.pilotos),nameCounts=new Map();
  for(const p of basePilots){const name=normalized(p.nombre||p.name,'name');if(name)nameCounts.set(name,(nameCounts.get(name)||0)+1);}
- const pilotRows=basePilots.map(p=>{const name=String(p.nombre||p.name||'Piloto'),key=normalized(name,'name'),storedId=String(p.id||''),id=storedId&&!legacyId(storedId)?storedId:((nameCounts.get(key)===1&&key)?'legacy-name-'+createHash('sha256').update(key).digest('hex').slice(0,24):'');return {...p,id,name};});
+  const pilotRows=basePilots.map(p=>{const name=String(p.nombre||p.name||'Piloto'),key=normalized(name,'name'),storedId=String(p.id||''),id=storedId&&!legacyId(storedId)?storedId:((nameCounts.get(key)===1&&key)?syntheticPilotId(key):'');return {...p,id,name};});
  const pilotIds=new Set();for(const p of pilotRows)if(p.id){if(pilotIds.has(p.id))throw Error('Hay identificadores de piloto duplicados. Revisa los expedientes antes de consultar Honorarios.');pilotIds.add(p.id);}
  const pilots=new Map(pilotRows.filter(p=>p.id).map(p=>[p.id,p.name]));
  const resolveName=name=>{const key=normalized(name,'name'),matches=pilotRows.filter(p=>p.id&&normalized(p.name,'name')===key);return matches.length===1?matches[0].id:'';};
- const resolvePilotId=(id,name)=>{const value=String(id||'');return value&&!legacyId(value)?value:resolveName(name);};
+  const resolvePilotId=(id,name,unresolved=false)=>{if(unresolved)return '';const value=String(id||'');return value&&!legacyId(value)?value:resolveName(name);};
  // Retain queryable history for deleted dossiers whose ledger records already
  // carry permanent IDs. Positional legacy IDs never become historical identities.
  for(const row of [...records,...registryEntries]){const id=String(row.pilotId||'');if(id&&!legacyId(id)&&!pilots.has(id)){const name=String(row.pilot||'Piloto histórico');pilots.set(id,name);pilotRows.push({id,name,historical:true});}}
- const rows=records.filter(r=>r.date>=selected.start&&r.date<=selected.end).map(r=>{const linkedPilotId=resolvePilotId(r.pilotId,r.pilot);return {...r,pilotId:linkedPilotId,pilot:r.pilot||pilots.get(linkedPilotId)||'Piloto'};}).filter(r=>!pilotId||String(r.pilotId)===String(pilotId));
+  const rows=records.filter(r=>r.date>=selected.start&&r.date<=selected.end).map(r=>{const linkedPilotId=resolvePilotId(r.pilotId,r.pilot,r.pilotIdentityUnresolved);return {...r,pilotId:linkedPilotId,pilot:r.pilot||pilots.get(linkedPilotId)||'Piloto'};}).filter(r=>!pilotId||String(r.pilotId)===String(pilotId));
  // Include flown entries missing from the ledger to keep an interrupted migration visible.
  for(const entry of registryEntries){
   if(typeof entry.date!=='string'||entry.date<selected.start||entry.date>selected.end||entry.bookStatus!=='flown'||!(Number(entry.hours100)>0)||!AIRCRAFT.includes(aircraftKey(entry.aircraft))||records.some(r=>r.entryId===entry.id))continue;
-  const linkedPilotId=resolvePilotId(entry.pilotId,entry.pilot),displayName=entry.pilot||pilots.get(linkedPilotId)||'Piloto';if(pilotId&&String(linkedPilotId)!==String(pilotId))continue;
+   const linkedPilotId=resolvePilotId(entry.pilotId,entry.pilot,entry.pilotIdentityUnresolved),displayName=entry.pilot||pilots.get(linkedPilotId)||'Piloto';if(pilotId&&String(linkedPilotId)!==String(pilotId))continue;
   const pay=entry.pilotHonorarium||addFlightPay(entry,stored[aircraftKey(entry.aircraft)]);
   rows.push({id:'flight-'+entry.id,entryId:entry.id,pilotId:linkedPilotId,pilot:displayName,date:entry.date,aircraft:entry.aircraft,kind:entry.operationType==='charter'?'charter':'flight',...pay});
  }
@@ -108,4 +118,5 @@ function protect(before,after){
  }
  if([...oldEntries.values()].some(e=>e.bookStatus==='no-show'||e.pilotHonorarium||e.instructorHonorariumCents))throw Error('No se puede eliminar una bitácora que ya registró honorarios o un no show.');
 }
-module.exports={AIRCRAFT,aircraftKey,defaultRates,rates,period,validDate,addFlightPay,applyNewEntries,report,validateRates,protect};
+module.exports={AIRCRAFT,aircraftKey,defaultRates,rates,period,validDate,addFlightPay,applyNewEntries,report,pilotReportId,validateRates,protect};
+

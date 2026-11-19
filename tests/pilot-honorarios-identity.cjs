@@ -78,6 +78,26 @@ function migrate(before,after){return pilotIdentity(before,after,fakeId);}
  const archived=Honorarios.report(after,'bob-permanent',date);assert.equal(archived.rows[0].pilotId,'bob-permanent');assert.equal(archived.rows[0].totalCents,1800);assert(archived.pilots.some(p=>p.id==='bob-permanent'&&p.name==='Bob Archivado'));
 }
 
+// A deleted same-name legacy dossier keeps the surviving dossier from
+// inheriting the removed pilot's ledger rows, including on repeated migration.
+{
+  const before=fixture([{nombre:'Mismo Nombre',email:'removed@example.test'},{nombre:'Mismo Nombre',email:'survivor@example.test'}]);
+  before.school.registry.entries=[{id:'removed-flight',date,aircraft:'HP1784',book:'M-1',bookStatus:'flown',operationType:'instruction',pilot:'Mismo Nombre',pilotId:'legacy-pilot-0',hours100:200}];
+  before.school.honorarios.records=[{id:'removed-ledger',entryId:'removed-flight',pilot:'Mismo Nombre',pilotId:'legacy-pilot-0',date,aircraft:'HP1784',kind:'flight',flightHours100:200,totalCents:6000}];
+  const after=structuredClone(before);after.pilotos=[{nombre:'Mismo Nombre',email:'survivor@example.test'}];migrate(before,after,fakeId);
+  const survivorId=after.pilotos[0].id;
+  assert.equal(after.school.registry.entries[0].pilotId,'legacy-pilot-0');
+  assert.equal(after.school.registry.entries[0].pilotIdentityUnresolved,true);
+  assert.equal(after.school.honorarios.records[0].pilotId,'legacy-pilot-0');
+  assert.equal(after.school.honorarios.records[0].pilotIdentityUnresolved,true);
+  assert.equal(Honorarios.report(after,'',date).rows[0].pilotId,'');
+  assert.equal(Honorarios.report(after,'',date).rows[0].totalCents,6000);
+  assert.equal(Honorarios.report(after,survivorId,date).rows.length,0);
+  const repeated=structuredClone(after);migrate(after,repeated,fakeId);
+  assert.equal(repeated.school.honorarios.records[0].pilotIdentityUnresolved,true);
+  assert.equal(Honorarios.report(repeated,survivorId,date).rows.length,0);
+}
+
 // New flights write the permanent ID and reject ambiguous name-only links.
 {
  const before=fixture([{id:'pilot-bob',nombre:'Bob'},{id:'pilot-carol',nombre:'Carol'}]);
@@ -89,3 +109,4 @@ function migrate(before,after){return pilotIdentity(before,after,fakeId);}
 }
 
 console.log('PASS permanent pilot identity migration, legacy history queries, deletion/reorder, renames, duplicate IDs and safe unassigned history');
+

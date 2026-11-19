@@ -75,12 +75,13 @@ function pilotIdentity(before,after,makeId=randomUUID){
  for(const pilot of newRows)if(!pilot.id||legacyId(pilot.id))pilot.id=makeId();
  assertUniqueIds(newRows,'actuales');
  const currentByName=new Map();for(const pilot of newRows){const name=normalized(pilot.nombre||pilot.name,'name');if(name){if(!currentByName.has(name))currentByName.set(name,[]);currentByName.get(name).push(String(pilot.id));}}
- const oldByName=new Map();for(let i=0;i<oldRows.length;i++){const p=oldRows[i],name=normalized(p.nombre||p.name,'name'),id=oldToId.get(i)||(legacyId(p.id)?'':String(p.id||''));if(name&&id){if(!oldByName.has(name))oldByName.set(name,[]);oldByName.get(name).push(id);}}
- const findName=(name)=>{const key=normalized(name,'name');if(!key)return '';const old=oldByName.get(key)||[],current=currentByName.get(key)||[];const matches=old.length?old:current;return matches.length===1?matches[0]:'';};
- function migrateRecords(rows){for(const record of list(rows)){
-  const id=String(record?.pilotId||'');if(id&&!legacyId(id))continue;
-  const matchedId=findName(record?.pilot);if(matchedId)record.pilotId=matchedId;
- }}
+  const oldByName=new Map();for(let i=0;i<oldRows.length;i++){const p=oldRows[i],name=normalized(p.nombre||p.name,'name'),id=oldToId.get(i)||(legacyId(p.id)?'':String(p.id||''));if(name){if(!oldByName.has(name))oldByName.set(name,[]);oldByName.get(name).push(id);}}
+  const findName=(name)=>{const key=normalized(name,'name');if(!key)return {id:'',blocked:true};const old=oldByName.get(key);if(old)return old.length===1&&old[0]?{id:old[0],blocked:false}:{id:'',blocked:true};const current=currentByName.get(key)||[];return current.length===1?{id:current[0],blocked:false}:{id:'',blocked:true};};
+  function migrateRecords(rows){for(const record of list(rows)){
+   if(record?.pilotIdentityUnresolved)continue;
+   const id=String(record?.pilotId||'');if(id&&!legacyId(id))continue;
+   const match=findName(record?.pilot);if(match.id){record.pilotId=match.id;delete record.pilotIdentityUnresolved;}else if(match.blocked)record.pilotIdentityUnresolved=true;
+  }}
  migrateRecords(after.school?.honorarios?.records);migrateRecords(after.school?.registry?.entries);
  const refs=after.school?.userProfiles||{};for(const [uid,profile]of Object.entries(refs))if(profile?.dossier?.kind==='pilot'&&legacyId(profile.dossier.id)){
   const matches=newRows.filter(p=>String(p.authUid||'')===String(uid));if(matches.length===1)profile.dossier.id=String(matches[0].id);
@@ -88,4 +89,5 @@ function pilotIdentity(before,after,makeId=randomUUID){
  return {changed:JSON.stringify(oldRows)!==JSON.stringify(newRows),pilots:newRows,...pilotReferences(oldRows,oldToId)};
 }
 module.exports={pilotIdentity,legacyId,normalized};
+
 
