@@ -2,10 +2,10 @@
 
 const AIRCRAFT=['HP1784','HP1819','HP1930','HP1815','HP1579','HP1907','HP880BL','HP18BLM','HP1186','HP1805BLM','HP11BL'];
 const aircraftKey=value=>String(value||'').replace(/[^a-z0-9]/gi,'').toUpperCase();
-const defaultRates=()=>Object.fromEntries(AIRCRAFT.map(id=>[id,{flightCents:['HP880BL','HP1805BLM'].includes(id)?5000:['HP18BLM','HP1186','HP11BL'].includes(id)?10000:3000,groundCents:id==='HP11BL'?10000:5000}]));
+const defaultRates=()=>Object.fromEntries(AIRCRAFT.map(id=>[id,{flightCents:['HP880BL','HP1805BLM'].includes(id)?5000:['HP18BLM','HP1186','HP11BL'].includes(id)?10000:3000,groundCents:id==='HP11BL'?10000:5000,noShowCents:3000}]));
 const list=v=>Array.isArray(v)?v:[];
 const cents=(value,label)=>{if(!Number.isSafeInteger(value)||value<0||value>100000000)throw Error('Revisa la tarifa de '+label+'.');return value;};
-function rates(data){return {...defaultRates(),...(data.school?.honorarios?.rates||{})};}
+function rates(data){const defaults=defaultRates(),saved=data.school?.honorarios?.rates||{};return Object.fromEntries(AIRCRAFT.map(id=>[id,{...defaults[id],...(saved[id]||{})}]));}
 function validDate(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T12:00:00Z'))&&new Date(value+'T12:00:00Z').toISOString().slice(0,10)===value;}
 function utcDate(value){return new Date(value+'T12:00:00Z');}
 function shift(value,days){const d=utcDate(value);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
@@ -13,9 +13,9 @@ function period(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T12:00:00Z'))||new Date(date+'T12:00:00Z').toISOString().slice(0,10)!==date)throw Error('Fecha de honorarios no válida.');
  const year=Number(date.slice(0,4)),month=Number(date.slice(5,7)),day=Number(date.slice(8,10));
  let start,end,label;
- if(day>=25){start=date.slice(0,8)+'25';const next=month===12?`${year+1}-01-10`:`${year}-${String(month+1).padStart(2,'0')}-10`;end=next;label='25 al 10';}
- else if(day<=10){const prev=month===1?`${year-1}-12-25`:`${year}-${String(month-1).padStart(2,'0')}-25`;start=prev;end=date.slice(0,8)+'10';label='25 al 10';}
- else{start=date.slice(0,8)+'11';end=date.slice(0,8)+'24';label='11 al 24';}
+ if(day>=26){start=date.slice(0,8)+'26';const next=month===12?`${year+1}-01-10`:`${year}-${String(month+1).padStart(2,'0')}-10`;end=next;label='26 al 10';}
+ else if(day<=10){const prev=month===1?`${year-1}-12-26`:`${year}-${String(month-1).padStart(2,'0')}-26`;start=prev;end=date.slice(0,8)+'10';label='26 al 10';}
+ else{start=date.slice(0,8)+'11';end=date.slice(0,8)+'25';label='11 al 25';}
  return {id:start+'_'+end,start,end,label};
 }
 function addFlightPay(entry,rate){
@@ -40,8 +40,9 @@ function applyNewEntries(before,after,account){
    if(account.syncStatus!=='matched'||account.recordKind!=='pilot'||!account.recordId)throw Error('Vincula tu usuario con un expediente de piloto.');
    entry.pilotId=String(account.recordId);entry.pilot=String(account.recordName||entry.pilot||'').trim();
   }else{
-   const pilot=list(before.pilotos).find(p=>String(p.id)===String(entry.pilotId)||String(p.nombre||p.name||'').trim().toLocaleLowerCase('es')===String(entry.pilot||'').trim().toLocaleLowerCase('es'));
-   if(!pilot)throw Error('Vincula el nombre con un expediente de piloto antes de guardar la bitácora.');entry.pilotId=String(pilot.id);entry.pilot=pilot.nombre||pilot.name;
+   const pilotIndex=list(before.pilotos).findIndex((p,index)=>String(p.id||'legacy-pilot-'+index)===String(entry.pilotId)||String(p.nombre||p.name||'').trim().toLocaleLowerCase('es')===String(entry.pilot||'').trim().toLocaleLowerCase('es'));
+   const pilot=list(before.pilotos)[pilotIndex];
+   if(!pilot)throw Error('Vincula el nombre con un expediente de piloto antes de guardar la bitácora.');entry.pilotId=String(pilot.id||'legacy-pilot-'+pilotIndex);entry.pilot=pilot.nombre||pilot.name;
   }
   if(status==='flown'){
    if(!String(entry.book||'').trim()||!(Number(entry.hours100)>0))throw Error('El número de bitácora y las horas son obligatorios para registrar el vuelo.');
@@ -56,26 +57,29 @@ function applyNewEntries(before,after,account){
    student.expenses ||= [];const expenseId='no-show-'+entry.id;
    if(student.expenses.some(e=>e.noShowId===entry.id))throw Error('El cargo de no show ya existe.');
    student.expenses.push({id:expenseId,noShowId:entry.id,date:entry.date,cents:10000,description:'Cargo por no show',aircraft:entry.aircraft,source:'Bitácora '+(entry.book||entry.id),note:'Pendiente de aprobación del estudiante',createdAt:new Date().toISOString(),acceptance:null});
-   const instructorPay={id:'no-show-'+entry.id,entryId:entry.id,pilotId:entry.pilotId,pilot:entry.pilot,date:entry.date,aircraft:entry.aircraft,kind:'no-show',totalCents:3000,createdAt:new Date().toISOString()};addRecord(instructorPay);entry.instructorHonorariumCents=3000;
+   const noShowCents=cents(tariffs[aircraft]?.noShowCents??3000,entry.aircraft),instructorPay={id:'no-show-'+entry.id,entryId:entry.id,pilotId:entry.pilotId,pilot:entry.pilot,date:entry.date,aircraft:entry.aircraft,kind:'no-show',noShowCents,totalCents:noShowCents,createdAt:new Date().toISOString()};addRecord(instructorPay);entry.instructorHonorariumCents=noShowCents;
   }
  }
 }
 function report(data,pilotId,date){
- const selected=period(date),stored=rates(data),pilotRows=list(data.pilotos),pilots=new Map(pilotRows.map(p=>[String(p.id),p.nombre||p.name||'Piloto'])),records=list(data.school?.honorarios?.records),rows=records.filter(r=>r.date>=selected.start&&r.date<=selected.end&&(!pilotId||String(r.pilotId)===String(pilotId))).map(r=>({...r,pilot:r.pilot||pilots.get(String(r.pilotId))||'Piloto'}));
+ const selected=period(date),stored=rates(data),pilotRows=list(data.pilotos).map((p,i)=>({...p,id:String(p.id||'legacy-pilot-'+i)})),pilots=new Map(pilotRows.map(p=>[String(p.id),p.nombre||p.name||'Piloto'])),pilotIdByName=name=>{const normalized=String(name||'').trim().toLocaleLowerCase('es'),matches=pilotRows.filter(p=>String(p.nombre||p.name||'').trim().toLocaleLowerCase('es')===normalized);return matches.length===1?String(matches[0].id):'';},resolvePilotId=(id,name)=>pilots.has(String(id||''))?String(id):pilotIdByName(name),records=list(data.school?.honorarios?.records),registryEntries=list(data.school?.registry?.entries),rows=records.filter(r=>r.date>=selected.start&&r.date<=selected.end).map(r=>{const linkedPilotId=resolvePilotId(r.pilotId,r.pilot);return {...r,pilotId:linkedPilotId,pilot:r.pilot||pilots.get(linkedPilotId)||'Piloto'};}).filter(r=>!pilotId||String(r.pilotId)===String(pilotId));
  // Include flown entries missing from the ledger to keep an interrupted migration visible.
- for(const entry of list(data.school?.registry?.entries)){
+ for(const entry of registryEntries){
   if(typeof entry.date!=='string'||entry.date<selected.start||entry.date>selected.end||entry.bookStatus!=='flown'||!(Number(entry.hours100)>0)||!AIRCRAFT.includes(aircraftKey(entry.aircraft))||records.some(r=>r.entryId===entry.id))continue;
-  const matches=pilotRows.filter(p=>String(p.nombre||p.name||'').trim().toLocaleLowerCase('es')===String(entry.pilot||'').trim().toLocaleLowerCase('es'));
-  const linkedPilotId=entry.pilotId|| (matches.length===1?String(matches[0].id):''),displayName=entry.pilot||pilots.get(String(linkedPilotId))||'Piloto';if(pilotId&&String(linkedPilotId)!==String(pilotId))continue;
+  const linkedPilotId=resolvePilotId(entry.pilotId,entry.pilot),displayName=entry.pilot||pilots.get(linkedPilotId)||'Piloto';if(pilotId&&String(linkedPilotId)!==String(pilotId))continue;
   const pay=entry.pilotHonorarium||addFlightPay(entry,stored[aircraftKey(entry.aircraft)]);
   rows.push({id:'flight-'+entry.id,entryId:entry.id,pilotId:linkedPilotId,pilot:displayName,date:entry.date,aircraft:entry.aircraft,kind:entry.operationType==='charter'?'charter':'flight',...pay});
  }
- const grouped=new Map();for(const row of rows){const kind=row.kind==='charter'?'charter':row.kind==='no-show'?'no-show':'flight',key=String(row.pilotId)+'|'+row.aircraft+'|'+kind;if(!grouped.has(key))grouped.set(key,{pilotId:row.pilotId,pilot:row.pilot,aircraft:row.aircraft,kind,flightHours100:0,groundHours100:0,totalCents:0,entries:0});const g=grouped.get(key);g.flightHours100+=Number(row.flightHours100||0);g.groundHours100+=Number(row.timeOnGround100||0);g.totalCents+=Number(row.totalCents||0);g.entries++;}
- return {period:selected,rates:stored,rows:rows.sort((a,b)=>a.date.localeCompare(b.date)||String(a.pilot).localeCompare(String(b.pilot),'es')),groups:[...grouped.values()].sort((a,b)=>a.pilot.localeCompare(b.pilot,'es')||a.aircraft.localeCompare(b.aircraft)||a.kind.localeCompare(b.kind))};
+ const entryById=new Map(registryEntries.map(e=>[String(e.id),e]));
+ const detailedRows=rows.map(row=>{const entry=entryById.get(String(row.entryId))||{};return {...row,origin:entry.origin||'',destination:list(entry.destinations).join(' → '),book:entry.book||'',personName:entry.personName||'',bookStatus:entry.bookStatus||'',operationType:entry.operationType||'',noShowCount:row.kind==='no-show'?1:0};});
+ const grouped=new Map();for(const row of detailedRows){const kind=row.kind==='charter'?'charter':row.kind==='no-show'?'no-show':'flight',key=String(row.pilotId)+'|'+row.aircraft+'|'+kind;if(!grouped.has(key))grouped.set(key,{pilotId:row.pilotId,pilot:row.pilot,aircraft:row.aircraft,kind,flightHours100:0,groundHours100:0,noShowCount:0,totalCents:0,entries:0});const g=grouped.get(key);g.flightHours100+=Number(row.flightHours100||0);g.groundHours100+=Number(row.timeOnGround100||0);g.noShowCount+=Number(row.noShowCount||0);g.totalCents+=Number(row.totalCents||0);g.entries++;}
+ const totals=new Map();for(const row of detailedRows){const key=String(row.pilotId);if(!totals.has(key))totals.set(key,{totalCents:0,flightHours100:0,groundHours100:0,noShowCount:0});const value=totals.get(key);value.totalCents+=Number(row.totalCents||0);value.flightHours100+=Number(row.flightHours100||0);value.groundHours100+=Number(row.timeOnGround100||0);value.noShowCount+=Number(row.noShowCount||0);}
+ const pilotList=pilotRows.filter(p=>!pilotId||String(p.id)===String(pilotId)).map(p=>({id:String(p.id),name:p.nombre||p.name||'Piloto',license:p.numeroLicencia||p.licenseNumber||p.licencia||'',...(totals.get(String(p.id))||{totalCents:0,flightHours100:0,groundHours100:0,noShowCount:0})})).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+ return {period:selected,rates:stored,pilots:pilotList,rows:detailedRows.sort((a,b)=>a.date.localeCompare(b.date)||String(a.pilot).localeCompare(String(b.pilot),'es')),groups:[...grouped.values()].sort((a,b)=>a.pilot.localeCompare(b.pilot,'es')||a.aircraft.localeCompare(b.aircraft)||a.kind.localeCompare(b.kind))};
 }
 function validateRates(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(id=>!AIRCRAFT.includes(id)))throw Error('Tarifas de aeronaves no válidas.');
- const next=defaultRates();for(const id of AIRCRAFT){const row=value[id]||next[id];next[id]={flightCents:cents(row.flightCents,id),groundCents:cents(row.groundCents,id)};}
+ const next=defaultRates();for(const id of AIRCRAFT){const row=value[id]||next[id];next[id]={flightCents:cents(row.flightCents,id),groundCents:cents(row.groundCents,id),noShowCents:cents(row.noShowCents??next[id].noShowCents,id)};}
  return next;
 }
 function protect(before,after){
