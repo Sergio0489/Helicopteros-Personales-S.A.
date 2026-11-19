@@ -73,6 +73,7 @@ function validateSlots(rows,night){
 
 const flightTypes={
  privado:{label:'Privado',hint:'Aeronaves asignadas por el director. Solo los monomotores se redistribuyen.'},
+ examen:{label:'Examen de vuelo',hint:'Prioridad máxima entre solicitudes pendientes. Requiere número de delegación.'},
  solo:{label:'Vuelo solo',hint:'Por defecto: HP1819, HP1907 y HP1784 como última opción.'},
  xc:{label:'XC',hint:'Aeronaves asignadas por el director para vuelos XC.'},
  ley89:{label:'Ley 89',hint:'Aeronaves asignadas por el director para vuelos Ley 89.'},
@@ -88,7 +89,7 @@ const typeOf=q=>!q.flightType||q.flightType==='general'?'privado':q.flightType;
 const soloOrder=['HP1819','HP1907','HP1784'];
 function defaultTypeRules(){
  const mono=fleet.filter(a=>a[2]==='Monomotor').map(a=>a[0]);
- return {privado:[...mono],solo:[...soloOrder],xc:[...mono],ley89:[...mono],conversion:[...mono],maniobras:[...mono],ifr:['HP1579','HP1815'],multi:['HP880BL'],grob:['HP1930'],charter:fleet.filter(a=>a[2]!=='Monomotor').map(a=>a[0]),socio:fleet.map(a=>a[0])};
+ return {privado:[...mono],examen:[...mono,'HP880BL'],solo:[...soloOrder],xc:[...mono],ley89:[...mono],conversion:[...mono],maniobras:[...mono],ifr:['HP1579','HP1815'],multi:['HP880BL'],grob:['HP1930'],charter:fleet.filter(a=>a[2]!=='Monomotor').map(a=>a[0]),socio:fleet.map(a=>a[0])};
 }
 function typeConfigAircraft(state,type){
  if(!flightTypes[type])return [];
@@ -140,10 +141,11 @@ function normalizeRequest(state,q){
  const slot=active(a).find(s=>overlaps(s,q))?.id||q.slot,next={...q,flightType:type,preferredAircraft:q.preferredAircraft||q.aircraft,aircraft:target,slot};
  next.sourceSlots=sourceSnapshot(a,next);return next;
 }
-function typeHint(state,type){return (flightTypes[type]?.label||'Tipo no válido')+': '+(allowedForType(state,type).join(' → ')||'sin aeronaves asignadas')+(type==='charter'?' · solo director · agenda fija':type==='multi'?' · orden de referencia manual · pilotos: solo HP880BL':' · prioridad por tipo; solo se redistribuyen monomotores');}
+function typeHint(state,type){return (flightTypes[type]?.label||'Tipo no válido')+': '+(allowedForType(state,type).join(' → ')||'sin aeronaves asignadas')+(type==='examen'?' · prioridad máxima entre solicitudes pendientes; requiere número de delegación':type==='charter'?' · solo director · agenda fija':type==='multi'?' · orden de referencia manual · pilotos: solo HP880BL':' · prioridad por tipo; solo se redistribuyen monomotores');}
 function flightDataError(state,q){
  if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la lista o deja la casilla en blanco.';
  if(q.studentId&&state.students?.some(x=>x.id===q.studentId&&x.blockedForFlights))return 'Este estudiante tiene un cargo de no show pendiente de aceptación y no puede recibir nuevos vuelos.';
+ if(typeOf(q)==='examen'&&!/^\d{1,30}$/.test(String(q.delegationNumber||'').trim()))return 'Escribe un número de delegación válido para el examen de vuelo.';
  if(typeOf(q)==='socio'&&(typeof q.socioName!=='string'||!q.socioName.trim()||q.socioName.trim().length>120))return 'Escribe el nombre del socio (máximo 120 caracteres).';
  return '';
 }
@@ -293,6 +295,21 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
  }
  return {flights,changes};
 }
+function allocateMonomotorType(state,type,valid,assignments,results,used){
+ for(const a of aircraftOrder(state,type)){
+  if(!bookable(a,state.date))continue;
+  const ranking=p=>{const n=a.pilots.indexOf(p);return n<0?Number.MAX_SAFE_INTEGER:n;};
+  while(true){
+   const candidates=valid.filter(q=>state.aircraft.find(x=>x.id===q.aircraft)?.category==='Monomotor'&&typeOf(q)===type&&!used.has(q.id)&&priorityAssignment(state,q,a,valid,assignments).allowed&&covers(a,q,state.date)&&compatible(state,q,a)&&(!state.maxBlocks||assignments.filter(x=>x.pilot===q.pilot).length<state.maxBlocks)).map(q=>({request:q,fit:fitRequest(state,q,a,assignments)})).filter(x=>x.fit).sort((x,y)=>ranking(x.request.pilot)-ranking(y.request.pilot)||x.request.created-y.request.created||x.request.id.localeCompare(y.request.id));
+   if(!candidates.length)break;
+   const original=candidates[0].request,q=candidates[0].fit,touched=active(a).filter(s=>overlaps(s,q)),priority=priorityAssignment(state,original,a,valid,assignments);
+   if(!touched.length){used.add(original.id);results.push({...original,status:'review',reason:'No se encontró un bloque habilitado para el horario ajustado.'});continue;}
+   const reason=flightTypes[type].label+' · '+(priority.competing?'prioridad por solicitudes coincidentes':priority.fallback?'aeronave solicitada no disponible para este tipo e intervalo':priority.idle?'prioridad de aeronave: '+a.registration+' lleva '+a.idleDays+' días sin vuelos registrados':'solicitud concedida en la aeronave solicitada')+(priority.competing?' · prioridad de piloto '+(ranking(q.pilot)===Number.MAX_SAFE_INTEGER?'fuera de lista':'#'+(ranking(q.pilot)+1)):'')+(q.aircraft!==a.id?' · redistribuido desde '+q.aircraft:'')+(q.start!==original.start||q.end!==original.end?' · horario ajustado desde '+original.start+'–'+original.end:' · horario solicitado conservado')+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
+   used.add(original.id);assignments.push({...q,aircraft:a.id,sourceRequestId:original.id,slot:touched[0].id,coveredSlots:touched.map(s=>s.id),requestedAircraft:original.aircraft,requestedStart:original.start,requestedEnd:original.end,fixed:false,conditional:a.status!=='operativo',reason});
+   results.push({...original,start:q.start,end:q.end,assignedAircraft:a.id,status:'assigned',conditional:a.status!=='operativo',reason});
+  }
+ }
+}
 function simulate(state){
  const assignments=state.confirmed.map(x=>({...x,fixed:true})),results=[],used=new Set(),requests=state.requests.filter(q=>q.status!=='approved'&&!state.cancelled.includes(q.id)&&!state.confirmed.some(f=>f.sourceRequestId===q.id));
  const valid=requests.map(q=>normalizeRequest(state,q)).filter(q=>{
@@ -309,50 +326,35 @@ function simulate(state){
   else reason=timeError(a,q);
   if(reason){results.push({...q,status:'review',reason});return false;}return true;
  });
- // HP880BL is a fixed reservation, protected before mono allocation.
+ // Exam requests take precedence over every other pending request.
+ // Allocate their monomotor requests first; HP880BL exam requests are handled below.
+ allocateMonomotorType(state,'examen',valid,assignments,results,used);
+ // HP880BL is a fixed reservation, protected before the remaining mono allocation.
  // A conflicting imported request is flagged as-is; never shifted or swapped.
- const protectedRequests=valid.filter(q=>q.aircraft==='HP880BL');
- const protectedConflicts=new Set();
+ const protectedRequests=valid.filter(q=>q.aircraft==='HP880BL').sort((a,b)=>(typeOf(b)==='examen')-(typeOf(a)==='examen')||a.created-b.created||a.id.localeCompare(b.id));
+ const protectedConflicts=new Set(),examPriorityLosers=new Set();
  for(let i=0;i<protectedRequests.length;i++)for(let j=i+1;j<protectedRequests.length;j++){
-  const x=protectedRequests[i],y=protectedRequests[j];if(overlaps(x,y)){protectedConflicts.add(x.id);protectedConflicts.add(y.id);}
+  const x=protectedRequests[i],y=protectedRequests[j];if(overlaps(x,y)){const xExam=typeOf(x)==='examen',yExam=typeOf(y)==='examen';if(xExam&&!yExam){protectedConflicts.add(y.id);examPriorityLosers.add(y.id);}else if(yExam&&!xExam){protectedConflicts.add(x.id);examPriorityLosers.add(x.id);}else{protectedConflicts.add(x.id);protectedConflicts.add(y.id);}}
  }
  for(const q of protectedRequests){
-  const a=state.aircraft.find(a=>a.id===q.aircraft);used.add(q.id);
+  const a=state.aircraft.find(a=>a.id===q.aircraft),conflict=assignments.find(x=>(x.aircraft===q.aircraft||x.pilot===q.pilot)&&overlaps(x,q));used.add(q.id);
   let reason='';
   if(!bookable(a,state.date)||!covers(a,q,state.date))reason='HP880BL no está disponible para todo el intervalo. Revisión manual; no se reasigna.';
-  else if(protectedConflicts.has(q.id)||assignments.some(x=>(x.aircraft===q.aircraft||x.pilot===q.pilot)&&overlaps(x,q)))reason='Cruce en una reserva fija de HP880BL. Revisión manual; no se alteran aeronave, piloto ni horas.';
+  else if(examPriorityLosers.has(q.id)||conflict?.flightType==='examen'&&!conflict.fixed&&typeOf(q)!=='examen')reason='El examen de vuelo tiene prioridad sobre esta solicitud.';
+  else if(protectedConflicts.has(q.id)||conflict)reason='Cruce en una reserva fija de HP880BL. Revisión manual; no se alteran aeronave, piloto ni horas.';
   if(reason){results.push({...q,status:'review',reason});continue;}
-  reason='HP880BL · reserva fija, fuera de prioridades · se publica como fue solicitada'+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
+  reason=(typeOf(q)==='examen'?'Examen de vuelo · prioridad máxima · ':'')+'HP880BL · reserva fija · se publica como fue solicitada'+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
   assignments.push({...q,protected:true,requestedAircraft:q.aircraft,fixed:false,conditional:a.status!=='operativo',reason});
   results.push({...q,assignedAircraft:q.aircraft,status:'assigned',protected:true,conditional:a.status!=='operativo',reason});
  }
- // Only mono requests and mono aircraft participate in priority allocation.
- for(const type of Object.keys(flightTypes).filter(t=>!['multi','charter'].includes(t)).sort((a,b)=>aircraftOrder(state,a).length-aircraftOrder(state,b).length)){
-  for(const a of aircraftOrder(state,type)){
-   if(!bookable(a,state.date))continue;
-   const ranking=p=>{const n=a.pilots.indexOf(p);return n<0?Number.MAX_SAFE_INTEGER:n;};
-   // Re-evaluate availability after every assignment, using the entire requested interval.
-   // Short adjacent requests can share one base block; long requests occupy every minute.
-   while(true){
-    const candidates=valid.filter(q=>
-     state.aircraft.find(x=>x.id===q.aircraft)?.category==='Monomotor'&&typeOf(q)===type&&!used.has(q.id)&&priorityAssignment(state,q,a,valid,assignments).allowed&&covers(a,q,state.date)&&compatible(state,q,a)&&
-     (!state.maxBlocks||assignments.filter(x=>x.pilot===q.pilot).length<state.maxBlocks)
-    ).map(q=>({request:q,fit:fitRequest(state,q,a,assignments)})).filter(x=>x.fit).sort((x,y)=>ranking(x.request.pilot)-ranking(y.request.pilot)||x.request.created-y.request.created||x.request.id.localeCompare(y.request.id));
-    if(!candidates.length)break;
-    const original=candidates[0].request,q=candidates[0].fit,touched=active(a).filter(s=>overlaps(s,q)),priority=priorityAssignment(state,original,a,valid,assignments);
-    if(!touched.length){used.add(original.id);results.push({...original,status:'review',reason:'No se encontró un bloque habilitado para el horario ajustado.'});continue;}
-    const reason=flightTypes[type].label+' · '+(priority.competing?'prioridad por solicitudes coincidentes':priority.fallback?'aeronave solicitada no disponible para este tipo e intervalo':priority.idle?'prioridad de aeronave: '+a.registration+' lleva '+a.idleDays+' días sin vuelos registrados':'solicitud concedida en la aeronave solicitada')+
-     (priority.competing?' · prioridad de piloto '+(ranking(q.pilot)===Number.MAX_SAFE_INTEGER?'fuera de lista':'#'+(ranking(q.pilot)+1)):'')+
-     (q.aircraft!==a.id?' · redistribuido desde '+q.aircraft:'')+(q.start!==original.start||q.end!==original.end?' · horario ajustado desde '+original.start+'–'+original.end:' · horario solicitado conservado')+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
-    used.add(original.id);assignments.push({...q,aircraft:a.id,sourceRequestId:original.id,slot:touched[0].id,coveredSlots:touched.map(s=>s.id),requestedAircraft:original.aircraft,requestedStart:original.start,requestedEnd:original.end,fixed:false,conditional:a.status!=='operativo',reason});
-    results.push({...original,start:q.start,end:q.end,assignedAircraft:a.id,status:'assigned',conditional:a.status!=='operativo',reason});
-   }
-  }
- }
+ // Only mono requests and mono aircraft participate in the remaining type priorities.
+ for(const type of Object.keys(flightTypes).filter(t=>t!=='examen'&&!['multi','charter'].includes(t)).sort((a,b)=>aircraftOrder(state,a).length-aircraftOrder(state,b).length))allocateMonomotorType(state,type,valid,assignments,results,used);
  for(const q of valid.filter(x=>!used.has(x.id))){
   const type=typeOf(q),options=aircraftOrder(state,type).filter(a=>compatible(state,q,a)&&bookable(a,state.date));
+  const examPriorityConflict=type!=='examen'&&assignments.some(x=>typeOf(x)==='examen'&&!x.fixed&&(x.pilot===q.pilot||x.aircraft===q.aircraft)&&overlaps(x,q));
   let reason;
-  if(assignments.some(x=>x.pilot===q.pilot&&overlaps(x,q)))reason='El piloto ya tiene otro vuelo en ese horario';
+  if(examPriorityConflict)reason='El examen de vuelo tiene prioridad sobre esta solicitud.';
+  else if(assignments.some(x=>x.pilot===q.pilot&&overlaps(x,q)))reason='El piloto ya tiene otro vuelo en ese horario';
   else if(state.maxBlocks&&assignments.filter(x=>x.pilot===q.pilot).length>=state.maxBlocks)reason='Límite diario propuesto alcanzado';
   else if(!options.length)reason='No hay aeronaves operativas o previstas para '+flightTypes[type].label+' en su lista: '+allowedForType(state,type).join(', ');
   else if(!options.some(a=>covers(a,q,state.date)))reason='Ninguna aeronave permitida cubre todo el horario solicitado';
