@@ -37,7 +37,7 @@
  }
  function totals(rows){return rows.reduce((sum,row)=>{sum.flightHours100+=Number(row.flightHours100||0);sum.groundHours100+=Number(row.timeOnGround100||0);sum.flightPayCents+=Number(row.flightPayCents||0);sum.groundPayCents+=Number(row.groundPayCents||0);sum.noShowPayCents+=row.kind==='no-show'?Number(row.totalCents||0):0;sum.noShowCount+=row.kind==='no-show'?1:0;sum.totalCents+=Number(row.totalCents||0);return sum;},{flightHours100:0,groundHours100:0,flightPayCents:0,groundPayCents:0,noShowPayCents:0,noShowCount:0,totalCents:0});}
  function detailReport(pilot,rows){
-  if(!pilot)return '<section class="card honorarios-print-report"><p class="school-muted">No hay pilotos disponibles para este período.</p></section>';
+  if(!pilot)return '<section class="card honorarios-print-report"><p class="school-muted">No hay honorarios registrados para este período.</p></section>';
   const sum=totals(rows),aircraft=new Map();
   for(const row of rows){const id=String(row.aircraft||''),rate={flightRateCents:row.flightRateCents??null,groundRateCents:row.groundRateCents??null,noShowCents:row.noShowCents??(row.kind==='no-show'?row.totalCents:null)},key=[id,rate.flightRateCents,rate.groundRateCents,rate.noShowCents].join('|');if(!aircraft.has(key))aircraft.set(key,{id,...rate});}
   const rateRows=[...aircraft.values()].map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+(r.flightRateCents==null?'—':money(r.flightRateCents)+'/h')+'</td><td>'+(r.groundRateCents==null?'—':money(r.groundRateCents)+'/h')+'</td><td>'+(r.noShowCents==null?money(report.rates?.[r.id]?.noShowCents||0):money(r.noShowCents))+'</td></tr>').join('');
