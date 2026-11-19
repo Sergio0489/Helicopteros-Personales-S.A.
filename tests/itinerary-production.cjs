@@ -124,7 +124,39 @@ test('status loss reassigns approved mono for maintenance and grounded without c
 });
 test('expired pilot rejected on server and closed requests require director',()=>{const d=fixture();d.pilotos[0].instructorExpiry='2026-10-30';assert.throws(()=>apply(d,director,'flight',{flight:flight()}),/vencido/);});
 test('cross-date flight edit is atomic and prevents target collision',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;apply(d,director,'flight',{id,originalDate:date,originalRevision:M.day(d,date).revision,date:'2026-11-01',flight:flight('p2','HP1819')});assert.equal(d.itinerarios.length,1);assert.equal(d.itinerarios[0].fecha,'2026-11-01');assert.equal(d.itinerarios[0].piloto,'Piloto Dos');});
-test('moving a published flight queues the source day email even when the target day is unpublished',()=>{const d=fixture(),movedAt='2026-10-30T13:15:00-05:00',target='2026-11-01';apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;M.publish(d,date,now);const sourceRevision=M.day(d,date).revision;apply(d,director,'flight',{id,originalDate:date,originalRevision:sourceRevision,date:target,flight:flight('p2','HP1819')},movedAt);assert.equal(d.itinerarios[0].fecha,target);assert.ok(M.day(d,date).modifiedEmail);assert.equal(M.day(d,date).modifiedEmail.dueAt,'2026-10-30T18:25:00.000Z');const email=M.flushModifiedEmail(d,'2026-10-30T18:25:00-05:00');assert.equal(email.date,date);assert.deepEqual(email.flights,[]);});
+test('moving a published flight to an unpublished day emails only the source after ten idle minutes',()=>{const d=fixture(),movedAt='2026-10-30T13:15:00-05:00',target='2026-11-01';apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;M.publish(d,date,now);const sourceRevision=M.day(d,date).revision;apply(d,director,'flight',{id,originalDate:date,originalRevision:sourceRevision,date:target,flight:flight('p2','HP1819')},movedAt);assert.equal(d.itinerarios[0].fecha,target);assert.ok(M.day(d,date).modifiedEmail);assert.equal(M.day(d,date).modifiedEmail.dueAt,'2026-10-30T18:25:00.000Z');assert.equal(M.day(d,target).modifiedEmail,undefined);assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:24:59Z'),null,'no email is produced before the idle window expires');const email=M.flushModifiedEmail(d,'2026-10-30T18:25:00Z');assert.equal(email.date,date);assert.deepEqual(email.flights,[]);assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:25:00Z'),null,'the same queued update is consumed once');});
+test('moving a flight between two published days queues one correct email for each day',()=>{
+ const d=fixture(),target='2026-11-01',movedAt='2026-10-30T13:15:00-05:00';
+ apply(d,director,'flight',{flight:flight()});const movedId=d.itinerarios[0].id;
+ apply(d,director,'flight',{date:target,flight:flight('p2','HP1819',{start:'10:30',end:'12:00'})});
+ M.publish(d,date,now);M.publish(d,target,now);
+ apply(d,director,'flight',{date:target,id:movedId,originalDate:date,originalRevision:M.day(d,date).revision,flight:flight('p2','HP1784')},movedAt);
+ assert.ok(M.day(d,date).modifiedEmail);assert.ok(M.day(d,target).modifiedEmail);
+ assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:24:59Z'),null);
+ const emails=[M.flushModifiedEmail(d,'2026-10-30T18:25:00Z'),M.flushModifiedEmail(d,'2026-10-30T18:25:00Z')];
+ assert.deepEqual(emails.map(e=>e.date).sort(),[date,target].sort());
+ const sourceEmail=emails.find(e=>e.date===date),targetEmail=emails.find(e=>e.date===target);
+ assert.deepEqual(sourceEmail.flights,[]);assert.deepEqual(sourceEmail.pilotRecipients,['p1@example.test','p2@example.test']);assert.equal(targetEmail.flights.length,2);
+ assert.ok(targetEmail.flights.some(f=>f.aircraft==='HP-1784'&&f.pilot==='Piloto Dos'));
+ assert.equal(new Set(emails.map(e=>e.id)).size,2);assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:25:00Z'),null);
+});
+test('cancelling a flight from a published day queues one delayed update with the final schedule',()=>{
+ const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;M.publish(d,date,now);
+ apply(d,director,'cancel-flight',{id,reason:'Prueba ficticia de cancelación'},'2026-10-30T13:10:00-05:00');
+ assert.ok(M.day(d,date).modifiedEmail);assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:19:59Z'),null);
+ const email=M.flushModifiedEmail(d,'2026-10-30T18:20:00Z');assert.equal(email.date,date);assert.deepEqual(email.flights,[]);
+ assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:20:00Z'),null);
+});
+test('successive edits within ten minutes reset the deadline and coalesce to the latest published schedule',()=>{
+ const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;M.publish(d,date,now);
+ apply(d,director,'flight',{id,originalDate:date,flight:flight('p1','HP1907',{route:'MPMG – David – MPMG'})},'2026-10-30T13:05:00-05:00');
+ apply(d,director,'flight',{id,originalDate:date,flight:flight('p2','HP1819',{start:'07:00',end:'10:00',route:'MPMG – Las Tablas – MPMG'})},'2026-10-30T13:12:00-05:00');
+ assert.equal(M.day(d,date).modifiedEmail.dueAt,'2026-10-30T18:22:00.000Z');
+ assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:15:00Z'),null,'the first edit deadline does not send a stale schedule');
+ const email=M.flushModifiedEmail(d,'2026-10-30T18:22:00Z');assert.equal(email.flights.length,1);
+ assert.equal(email.flights[0].route,'MPMG – Las Tablas – MPMG');assert.equal(email.flights[0].pilot,'Piloto Dos');
+ assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:22:00Z'),null,'coalesced edits yield only one update');
+});
 test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});
 test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
 test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
