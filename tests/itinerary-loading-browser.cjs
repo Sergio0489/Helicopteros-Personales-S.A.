@@ -112,18 +112,18 @@ test('Cancelling a schedule date change keeps the explicitly selected day',async
  await page.evaluate(()=>renderDailySchedule());
  assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-date'),selected);
 });
-test('Director sees detailed confirmed flights and cannot submit without route or observations',async t=>{
+test('Director sees detailed confirmed flights, requires route and allows blank observations',async t=>{
  const page=await app(t),result=response();Object.assign(result.state.confirmed[0],{route:'Chitré <referencia>',note:'Sin observaciones',studentId:'st1'});
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
  const details=await page.locator('[data-flight-list]').textContent();
  for(const value of ['Aeronave','Hora de inicio y fin','Ruta o destino','Cliente / Estudiante','Estudiante A','Chitré <referencia>'])assert.ok(details.includes(value),value);
  await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
  const form=page.locator('dialog form');
- assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name).map(el=>el.name).sort()),['aircraft','flightType','newDate','note','pilot','route'].sort());
+ assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','route'].sort());
  assert.equal(await form.evaluate(f=>f.querySelectorAll('[data-time-field] [required]').length),6);
  assert.equal(await form.evaluate(f=>f.elements.studentId.required),false);
  assert.equal(await form.evaluate(f=>f.checkValidity()),false);
- await page.locator('[name=route]').fill('MPMG – Chitré');await page.locator('[name=note]').fill('Sin observaciones');
+ await page.locator('[name=route]').fill('MPMG – Chitré');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false);
  await page.locator('[name=socioName]').fill('Socio de prueba');

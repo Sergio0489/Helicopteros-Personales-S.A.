@@ -145,7 +145,8 @@ function typeHint(state,type){return (flightTypes[type]?.label||'Tipo no válido
 function flightDataError(state,q){
  if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la lista o deja la casilla en blanco.';
  if(q.studentId&&state.students?.some(x=>x.id===q.studentId&&x.blockedForFlights))return 'Este estudiante tiene un cargo de no show pendiente de aceptación y no puede recibir nuevos vuelos.';
- if(typeOf(q)==='examen'&&!/^\d{1,30}$/.test(String(q.delegationNumber||'').trim()))return 'Escribe un número de delegación válido para el examen de vuelo.';
+ const delegationNumber=String(q.delegationNumber||'').trim();
+ if(typeOf(q)==='examen'&&(!delegationNumber||delegationNumber.length>30||/[\x00-\x1F\x7F]/.test(delegationNumber)))return 'Escribe un número de delegación válido (máximo 30 caracteres).';
  if(typeOf(q)==='socio'&&(typeof q.socioName!=='string'||!q.socioName.trim()||q.socioName.trim().length>120))return 'Escribe el nombre del socio (máximo 120 caracteres).';
  return '';
 }
