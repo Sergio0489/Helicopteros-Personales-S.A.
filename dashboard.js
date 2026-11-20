@@ -173,7 +173,7 @@ function loadData(reg) { return null; }
 function defaultAc(ac) {
   return {
     status: "",
-    serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "", limite_helice: "", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], bitacora_reinicios_inspeccion: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
+    serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "", limite_helice: "", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
     ...(isDualTAC(ac.reg)?{tac_izq_anterior:"",tac_izq_actual:"",tac_der_anterior:"",tac_der_actual:"",hobbs_anterior:"",hobbs_actual:""}:{}),
     horas_totales: "", horas_limite: "", fecha_50: "", fecha_100: "",
     ciclos_totales: "", ciclos_limite: "",
