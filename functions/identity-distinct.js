@@ -114,7 +114,8 @@ function invalidated(root,targetUid){
   // A new strong association can absorb the reviewed peer into the target.
   if(overlaps(ctx.target))return true;
   // The account key can disappear or split; retain the reviewed stable records.
-  return ctx.collisions.some(other=>overlaps(other)&&!validReceipt(receipt,targetUid,ctx.target,other));
+  // A renewed valid decision supersedes this stale receipt for that exact pair.
+  return ctx.collisions.some(other=>overlaps(other)&&!covered(root,targetUid,ctx.target,other));
  });
 }
 function confirm(root,body,actor,now=new Date().toISOString()){

@@ -166,6 +166,32 @@ test('an approved name-only pair remains resolved through submit and synchroniza
  const status=await h.call('status');assert.equal(status.body.identityReviewPending,false);assert.equal((await h.call('access',{page:'estudiantes'})).status,200);
 });
 
+test('a renewed approval supersedes stale evidence on later sync while audit history and document checks remain intact',async()=>{
+ const h=harness(),firstPreview=await eligiblePreview(h),first=await save(h,firstPreview);assert.equal(first.status,200);
+ const firstId=Object.keys(h.root.accountRequests.target.identityDistinctDecisions)[0],firstReceipt=structuredClone(h.root.accountRequests.target.identityDistinctDecisions[firstId]);
+ const historyAfterFirst=Object.keys(h.root.accountRequests.target.auditPending||{});
+ setDocument(h,'target','TEST-ALPHA-REVISED');
+ assert.equal(require('../functions/identity-distinct').invalidated(h.root,'target'),true,'changed identity data invalidates the first receipt');
+ h.as('target');const reopened=await h.call('status');assert.equal(reopened.status,200);assert.equal(reopened.body.identityReviewPending,true);assert.equal((await h.call('access',{page:'estudiantes'})).status,403);
+
+ h.as('director');const renewedPreview=await eligiblePreview(h),renewed=await save(h,renewedPreview);assert.equal(renewed.status,200);assert.equal(renewed.body.resolved,true);
+ const account=h.root.accountRequests.target,ids=Object.keys(account.identityDistinctDecisions);
+ assert.equal(ids.length,2,'keep both the historical and renewed approvals');assert.deepEqual(account.identityDistinctDecisions[firstId],firstReceipt);
+ assert.equal(account.identityReviewVersion,2);assert.equal(account.identityReviewPending,false);
+ const historyAfterRenewal=Object.keys(account.auditPending||{});assert(historyAfterFirst.every(id=>historyAfterRenewal.includes(id)));assert(historyAfterRenewal.length>historyAfterFirst.length,'the renewed decision is audited');
+ const renewedId=ids.find(id=>id!==firstId),renewedReceipt=structuredClone(account.identityDistinctDecisions[renewedId]);
+ assert.equal(require('../functions/identity-distinct').approved(h.root,'target','student:other-student'),true,'the renewed receipt covers the current pair');
+ h.as('target');const synced=await h.call('status');assert.equal(synced.status,200);assert.equal(synced.body.identityReviewPending,false);assert.equal(require('../functions/identity-distinct').invalidated(h.root,'target'),false);assert.equal((await h.call('access',{page:'estudiantes'})).status,200);
+ const afterSync=h.root.accountRequests.target;
+ assert.deepEqual(afterSync.identityDistinctDecisions[firstId],firstReceipt);assert.deepEqual(afterSync.identityDistinctDecisions[renewedId],renewedReceipt);
+ assert(historyAfterRenewal.every(id=>Object.hasOwn(afterSync.auditPending,id)),'synchronization preserves prior audit entries');
+
+ setDocument(h,'target','TEST-BETA');
+ assert.equal(require('../functions/identity-distinct').invalidated(h.root,'target'),true,'a new shared identity document remains incompatible');
+ const incompatible=await h.call('status');assert.equal(incompatible.status,200);assert.equal(incompatible.body.identityReviewPending,true);assert.equal((await h.call('access',{page:'estudiantes'})).status,403);
+ assert.deepEqual(h.root.accountRequests.target.identityDistinctDecisions[firstId],firstReceipt);assert.deepEqual(h.root.accountRequests.target.identityDistinctDecisions[renewedId],renewedReceipt);
+});
+
 test('a real document collision after approval invalidates the exception and restores review',async()=>{
  const h=harness(),preview=await eligiblePreview(h);assert.equal((await save(h,preview)).status,200);const decision=structuredClone(h.root.accountRequests.target.identityDistinctDecisions);
  setDocument(h,'other',' test alpha ');h.as('target');const response=await h.call('status');assert.equal(response.status,200);assert.equal(response.body.identityReviewPending,true);assert.equal((await h.call('access',{page:'estudiantes'})).status,403);assert.deepEqual(h.root.accountRequests.target.identityDistinctDecisions,decision,'previous decisions remain historical evidence');
