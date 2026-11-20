@@ -112,7 +112,7 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
-  const script=document.createElement('script');script.src='dashboard.js?v=20261119-mobile-flight-log-2';
+  const script=document.createElement('script');script.src='dashboard.js?v=20261120-maintenance-log-dates-2';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261118-honorarios-scheduling-1';
