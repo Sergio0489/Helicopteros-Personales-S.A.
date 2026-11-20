@@ -1,6 +1,6 @@
 'use strict';
 const {normalize}=require('./boxes');
-const PAGES={horario:'Horario del día',pendientes:'Pendientes',aeronaves:'Aeronaves',pilotos:'Pilotos',bitacora:'Registro de bitácora',pagos:'Registro de pago',itinerario:'Itinerarios',estudiantes:'Estudiantes / Clientes',escuela:'Escuela',charter:'HP CHÁRTER',estadisticas:'Estadísticas',saldos:'Alerta de saldos'};
+const PAGES={horario:'Horario del día',pendientes:'Pendientes',aeronaves:'Aeronaves',pilotos:'Pilotos',bitacora:'Registro de bitácora',pagos:'Registro de pago',itinerario:'Itinerarios',estudiantes:'Estudiantes / Clientes',escuela:'Escuela',charter:'HP CHÁRTER',estadisticas:'Estadísticas',honorarios:'Honorarios',saldos:'Alerta de saldos'};
 const ROLES=['Gerente','Administrativo','Piloto','Estudiante','Mecánico','Contabilidad'];
 const arr=v=>Array.isArray(v)?v:[];
 const fields=(o,names)=>Object.fromEntries(names.split(' ').filter(k=>o?.[k]!=null&&typeof o[k]!=='object').map(k=>[k,o[k]]));
@@ -10,6 +10,8 @@ const flight='fecha aeronave piloto estudiante cliente destino origen hora horaI
 function policyFor(data,account){
  if(!account?.assignedAt||!ROLES.includes(account.role))return {};
  const policy=normalize(data.school?.accessConfiguration?.roles?.[account.role]||{});
+ const rolePolicy=data.school?.accessConfiguration?.roles?.[account.role]||{};
+ if(!rolePolicy.honorarios&&['Director','Gerente','Piloto','Contabilidad'].includes(account.role)){const page=policy.honorarios;page.actions.view=true;page.areas['Honorarios de pilotos']=true;page.boxes.report={view:true,edit:false};}
  if(account.role==='Mecánico'){
   const page=policy.aeronaves;page.actions.view=true;page.actions.edit=true;
   for(const id of ['status','pending','maintenance'])page.boxes[id]={view:true,edit:true};
@@ -38,7 +40,7 @@ function projectPage(data,account,policy,page){
  if(page==='aeronaves'){
   add('Información y estatus',fRows('serial year voltaje status estatus_nota'));
   add('Motores y hélices',fRows('motor_fabricante motor_modelo motor_serie motor_fabricante_izq motor_modelo_izq motor_serie_izq motor_fabricante_der motor_modelo_der motor_serie_der helice_fabricante helice_modelo helice_serie helice_fabricante_izq helice_modelo_izq helice_serie_izq helice_fabricante_der helice_modelo_der helice_serie_der'));
-  add('Horas e inspecciones',fRows('tac_anterior horas_acum_50 horas_acum_100 ciclos_totales ciclos_limite limite_motor limite_helice helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_motor fecha_helices'));
+  add('Horas e inspecciones',fRows('tac_anterior tac_izq_anterior tac_izq_actual tac_der_anterior tac_der_actual hobbs_anterior hobbs_actual horas_acum_50 horas_acum_100 ciclos_totales ciclos_limite limite_motor limite_helice helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_motor fecha_helices bitacora_horas bitacora_tac'));
   add('Mantenimiento y taller',nestedFleet('mantenimiento','nombre fecha resuelto fecha_resuelto observaciones nota'));
   add('Documentos y emergencia',nestedFleet('documentos','nombre vence fecha numero'));
   add('Pedidos',nestedFleet('bitacora_pedidos','fecha nombre descripcion estado proveedor observaciones'));
@@ -58,7 +60,7 @@ function projectPage(data,account,policy,page){
  }
  if(page==='bitacora'){
   add('Vuelos e instructores',entryRows);
-  add('Tacómetros y horas',entries.map(e=>fields(e,'date aircraft book tacPrevious100 tacCurrent100 aircraftHours100 hours100')));
+  add('Tacómetros y horas',entries.map(e=>fields(e,'date aircraft book tacPrevious100 tacCurrent100 aircraftHours100 tacLeftPrevious100 tacLeftCurrent100 tacLeftHours100 tacRightPrevious100 tacRightCurrent100 tacRightHours100 hobbsPrevious100 hobbsCurrent100 hobbsHours100 hours100')));
   add('Cargos por servicios',entries.map(e=>fields(e,'date aircraft book personName rateCents costCents charge voidedAt')));
   add('Historial de registros',entryRows);
  }

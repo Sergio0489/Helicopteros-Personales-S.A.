@@ -54,4 +54,10 @@ async function scheduled(db,now=new Date().toISOString()){
   return M.publish(data,clock.tomorrow,now)?{emailPublication:M.publicationEmail(data,clock.tomorrow)}:false;
  });
 }
-module.exports={handle,transaction,scheduled,enable};
+async function flushModified(db,now=new Date().toISOString()){
+ return transaction(db,null,'Envío de horario modificado tras diez minutos',data=>{
+  const emailPublication=M.flushModifiedEmail(data,now);
+  return emailPublication?{emailPublication}:false;
+ });
+}
+module.exports={handle,transaction,scheduled,flushModified,enable};

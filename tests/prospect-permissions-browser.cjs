@@ -787,7 +787,7 @@ test(
         policyFor(data, account),
         policyFor(data, { ...account, prospectAccess: null }),
       );
-      assert.deepEqual(visiblePages(policyFor(data, account)), []);
+      assert.deepEqual(visiblePages(policyFor(data, account)), account.role==='Piloto'?[{id:'honorarios',name:'Honorarios'}]:[]);
     }
     assert.deepEqual(errors, []);
     assert.deepEqual(external, []);

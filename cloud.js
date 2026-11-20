@@ -83,6 +83,8 @@ window.cloudWrite=async function(data){
  const motive=window.ChangeHistory?.getReason()||'';
  try{
   const result=await AccountRegistration.api('director-save',{payload,operation:cloudOperation,reason:motive});
+  if(result.schoolSync?.school)data.school=result.schoolSync.school;
+  if(result.pilotSync?.pilotos)data.pilotos=result.pilotSync.pilotos;
   if(result.itinerarySync)Object.assign(data,result.itinerarySync);
   window.ChangeHistory?.consume(motive);window.failedCloudData=null;lastCloudPayload=JSON.stringify(data);cloudVersion=result.revision;cloudOperation=result.operation;
   cloudBlocked=false;
@@ -110,20 +112,22 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
-  const script=document.createElement('script');script.src='dashboard.js?v=20261118-maintenance-log-dates-1';
+  const script=document.createElement('script');script.src='dashboard.js?v=20261120-maintenance-log-dates-2';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
- const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261026-horas-fechas-1';
+ const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261118-honorarios-scheduling-1';
  await new Promise((resolve,reject)=>{schoolScript.onload=()=>window.STUDENTS_READY?resolve():reject(Error('El panel de estudiantes no terminó de cargar. Recarga la página.'));schoolScript.onerror=()=>reject(Error('No se pudo cargar Estudiantes. Recarga la página.'));document.body.appendChild(schoolScript);});
  window.REGISTRO_READY=false;
- const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261026-horas-fechas-1';
+ const registroScript=document.createElement('script');registroScript.src='registro.js?v=20261119-hp880-dual-tac-1';
  await new Promise((resolve,reject)=>{registroScript.onload=()=>window.REGISTRO_READY?resolve():reject(Error('Registro no terminó de cargar. Recarga la página.'));registroScript.onerror=()=>reject(Error('No se pudo cargar Registro. Recarga la página.'));document.body.appendChild(registroScript);});
  const winnersScript=document.createElement('script');winnersScript.src='monthly-winners-ui.js?v=20261026-horas-fechas-1';await new Promise((resolve,reject)=>{winnersScript.onload=resolve;winnersScript.onerror=()=>reject(Error('No se pudo cargar Ganadores del mes.'));document.body.appendChild(winnersScript);});
  const pilotsScript=document.createElement('script');pilotsScript.src='pilots-ui.js?v=20261026-ortografia-1';await new Promise((resolve,reject)=>{pilotsScript.onload=resolve;pilotsScript.onerror=()=>reject(Error('No se pudo cargar Expediente de pilotos.'));document.body.appendChild(pilotsScript);});
  for(const path of ['company-ui.js']){const script=document.createElement('script');script.src=path+'?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.appendChild(script);});}
  const schoolInformationScript=document.createElement('script');schoolInformationScript.src='school-info.js?v=20261021-hour-configuration-1';await new Promise((resolve,reject)=>{schoolInformationScript.onload=resolve;schoolInformationScript.onerror=()=>reject(Error('No se pudo cargar la información de Escuela.'));document.body.appendChild(schoolInformationScript);});
  window.DraftRecovery?.init({revision:()=>cloudOperation||String(cloudVersion),read:key=>DraftRecovery.list()['director:'+key],write:(key,value)=>DraftRecovery.store('director:'+key,value)});window.installAircraftDrafts?.();window.Registro?.installDraft?.();
- window.HPItineraryUI?.install({onChange:()=>window.syncItineraryCloud?.()});window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
+ window.HPItineraryUI?.install({onChange:()=>window.syncItineraryCloud?.()});window.HonorariosUI?.install();window.AccountRegistration?.installUsersPage();window.Prospects?.install();window.ChangeHistory?.install();window.HomeUI?.installDirector();window.PageMemory?.installDirector();
+ const sidebar=el('sidebar-tabs');if(sidebar){const honorarios=sidebar.querySelector('#tab-honorarios'),cotizaciones=[...sidebar.children].find(tab=>tab.querySelector('.tab-reg')?.textContent.trim()==='COTIZACIONES');if(honorarios)sidebar.append(honorarios);if(cotizaciones)sidebar.append(cotizaciones);}
+ appLoaded=true;el('access-screen').hidden=true;el('dashboard-app').hidden=false;
  setCloudStatus('Conectado a Firebase · Datos cargados');updateProfileAvatar();
 }
 async function refreshCloud(){
@@ -287,17 +291,35 @@ const ROLE_PAGES=[
  {id:'escuela',name:'Escuela',areas:['Información y documentos','Cursos y fechas','Tarifas de servicios'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'charter',name:'HP CHARTER',areas:['Información de la empresa','Documentos y vencimientos','Personal de la empresa','Servicios'],actions:['view','create','edit','delete','print','export','resolve']},
  {id:'estadisticas',name:'Estadísticas',areas:['Estadísticas generales','Estadísticas para AAC','Estadísticas Helicópteros Personales'],actions:['view','print','export']},
+ {id:'honorarios',name:'Honorarios',areas:['Honorarios de pilotos'],actions:['view','print']},
  {id:'saldos',name:'Alerta de saldos',areas:['Estudiantes','Clientes'],actions:['view','edit','print','export']}
 ];
 function suggestedRolePolicy(role){
- const read={Gerente:ROLE_PAGES.map(p=>p.id),Administrativo:['horario','pendientes','aeronaves','pilotos','bitacora','pagos','itinerario','estudiantes','escuela','charter','estadisticas','saldos'],Piloto:['horario','pendientes','aeronaves','pilotos','bitacora','itinerario'],Estudiante:[],Mecánico:['pendientes','aeronaves'],Contabilidad:['pagos','estudiantes','escuela','charter','estadisticas','saldos']}[role]||[];
+ const read={Gerente:ROLE_PAGES.map(p=>p.id),Administrativo:['horario','pendientes','aeronaves','pilotos','bitacora','pagos','itinerario','estudiantes','escuela','charter','estadisticas','saldos'],Piloto:['horario','pendientes','aeronaves','pilotos','bitacora','itinerario','honorarios'],Estudiante:[],Mecánico:['pendientes','aeronaves'],Contabilidad:['pagos','estudiantes','escuela','charter','estadisticas','honorarios','saldos']}[role]||[];
  const edit={Gerente:['aeronaves','pilotos','bitacora','pagos','itinerario','estudiantes','escuela','charter','saldos'],Administrativo:['pilotos','bitacora','pagos','itinerario','estudiantes'],Piloto:['bitacora'],Estudiante:[],Mecánico:['aeronaves'],Contabilidad:['pagos']}[role]||[];
- return Object.fromEntries(ROLE_PAGES.map(page=>{const full=role==='Director',view=full||read.includes(page.id),write=edit.includes(page.id);const actions=Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,page.actions.includes(action)&&(full||(view&&(action==='view'||(write&&['create','edit'].includes(action))||(['Gerente','Administrativo','Contabilidad'].includes(role)&&['print','export'].includes(action)))))]));const areas=Object.fromEntries(page.areas.map(area=>[area,view]));if(role==='Mecánico'&&page.id==='aeronaves')areas.Tarifas=false;if(role==='Contabilidad'&&page.id==='estudiantes')for(const area of page.areas)areas[area]=['Estado de cuenta y abonos','Cursos y licencias'].includes(area);return [page.id,{actions,areas}];}));
+ return Object.fromEntries(ROLE_PAGES.map(page=>{
+  const full=role==='Director',view=full||read.includes(page.id),write=edit.includes(page.id);
+  const actions=Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>{
+   const suggestedOutput=page.id!=='honorarios'&&['Gerente','Administrativo','Contabilidad'].includes(role)&&['print','export'].includes(action);
+   return [action,page.actions.includes(action)&&(full||(view&&(action==='view'||(write&&['create','edit'].includes(action))||suggestedOutput)))];
+  }));
+  const areas=Object.fromEntries(page.areas.map(area=>[area,view]));
+  if(role==='Mecánico'&&page.id==='aeronaves')areas.Tarifas=false;
+  if(role==='Contabilidad'&&page.id==='estudiantes')for(const area of page.areas)areas[area]=['Estado de cuenta y abonos','Cursos y licencias'].includes(area);
+  return [page.id,{actions,areas}];
+ }));
 }
 function normalizeRolePolicy(role,policy){
  if(role==='Director')return suggestedRolePolicy(role);
  if(!STAFF_ROLES.includes(role))throw Error('Cargo no válido.');
- return Object.fromEntries(ROLE_PAGES.map(page=>{const input=policy?.[page.id]||{},view=!!input.actions?.view;return [page.id,{actions:Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,view&&page.actions.includes(action)&&!!input.actions?.[action]])),areas:Object.fromEntries(page.areas.map(area=>[area,view&&!!input.areas?.[area]]))}];}));
+ return Object.fromEntries(ROLE_PAGES.map(page=>{
+  const input=policy?.[page.id]||{},view=!!input.actions?.view;
+  const actions=Object.fromEntries(Object.keys(ROLE_ACTIONS).map(action=>[action,view&&page.actions.includes(action)&&!!input.actions?.[action]]));
+  const areas=Object.fromEntries(page.areas.map(area=>[area,view&&!!input.areas?.[area]]));
+  if(page.id!=='honorarios')return [page.id,{actions,areas}];
+  const reportView=areas['Honorarios de pilotos']===true;
+  return [page.id,{actions,areas,boxes:{report:{view:reportView,edit:false,print:reportView&&actions.print===true}}}];
+ }));
 }
 function saveRoleConfiguration(data,role,policy,actorUid){
  if(!isDirectorUser()||actorUid!==firebase.auth().currentUser.uid)throw Error('Solo el Director puede administrar los permisos.');
@@ -322,3 +344,4 @@ function openRolePermissions(){
  const close=()=>{if(saving)return;if(dirty&&!confirm('¿Cerrar sin guardar los permisos?'))return;dialog.close();};dialog.querySelector('[data-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
 el('profile-roles').onclick=openRolePermissions;
+
