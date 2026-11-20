@@ -159,3 +159,25 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  await page.evaluate(result=>{window.commandResult=result;},result);await page.getByRole('button',{name:'Guardar',exact:true}).click();await page.locator('dialog').waitFor({state:'detached'});
  const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.deepEqual(saved[0].slots,result.state.aircraft.find(a=>a.id==='HP1907').slots);assert.equal(saved[0].release.from,'06:30');
 });
+async function assertExamDelegationValidity(page){
+ const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');
+ const field=page.locator('[name=delegationNumber]');assert.equal(await field.getAttribute('maxlength'),null,'custom validation matches the server after trimming');
+ assert.equal(await form.evaluate(f=>f.elements.delegationNumber.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false,'blank value is rejected');
+ await field.fill('   ');assert.equal(await form.evaluate(f=>f.checkValidity()),false,'spaces-only value is rejected');
+ await field.fill('FAA-26 / 007 #A +B');assert.equal(await form.evaluate(f=>f.checkValidity()),true,'alphanumeric value with signs and internal spaces is accepted');
+ await field.fill(' '+('A'.repeat(30))+' ');assert.equal(await form.evaluate(f=>f.checkValidity()),true,'length is measured after normalization, like the server');
+ await field.fill('A'.repeat(31));assert.equal(await form.evaluate(f=>f.checkValidity()),false,'more than 30 trimmed characters is rejected');
+ await field.evaluate(el=>{el.value='AB\u0001CD';el.dispatchEvent(new Event('input',{bubbles:true}));});assert.equal(await form.evaluate(f=>f.checkValidity()),false,'internal control characters are rejected');
+}
+test('Exam delegation browser validation matches the server in Director scheduling',async t=>{
+ const page=await app(t),result=response();await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();await assertExamDelegationValidity(page);
+});
+test('Exam delegation browser validation matches the server in pilot requests and released slots',async t=>{
+ const result=response();result.rights={role:'pilot',request:true,pilot:'b',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};
+ const requestPage=await app(t);await requestPage.evaluate(result=>resolveRead(result),result);await requestPage.locator('[data-date]').waitFor();
+ await requestPage.locator('[data-slot="HP1907:b1"]').click();await assertExamDelegationValidity(requestPage);
+ const slotResult=response();slotResult.rights={role:'pilot',request:true,pilot:'b',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};slotResult.state.published=true;slotResult.state.openSlots=[{id:'open-exam-test',aircraft:'HP1907',start:'06:30',end:'09:30',flightType:'examen'}];
+ const claimPage=await app(t);await claimPage.evaluate(result=>resolveRead(result),slotResult);await claimPage.locator('[data-date]').waitFor();
+ await claimPage.locator('[data-claim-slot="open-exam-test"]').click();await assertExamDelegationValidity(claimPage);
+});
