@@ -6,7 +6,7 @@ const path=require('node:path');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
 let browser;
-before(async()=>{browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});});
+before(async()=>{browser=await chromium.launch({...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{}),headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});});
 after(async()=>{await browser?.close();});
 
 function fixture(){return {fleet:{HP_1784:{mantenimiento:[
