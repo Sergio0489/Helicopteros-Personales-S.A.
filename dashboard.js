@@ -1389,7 +1389,7 @@ function dualTACInputValues(idx){
  for(const meter of DUAL_TAC_METERS){
   const previous=document.getElementById('tac-'+meter.key+'-anterior-'+idx),current=document.getElementById('tac-'+meter.key+'-actual-'+idx);
   if(!previous||!current)continue;
-  const delta=tacDifference(previous.value,current.value);if(current.value!==''||previous.value!=='')any=true;
+  const delta=tacDifference(previous.value,current.value);if(current.value!=='')any=true;
   current.setCustomValidity(current.value!==''&&Number.isNaN(delta)?meter.label+': el TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.':'');
   if(current.value===''||previous.value===''||!Number.isFinite(delta))complete=false;
   readings[meter.key]={previous:previous.value,current:current.value,delta};
@@ -1462,7 +1462,7 @@ async function openRecordEditor(kind,idx,ri=-1,tipo=50){
  document.body.appendChild(dialog);dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());
  dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const f=Object.fromEntries(new FormData(event.target));const error=await applyRecordChange(kind,idx,ri,f);if(error){dialog.querySelector('.record-error').textContent=error;return;}dialog.close();};dialog.showModal();
 }
-function adjustRecordedHours(d,r,delta){
+function adjustRecordedHours(d,r,delta,{adjustComponents=true}={}){
  if(!delta)return;
  let hi=Number.isInteger(r.hour_index)?r.hour_index:(d.bitacora_horas||[]).findIndex(h=>h.tac_id===r.id || h.fecha===r.fecha&&h.hora===r.hora&&Number(h.hv)===Number(r.hv));
  if(hi<0)throw Error('No se encontró el registro de horas vinculado. No se aplicó la modificación.');
@@ -1471,8 +1471,10 @@ function adjustRecordedHours(d,r,delta){
  const add=key=>{const n=Number(d[key]||0)+delta;if(n<0)throw Error('La corrección produciría horas negativas. Revisa las lecturas.');d[key]=n.toFixed(2);};
  if(!last50||hi>=last50.hour_offset)add('horas_acum_50');
  if(!last100||hi>=last100.hour_offset)add('horas_acum_100');
- for(const key of ['ciclos_totales','ciclos_limite'])add(key);
- if(isMultimotor(fleetRecordReg(d)))for(const key of ['helice1_ciclos','helice2_ciclos'])add(key);
+ if(adjustComponents){
+  for(const key of ['ciclos_totales','ciclos_limite'])add(key);
+  if(isMultimotor(fleetRecordReg(d)))for(const key of ['helice1_ciclos','helice2_ciclos'])add(key);
+ }
  d.bitacora_horas[hi].hv=(Number(d.bitacora_horas[hi].hv)+delta).toFixed(2);
  const nextReset=inspections.find(x=>x.tipo===100&&x.hour_offset>hi)?.hour_offset??Infinity;
  for(let i=hi;i<d.bitacora_horas.length&&i<nextReset;i++)d.bitacora_horas[i].acum=(Number(d.bitacora_horas[i].acum||0)+delta).toFixed(2);
@@ -1493,11 +1495,11 @@ async function applyRecordChange(kind,idx,ri,f){
    if(isDualTAC(fleet[idx].reg)&&hasDualTACLog(r)){
      const old={},next={};for(const m of DUAL_TAC_METERS){const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',previous=tacCents(f[m.key+'Anterior']),current=tacCents(f[m.key+'Actual']);if(!Number.isFinite(tacDifference(f[m.key+'Anterior'],f[m.key+'Actual'])))return 'Revisa TAC anterior y actual de '+m.label+'.';old[m.key]={previous:Number(r[stem+'Previous100']),current:Number(r[stem+'Current100']),hours:Number(r[stem+'Hours100'])};next[m.key]={previous,current,hours:current-previous};}
      const oldMax=Math.max(old.left.hours,old.right.hours),newMax=Math.max(next.left.hours,next.right.hours),maintenanceChange=(newMax-oldMax)/100,before={fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.flatMap(m=>{const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';return [[stem+'Previous100',r[stem+'Previous100']],[stem+'Current100',r[stem+'Current100'],],[stem+'Hours100',r[stem+'Hours100']]];}))};
-     if(maintenanceChange)adjustRecordedHours(d,r,maintenanceChange);
-     adjustDualAircraftComponents((next.left.hours-old.left.hours)/100-maintenanceChange,(next.right.hours-old.right.hours)/100-maintenanceChange);
+     if(maintenanceChange)adjustRecordedHours(d,r,maintenanceChange,{adjustComponents:false});
+     adjustDualAircraftComponents(d,(next.left.hours-old.left.hours)/100,(next.right.hours-old.right.hours)/100);
      const hi=Number.isInteger(r.hour_index)?r.hour_index:(d.bitacora_horas||[]).findIndex(h=>h.tac_id===r.id||h.registryId&&h.registryId===r.registryId),linked=d.bitacora_horas[hi];if(linked)linked.fecha=f.fecha;
      Object.assign(r,{fecha:f.fecha,hv:(newMax/100).toFixed(2)});for(const m of DUAL_TAC_METERS){const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',reading=next[m.key];r[stem+'Previous100']=reading.previous;r[stem+'Current100']=reading.current;r[stem+'Hours100']=reading.hours;if(linked){linked[stem+'Previous100']=reading.previous;linked[stem+'Current100']=reading.current;linked[stem+'Hours100']=reading.hours;}if(ri===d.bitacora_tac.length-1){const meter=DUAL_TAC_METERS.find(x=>x.key===m.key);d[meter.previous]=(reading.current/100).toFixed(2);d[meter.current]='';}}
-     r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes,despues:{fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.map(m=>[m.key+'Actual',r[(m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs')+'Current100']]))}});
+     r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes:before,despues:{fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.map(m=>[m.key+'Actual',r[(m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs')+'Current100']]))}});
      if(ri===d.bitacora_tac.length-1&&d.ultimo_venc_registry_id)d.ultimo_venc_hv=r.hv;
    }else{
      const hv=tacDifference(f.anterior,f.actual);if(!Number.isFinite(hv))return 'Revisa los TAC: máximo 5 dígitos, 2 decimales y diferencia no negativa.';
