@@ -4,16 +4,21 @@ const {catalog}=require('../functions/boxes'),{boxView}=require('../functions/bo
 const root=path.resolve(__dirname,'..'),description='Vibración en el rotor de cola',uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const newReportMessage='Reporte guardado como tarea pendiente de taller.',recognizedReportMessage='Este reporte ya se había recibido.',receivedReportMessage='Reporte recibido.';
 const reportPolicy={aeronaves:{actions:{view:true,edit:false},boxes:{status:{view:true,edit:false}}}};
-const data={fleet:{HP_1784:{reg:'HP-1784',model:'Aeronave de prueba',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]}},pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]},accessConfiguration:{roles:{Piloto:reportPolicy}}}};
+const testAircraft=reg=>({reg,model:'Aeronave ficticia',status:'operativo',component_schema_v2:true,mantenimiento:[],documentos:[]});
+const testKey=reg=>reg.replaceAll('-','_');
+const data={fleet:Object.fromEntries(['HP-1784','HP-1819','HP-1907'].map(reg=>[testKey(reg),testAircraft(reg)])),pilotos:[{id:'pilot-record',authUid:'pilot-fixture',nombre:'Piloto de prueba',verificaciones:[]},{id:'pilot-record-two',authUid:'pilot-two-fixture',nombre:'Segundo piloto ficticio',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]},accessConfiguration:{roles:{Piloto:reportPolicy}}}};
 const account={uid:'pilot-fixture',role:'Piloto',assignedAt:'fixture',recordKind:'pilot',recordId:'pilot-record',syncStatus:'matched',profile:{name:'Piloto de prueba'}};
+const accountTwo={uid:'pilot-two-fixture',role:'Piloto',assignedAt:'fixture',recordKind:'pilot',recordId:'pilot-record-two',syncStatus:'matched',profile:{name:'Segundo piloto ficticio'}};
 const policy=Object.fromEntries(Object.entries(catalog).map(([page,boxes])=>[page,{actions:{view:true,edit:false},boxes:Object.fromEntries(boxes.map(box=>[box.id,{view:true,edit:false}]))}]));
 const server=http.createServer((req,res)=>{const file=path.join(root,req.url.split('?')[0]);if(req.url==='/test'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<body><div id="shell"></div><script src="aircraft-report-recovery.js"></script><script src="role-main-view.js"></script></body>');}else if(file.startsWith(root+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('Content-Type',(file.endsWith('.js')?'application/javascript':'text/html')+'; charset=utf-8');res.end(fs.readFileSync(file));}else{res.statusCode=404;res.end();}});
 
 function backend(){
  let saved={operation:'fixture',revision:0,payload:JSON.stringify(data)};
  const db={ref:dbPath=>{assert.equal(dbPath,'dashboard');return {transaction:async update=>{const next=update(structuredClone(saved));if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(saved)}};saved=next;return {committed:true,snapshot:{val:()=>structuredClone(saved)}};}};}};
+ const callAs=(body,who=account)=>handle(db,{user:{uid:who.uid,email:who.uid+'@example.test',emailVerified:true},account:who,actor:{uid:who.uid,name:who.profile.name,role:who.role},body});
  return {
-  call:body=>handle(db,{user:{uid:account.uid,email:'pilot@example.test',emailVerified:true},account,actor:{uid:account.uid,name:account.profile.name,role:account.role},body}),
+  call:body=>callAs(body,account),
+  callAs,
   snapshot:()=>structuredClone(saved),
   changeTask(state){
    const snapshot=JSON.parse(saved.payload),tasks=snapshot.fleet.HP_1784.mantenimiento;assert.equal(tasks.length,1);
@@ -301,5 +306,73 @@ async function fixture(browser){
   }
   console.log('PASS authentication changes block recovery and sending from the previous pilot view');
 
- }finally{await browser?.close();server.close();}
+   {
+   const f=await fixture(browser),firstDescription='Pérdida de presión en HP-1819',secondDescription='Ruido en tren de aterrizaje HP-1907',otherPilotDescription='Fuga de aceite reportada por otro piloto';
+   async function openPanel(index,registration){
+    await f.frame.locator('.aircraft-tab[data-idx="'+index+'"]').click();
+    const panel=f.frame.locator('#panel-'+index);await panel.locator('[data-pilot-aircraft-report]').waitFor({state:'visible'});
+    await panel.locator('[data-pilot-aircraft-report]').click();await f.frame.locator('dialog h2').waitFor();
+    assert.equal(await f.frame.locator('dialog h2').textContent(),'Reporte de aeronave · '+registration);
+    await f.frame.locator('dialog [data-report-new]').waitFor({state:'attached'});
+    return panel;
+   }
+   function assertSaved(snapshot,registration,who,text,idempotencyKey){
+    const saved=JSON.parse(snapshot.payload),key=testKey(registration),tasks=saved.fleet[key].mantenimiento.filter(task=>task.reportadoPorUid===who.uid&&task.description===text);
+    assert.equal(tasks.length,1,'one task is stored only for '+registration+' and '+who.uid);
+    const task=tasks[0];assert.equal(task.registration,key);assert.equal(task.reportIdempotencyKey,idempotencyKey);
+    const notices=(saved.operationalNotices||[]).filter(notice=>notice.taskId===task.id);assert.equal(notices.length,1);assert.equal(notices[0].aircraft,registration);
+    const receipts=Object.values(snapshot.aircraftReportReceipts||{}).filter(receipt=>receipt.taskId===task.id);assert.equal(receipts.length,1);
+    return task;
+   }
+   // Pilot one selects the second aircraft panel, not the first (HP-1784).
+   await openPanel(1,'HP-1819');assert.equal(await f.frame.locator('dialog [data-report-recover]').count(),0);
+   await f.frame.locator('dialog textarea').fill(firstDescription);await f.send();await f.waitForRequests(1);await f.assertIdentity(1);
+   assert.equal(f.requests[0].aircraft,'HP-1819','the API request uses the selected panel registration');
+   const first=await f.api.callAs(f.requests[0],account);assert.equal(first.ok,true);const firstTask=assertSaved(f.api.snapshot(),'HP-1819',account,firstDescription,f.requests[0].idempotencyKey);
+   const firstSnapshot=await f.stored(account.uid);await f.expire(0);f.pending[0].resolve(first);await f.received(1);
+   assert.deepEqual(await f.stored(account.uid),firstSnapshot,'a delayed confirmation leaves the original recoverable record intact');
+   await f.closeDialog();
+
+   // Another aircraft has no access to the first aircraft's pending recovery.
+   await openPanel(5,'HP-1907');assert.equal(await f.frame.locator('dialog [data-report-recover]').count(),0,'HP-1819 recovery is filtered out on HP-1907');
+   assert.equal(await f.frame.locator('dialog textarea').inputValue(),'');
+   await f.frame.locator('dialog textarea').fill(secondDescription);await f.send();await f.waitForRequests(2);
+   assert.equal(f.requests[1].aircraft,'HP-1907');assert.notEqual(f.requests[1].idempotencyKey,f.requests[0].idempotencyKey);
+   const second=await f.api.callAs(f.requests[1],account);assert.equal(second.ok,true);const secondTask=assertSaved(f.api.snapshot(),'HP-1907',account,secondDescription,f.requests[1].idempotencyKey);
+   assert.equal(JSON.parse(f.api.snapshot().payload).fleet.HP_1784.mantenimiento.length,0,'HP-1784 remains untouched');
+   f.pending[1].resolve(second);await f.assertSuccess(newReportMessage,1);await f.closeDialog();
+
+   // A second pilot cannot see pilot one's pending report on the same aircraft.
+   await f.reload(accountTwo);await openPanel(1,'HP-1819');
+   assert.equal(await f.frame.locator('dialog [data-report-recover]').count(),0,'pending reports are isolated by pilot');
+   assert.equal(await f.frame.locator('dialog textarea').inputValue(),'');await f.closeDialog();
+   await openPanel(5,'HP-1907');assert.equal(await f.frame.locator('dialog [data-report-recover]').count(),0);
+   await f.frame.locator('dialog textarea').fill(otherPilotDescription);await f.send();await f.waitForRequests(3);
+   assert.equal(f.requests[2].aircraft,'HP-1907');const other=await f.api.callAs(f.requests[2],accountTwo);assert.equal(other.ok,true);
+   const otherTask=assertSaved(f.api.snapshot(),'HP-1907',accountTwo,otherPilotDescription,f.requests[2].idempotencyKey);assert.notEqual(otherTask.id,secondTask.id);
+   f.pending[2].resolve(other);await f.assertSuccess(newReportMessage,0);await f.closeDialog();
+
+   // Reload pilot one, recover HP-1819, and retry with the same key. The receipt
+   // returns the same task while leaving the other aircraft and pilot unchanged.
+   await f.reload(account);await openPanel(1,'HP-1819');
+   assert.equal(await f.frame.locator('dialog [data-report-recover]').count(),1);
+   await f.frame.locator('dialog [data-report-recover]').click();
+   assert.equal(await f.frame.locator('dialog textarea').inputValue(),firstDescription);
+   assert.equal(await f.frame.locator('dialog textarea').evaluate(element=>element.readOnly),true);
+   await f.send();await f.waitForRequests(4);assert.equal(f.requests[3].aircraft,'HP-1819');
+   assert.equal(f.requests[3].idempotencyKey,f.requests[0].idempotencyKey,'recovery must reuse the original idempotency key');
+   const beforeReplay=f.api.snapshot(),replay=await f.api.callAs(f.requests[3],account);
+   assert.equal(replay.ok,true);assert.equal(replay.deduplicated,true);assert.equal(replay.taskId,firstTask.id);f.api.assertSnapshot(beforeReplay);
+   f.pending[3].resolve(replay);await f.assertSuccess(recognizedReportMessage,0);
+   const final=JSON.parse(f.api.snapshot().payload);
+   assert.equal(final.fleet.HP_1784.mantenimiento.length,0);assert.equal(final.fleet.HP_1819.mantenimiento.length,1);assert.equal(final.fleet.HP_1907.mantenimiento.length,2);
+   assert.equal(final.operationalNotices.filter(notice=>notice.kind==='aircraft-report').length,3);
+   assert.equal(Object.keys(f.api.snapshot().aircraftReportReceipts).length,3);
+   assert.equal(assertSaved(f.api.snapshot(),'HP-1819',account,firstDescription,f.requests[0].idempotencyKey).id,firstTask.id);
+   assert.equal(assertSaved(f.api.snapshot(),'HP-1907',account,secondDescription,f.requests[1].idempotencyKey).id,secondTask.id);
+   assert.equal(assertSaved(f.api.snapshot(),'HP-1907',accountTwo,otherPilotDescription,f.requests[2].idempotencyKey).id,otherTask.id);
+   await f.close();
+   console.log('PASS multi-aircraft panel selection, report recovery, pilot isolation and retry preserve each task, notice and receipt association');
+  }
+  }finally{await browser?.close();server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
