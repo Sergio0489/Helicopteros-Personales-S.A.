@@ -1,6 +1,5 @@
 'use strict';
 (() => {
- const FORM_URL = 'https://sergio-40h.wixforms.com/f/7528524624544400415';
  const concepts = ['Abono', 'Saldo', 'Pago total', 'Otro'];
  const statuses = {
   pending_quote: 'Falta registrar la cotización',
@@ -13,6 +12,19 @@
  const money = cents => Number.isSafeInteger(cents) ? new Intl.NumberFormat('es-PA', {style:'currency', currency:'USD'}).format(cents / 100) : 'Sin importe';
  const day = value => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('es-PA', {timeZone:'America/Panama', dateStyle:'medium', timeStyle:'short'}).format(new Date(value)) : 'Sin fecha';
  const allowed = scope => !!scope && (scope.director === true || scope.full === true || scope.area === 'charters');
+ function configuredAcceptanceUrl(policy) {
+  if (!policy || typeof policy.formId !== 'string' || !policy.formId.trim() || typeof policy.conditionsVersion !== 'string' || !policy.conditionsVersion.trim() || typeof policy.privacyVersion !== 'string' || !policy.privacyVersion.trim()) {
+   throw Error('El formulario de aceptación vigente no está configurado. No se copió la solicitud.');
+  }
+  const value = typeof policy.formUrl === 'string' ? policy.formUrl.trim() : '';
+  let url;
+  try { url = new URL(value); }
+  catch { throw Error('La dirección HTTPS del formulario no es válida. No se copió la solicitud.'); }
+  if (!/^https:\/\//i.test(value) || url.protocol !== 'https:' || !url.hostname || url.username || url.password) {
+   throw Error('La dirección HTTPS del formulario no es válida. No se copió la solicitud.');
+  }
+  return value;
+ }
  let panel, tab, shell, owner = null, rights = null, policy = null, rows = [], cursor = null, busy = false, loaded = false, authBound = false, generation = 0;
 
  function operation() { return {generation, uid:owner}; }
@@ -196,10 +208,10 @@
   const op = operation();
   try {
    const currentSession = await session(false, op); guard(op);
+   const url = configuredAcceptanceUrl(currentSession.policy);
    const result = await AccountRegistration.api('quote-detail', {id}); guard(op);
    const q = result.quote;
    if (!q?.quoteExists) throw Error('Registra primero la cotización y el importe acordado.');
-   const url = currentSession.policy?.formUrl === FORM_URL ? currentSession.policy.formUrl : FORM_URL;
    const text = `Hola, ${q.customerName}. Para continuar con tu cotización de Charters Panamá, revisa las condiciones y registra tu aceptación aquí:\n${url}\n\nReferencia: ${q.reference}\nCorreo de la cotización: ${q.email}\nImporte de este pago: ${money(q.amountCents)}\nConcepto: ${q.paymentConcept}\n\nCompleta esos mismos datos y marca las casillas de condiciones y privacidad. Después de comprobar el registro, te facilitaremos el enlace de pago correspondiente. El formulario de aceptación no realiza ningún cobro.`;
    try { guard(op); await navigator.clipboard.writeText(text); guard(op); message('Solicitud copiada. Puedes pegarla en la conversación con el cliente. No se envió ningún mensaje.'); }
    catch {

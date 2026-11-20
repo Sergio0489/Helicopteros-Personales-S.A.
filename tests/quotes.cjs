@@ -94,11 +94,11 @@ test('list/detail paginate, include unmatched review items and disclose no token
  await assert.rejects(q.handle(db,'quote-detail',{id:'../../dashboard'},actor,current),/válida/);
 });
 
-function endpoint(db){
+function endpoint(db,configuration=cfg){
  let user={uid:'fictional-user',email:'staff@example.test',emailVerified:true,disabled:false},account={role:'Administrativo',assignedAt:now,prospectAccess:{area:'charters',email:'staff@example.test',assignedAt:now}},policy={};
  const exports={},database={ref:path=>path==='accountRequests/'+user.uid?{get:async()=>({val:()=>account})}:path==='dashboard/payload'?{get:async()=>({val:()=>JSON.stringify({school:{accessConfiguration:{roles:{Administrativo:policy}}}})})}:db.ref(path)};
  const dependencies={'firebase-functions/v2/https':{onRequest:(_options,fn)=>fn},'firebase-admin/app':{initializeApp(){}},'firebase-admin/auth':{getAuth:()=>({verifyIdToken:async()=>({uid:user.uid}),getUser:async()=>user})},'firebase-admin/database':{getDatabase:()=>database}};
- vm.runInNewContext(fs.readFileSync(require.resolve('../functions/index'),'utf8'),{exports,process:{env:{HP_WIX_INTERESTS_CONFIG:JSON.stringify(cfg)}},require:id=>dependencies[id]||require(id.startsWith('./')?'../functions/'+id.slice(2):id),console});
+ vm.runInNewContext(fs.readFileSync(require.resolve('../functions/index'),'utf8'),{exports,process:{env:{HP_WIX_INTERESTS_CONFIG:JSON.stringify(configuration)}},require:id=>dependencies[id]||require(id.startsWith('./')?'../functions/'+id.slice(2):id),console});
  return {setUser:patch=>{user={...user,...patch};},setAccount:value=>{account=value;},setPolicy:value=>{policy=value;},async call(action,extra={},authorized=true){let status=200,data;await exports.accountRegistration({method:'POST',headers:{authorization:authorized?'Bearer fictional':''},body:{action,...extra}},{set(){},status(v){status=v;return this;},json(v){data=v;},end(){}});return {status,data};}};
 }
 test('authentication and area gate deny school/unverified/disabled accounts and honor read-only policy',async()=>{
@@ -112,6 +112,31 @@ test('authentication and area gate deny school/unverified/disabled accounts and 
  // Use the same permission schema and precedence as existing CRM role tests.
  const scope=require('../functions/prospect-access').scope({emailVerified:true,email:'staff@example.test'}, {role:'Administrativo',assignedAt:now},false,{interesados:{actions:{view:true,edit:false},boxes:{contacts:{view:true,edit:false}}}});
  assert.equal(scope?.edit,false);assert.equal((await api.call('quote-list')).status,200);assert.equal((await api.call('quote-save',{record:{...record,version:1}})).status,403);
+});
+
+test('authorized quote session and webhook use the same current replacement form; invalid links fail closed',async()=>{
+ const configuration=structuredClone(cfg),replacementId='fictional-acceptance-v2',replacementUrl='https://forms.example.test/acceptance-v2';
+ const replacement={...configuration.forms[formId],acceptance:{...configuration.forms[formId].acceptance,conditionsVersion:'2026-11-18',privacyVersion:'2026-11-18',formUrl:replacementUrl}};
+ delete configuration.forms[formId];configuration.forms[replacementId]=replacement;
+
+ const api=endpoint(memory(),configuration),session=await api.call('quote-session');
+ assert.equal(session.status,200);
+ assert.equal(session.data.access.view,true);
+ assert.equal(session.data.policy.formId,replacementId);
+ assert.equal(session.data.policy.formUrl,replacementUrl);
+ assert.equal(session.data.policy.conditionsVersion,'2026-11-18');
+ assert.equal(session.data.policy.privacyVersion,'2026-11-18');
+
+ const currentBody={...body,formId:replacementId,conditionsVersion:'2026-11-18',privacyVersion:'2026-11-18'};
+ const processed=q.webhookInput(currentBody,configuration,last);
+ assert.equal(processed.formId,session.data.policy.formId);
+ assert.equal(processed.formUrl,session.data.policy.formUrl);
+ assert.throws(()=>q.webhookInput(body,configuration,last),/formulario|Formulario/);
+
+ for(const formUrl of ['', 'not-a-url', 'http://forms.example.test/acceptance', 'https://pilot:secret@forms.example.test/acceptance']){
+  const invalid=structuredClone(configuration);invalid.forms[replacementId].acceptance.formUrl=formUrl;
+  assert.throws(()=>q.policy(invalid));
+ }
 });
 
 test('HTTP receiver routes quote acceptance only to private quotation records and preserves CRM route',async()=>{

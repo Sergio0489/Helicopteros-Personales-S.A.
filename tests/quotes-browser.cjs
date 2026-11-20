@@ -23,7 +23,7 @@ async function capture(page, name) {
  await page.screenshot({path:path.join(process.env.HP_QUOTES_PREVIEW_DIR, name + '.png'), fullPage:true});
 }
 async function fixture(browser, width, patch = {}) {
- const model = {view:true, edit:true, rows:[quote()], calls:[], ...patch};
+ const model = {view:true, edit:true, policy:{formId:'fictional-acceptance-v1', conditionsVersion:'charters-test-v1', privacyVersion:'privacy-test-v1', formUrl:'https://sergio-40h.wixforms.com/f/7528524624544400415'}, rows:[quote()], calls:[], ...patch};
  const page = await browser.newPage({viewport:{width, height:950}}), errors = [], external = [];
  page.on('pageerror', e => errors.push(e.message));
  await page.route('**/*', route => {external.push(route.request().url());return route.abort();});
@@ -34,7 +34,7 @@ async function fixture(browser, width, patch = {}) {
    const result = await model.intercept(action, body);
    if (result !== undefined) return result;
   }
-  if (action === 'quote-session') return {access:{view:model.view, edit:model.edit}, policy:{conditionsVersion:'charters-test-v1', privacyVersion:'privacy-test-v1', formUrl:'https://sergio-40h.wixforms.com/f/7528524624544400415'}};
+  if (action === 'quote-session') return {access:{view:model.view, edit:model.edit}, policy:structuredClone(model.policy)};
   if (!model.view) throw Error('No autorizado.');
   if (action === 'quote-list') return {quotes:structuredClone(model.rows), nextCursor:null};
   if (action === 'quote-detail') {
@@ -115,6 +115,56 @@ test('dedicated quotations page creates exact amounts and copies current quote d
   assert.equal(await page.locator('#quotes-staff-shell').count(), 0);
   await page.close();
  }
+});
+test('copy follows each authorized server form configuration and fails closed when that policy is invalid', async t => {
+ const browser = await launch(t);
+ const firstUrl = 'https://forms.example.test/acceptance-v1';
+ const secondUrl = 'https://forms.example.test/acceptance-v2';
+ const {page, model, errors, external} = await fixture(browser, 390, {edit:false, policy:{formId:'fictional-form-v1', conditionsVersion:'conditions-v1', privacyVersion:'privacy-v1', formUrl:firstUrl}});
+ await page.evaluate(scope => window.Quotes.openStaff(scope, () => {}), {...scope, edit:false});
+ await page.locator('[data-quote-copy="quote-a"]').click();
+ await page.waitForFunction(url => window.copiedQuoteText?.includes(url), firstUrl);
+ assert((await page.evaluate(() => window.copiedQuoteText)).includes(firstUrl));
+ assert(!model.edit, 'A read-only session may copy its authorized acceptance request.');
+
+ // A second request obtains a fresh server session after Direction changes forms.
+ model.policy = {formId:'fictional-form-v2', conditionsVersion:'conditions-v2', privacyVersion:'privacy-v2', formUrl:secondUrl};
+ await page.locator('[data-quote-copy="quote-a"]').click();
+ await page.waitForFunction(url => window.copiedQuoteText?.includes(url), secondUrl);
+ const copied = await page.evaluate(() => window.copiedQuoteText);
+ assert(copied.includes(secondUrl));
+ assert(!copied.includes(firstUrl));
+ assert(!copied.includes('https://sergio-40h.wixforms.com/f/7528524624544400415'));
+ assert.equal(model.calls.filter(call => call.action === 'quote-session').length, 3);
+ assert.equal(model.calls.filter(call => call.action === 'quote-detail').length, 2);
+ assert.deepEqual(errors, []); assert.deepEqual(external, []);
+ await page.close();
+
+ const invalidPolicies = [
+  null,
+  {formId:'fictional-form', conditionsVersion:'v1', privacyVersion:'v1', formUrl:''},
+  {formId:'fictional-form', conditionsVersion:'v1', privacyVersion:'v1', formUrl:'http://forms.example.test/acceptance'},
+  {formId:'fictional-form', conditionsVersion:'v1', privacyVersion:'v1', formUrl:'not-a-url'},
+  {formId:'fictional-form', conditionsVersion:'v1', privacyVersion:'v1', formUrl:'https://pilot:secret@forms.example.test/acceptance'},
+  {conditionsVersion:'v1', privacyVersion:'v1', formUrl:'https://forms.example.test/acceptance'}
+ ];
+ for (const policy of invalidPolicies) {
+  const fixturePage = await fixture(browser, 390, {policy});
+  await fixturePage.page.evaluate(scope => window.Quotes.openStaff(scope, () => {}), scope);
+  await fixturePage.page.locator('[data-quote-copy="quote-a"]').click();
+  await fixturePage.page.locator('[data-quote-message]').filter({hasText:/formulario|dirección HTTPS/i}).waitFor();
+  assert.equal(fixturePage.model.calls.filter(call => call.action === 'quote-detail').length, 0);
+  assert.equal(await fixturePage.page.evaluate(() => window.copiedQuoteText), undefined);
+  assert.deepEqual(fixturePage.errors, []); assert.deepEqual(fixturePage.external, []);
+  await fixturePage.page.close();
+ }
+
+ const denied = await fixture(browser, 390, {view:false});
+ await denied.page.evaluate(scope => window.Quotes.openStaff(scope, () => {}), scope);
+ await denied.page.getByText('No tienes acceso a las cotizaciones de Charters.', {exact:true}).waitFor();
+ assert.equal(denied.model.calls.filter(call => call.action === 'quote-detail').length, 0);
+ assert.equal(await denied.page.evaluate(() => window.copiedQuoteText), undefined);
+ await denied.page.close();
 });
 test('acceptance is read-only, incomplete evidence never appears ready, and revoked access clears cached quotations', async t => {
  const browser = await launch(t);
