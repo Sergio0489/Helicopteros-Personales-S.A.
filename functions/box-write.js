@@ -74,7 +74,7 @@ function applyChanges(current,before,after,policy,account){
   const remaining=clone(next);
   for(const task of records){const match=maintenanceMatchIndex(task,remaining);if(match>=0)remaining.splice(match,1);else assertPendingTaskRemoval(path,task);}
  };
- const check=(path,context)=>{if(path[0]==='fleet'&&path[2]==='bitacora_reinicios_inspeccion'&&account.role!=='Director')throw Error('Solo el Director puede registrar reinicios de inspección.');if(path[0]==='fleet'&&['horas_acum_50','horas_acum_100','horas_totales','horas_limite'].includes(path[2])&&account.role!=='Director')throw Error('Solo el Director puede reiniciar o corregir acumulados de inspección.');if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
+ const check=(path,context)=>{if(path[0]==='fleet'&&path[2]==='bitacora_reinicios_inspeccion'&&account.role!=='Director')throw Error('Solo el Director puede registrar reinicios de inspección.');if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
    const pilot=root.pilotos?.[path[1]];
    if(!pilot||account.syncStatus!=='matched'||account.recordKind!=='pilot'||pilot.id!==account.recordId)throw Error('Solo puedes modificar tu expediente de piloto autorizado.');
   }if(account.role==='Administrativo'&&path[0]==='school'&&path[1]==='personnel'){
@@ -116,7 +116,7 @@ function applyChanges(current,before,after,policy,account){
  }
  const result=merge(root,before,after,[]);
  require('./inspection-records').protectDeletion(current,result,account);
- require('./inspection-resets').protect(current,result);
+ require('./inspection-resets').protect(current,result,account);
  require('./honorarios').protect(current,result);
  require('./honorarios').applyNewEntries(current,result,account);
  require('./identity-merge').syncLinked(current,result);require('./identity-merge').assertUnique(current,result);require('./company').validateChanges(current,result);require('./pilot-validity').validateChanges(current,result);require('./school-information').validateChanges(current,result);require('./school-certificates').validateChanges(current,result);return {data:result,writes};
