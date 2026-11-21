@@ -771,18 +771,35 @@ function requestInspectionResetReason(reg,limitHours){
  });
 }
 async function resetInspectionBar(idx,limitHours){
- if(!canResetInspectionBar()||![50,100].includes(Number(limitHours))||!fleet[idx])return false;
- const reg=fleet[idx].reg,reason=await requestInspectionResetReason(reg,Number(limitHours));if(!reason)return false;
- if(aircraftDirty.has(idx)&&!await savePanel(idx))return false;
- if(!canResetInspectionBar())return false;
- const d=structuredClone(state[idx]),key='horas_acum_'+limitHours,current=Number(d[key]||0);
- if(!Number.isFinite(current)||current<0){alert('El acumulado actual no es válido. Revisa las horas antes de reiniciar.');return false;}
- const previousReason=window.ChangeHistory?.getReason?.()||'';
- d[key]='0.00';if(limitHours===50)d.horas_totales='0.00';else d.horas_limite='0.00';
- d.bitacora_reinicios_inspeccion||=[];const offset=(d.bitacora_horas||[]).length;d.bitacora_reinicios_inspeccion.push({id:globalThis.crypto?.randomUUID?.()||'reset-'+Date.now()+'-'+Math.random().toString(16).slice(2),limitHours,before:current.toFixed(2),after:'0.00',hour_offset:offset,effective_hour_offset:offset,reason:reason.trim(),createdAt:new Date().toISOString(),fecha:getFechaPanama(),hora:getHoraPanama()});
- window.ChangeHistory?.setReason?.(reason.trim());
- const ok=await saveData(reg,d,{clearUndo:true});if(!ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
- state[idx]=d;aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();updateUndoButtons();return true;
+  limitHours=Number(limitHours);
+  if(!canResetInspectionBar()||![50,100].includes(limitHours)||!fleet[idx])return false;
+  const reg=fleet[idx].reg,reason=await requestInspectionResetReason(reg,limitHours);if(!reason)return false;
+  if(aircraftDirty.has(idx)&&!await savePanel(idx))return false;
+  if(!canResetInspectionBar())return false;
+  if(aircraftDirty.size){alert('Guarda primero los cambios pendientes en las demás aeronaves.');return false;}
+  if(window.hasDraftChanges?.()){alert('Guarda o descarta los cambios pendientes antes de reiniciar una barra.');return false;}
+  const d=state[idx],key='horas_acum_'+limitHours,current=Number(d[key]||0);
+  if(!Number.isFinite(current)||current<0){alert('El acumulado actual no es válido. Revisa las horas antes de reiniciar.');return false;}
+  if(typeof window.cloudResetInspectionBar!=='function'){alert('No está disponible el guardado seguro del reinicio. Actualiza la aplicación e inténtalo de nuevo.');return false;}
+  const previousReason=window.ChangeHistory?.getReason?.()||'';
+  const requestId=globalThis.crypto?.randomUUID?.()||'reset-'+Date.now()+'-'+Math.random().toString(16).slice(2);
+  window.ChangeHistory?.setReason?.(reason.trim());
+  let result;
+  try{result=await window.cloudResetInspectionBar({reg,limitHours,expectedBefore:current.toFixed(2),id:requestId,reason:reason.trim()});}
+  catch(error){window.ChangeHistory?.setReason?.(previousReason);alert(error.message||'No se pudo guardar el reinicio.');return false;}
+  if(result.stale){
+    window.ChangeHistory?.setReason?.(previousReason);
+    state[idx]=structuredClone(result.aircraft);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();
+    alert('Las horas cambiaron desde que abriste el panel. Actualicé los datos; revisa el acumulado y vuelve a reiniciar si aún corresponde.');
+    if(result.rebased)location.reload();
+    return false;
+  }
+  if(!result.ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
+  if(result.noChange)window.ChangeHistory?.setReason?.(previousReason);
+  if(result.alreadyApplied)window.ChangeHistory?.consume?.(reason.trim());
+  state[idx]=structuredClone(result.aircraft);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();updateUndoButtons();
+  if(result.rebased)location.reload();
+  return true;
 }
 function requestInspectionDeleteReason(reg,record){
  return new Promise(resolve=>{
@@ -3597,7 +3614,7 @@ function confirmFlightScheduling(flight) {
 
 
 function dateAlertLevel(days){return days<0?'danger':days<=5?'orange':days<=30?'warn':'ok';}
-function inspectionFill(hours,limit){const n=Number(hours||0);return n>=limit?'fill-danger':n>=limit-10?'fill-warn':'fill-ok';}
+function inspectionFill(hours,limit){const n=Number(hours||0);return n<=0?'fill-empty':n>=limit?'fill-danger':n>=limit-10?'fill-warn':'fill-ok';}
 
 function plannerFlightLabel(f,r){
   if(r.end-r.start<45)return '<b class="planner-tiny-icon" aria-hidden="true">◷</b>';

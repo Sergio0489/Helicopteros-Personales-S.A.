@@ -95,6 +95,45 @@ window.cloudWrite=async function(data){
 };
 const draftCloudWrite=window.cloudWrite;
 window.cloudWrite=async data=>{await window.DraftRecovery?.beforeSave();try{const result=await draftCloudWrite(data);window.DraftRecovery?.saved();return result;}catch(error){window.DraftRecovery?.error(error.message);throw error;}};
+window.cloudResetInspectionBar=async function({reg,limitHours,expectedBefore,id,reason}={}){
+ if(!isDirectorUser())throw Error('Inicia sesión con el usuario autorizado.');
+ const limit=Number(limitHours),field='horas_acum_'+limit,alias=limit===50?'horas_totales':'horas_limite';
+ const expectedCents=Math.round(Number(expectedBefore)*100),requestId=String(id||''),motive=String(reason||'').trim();
+ if(![50,100].includes(limit)||!Number.isSafeInteger(expectedCents)||expectedCents<0)throw Error('El acumulado de inspección no es válido.');
+ if(!requestId.trim()||requestId.length>160||!motive||motive.length>500)throw Error('El reinicio necesita un identificador y un motivo válido.');
+ if(cloudBusy)throw Error('Espera a que termine el guardado actual.');
+ if(cloudBlocked)throw Error('Actualiza los datos antes de reiniciar. El guardado anterior quedó pendiente de revisión.');
+ if(profileDirty||window.hasDraftChanges?.())throw Error('Guarda o descarta los cambios pendientes antes de reiniciar una barra.');
+ const key=String(reg||'').replace(/[^a-zA-Z0-9]/g,'_'),initialOperation=cloudOperation;
+ const rows=value=>Array.isArray(value)?value:value&&typeof value==='object'?Object.keys(value).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(k=>value[k]):[];
+ for(let attempt=0;attempt<3;attempt++){
+  const latest=await cloudRequest('GET'),envelope=latest.value;
+  if(!latest.etag||!envelope?.payload||typeof envelope.payload!=='string')throw Error('No se pudo consultar el estado actual de las aeronaves.');
+  const fresh=validateBackup(JSON.parse(envelope.payload)),aircraft=fresh.fleet[key];
+  if(!aircraft)throw Error('No encontré la aeronave seleccionada en los datos actuales.');
+  const rebased=(envelope.operation||null)!==(initialOperation||null);
+  cloudETag=latest.etag;cloudVersion=envelope.revision||0;cloudOperation=envelope.operation||null;lastCloudPayload=envelope.payload;cloudBlocked=false;
+  const events=rows(aircraft.bitacora_reinicios_inspeccion),existing=events.find(event=>String(event?.id||'')===requestId);
+  previewData=structuredClone(fresh);
+  if(existing){window.failedCloudData=null;return{ok:true,alreadyApplied:true,rebased,data:fresh,aircraft};}
+  const current=Number(aircraft[field]||aircraft[alias]||0);
+  if(!Number.isFinite(current)||current<0)throw Error('El acumulado actual no es válido. Revisa las horas antes de reiniciar.');
+  if(Math.round(current*100)!==expectedCents){window.failedCloudData=null;return{ok:false,stale:true,rebased,data:fresh,aircraft};}
+  if(expectedCents===0){window.failedCloudData=null;return{ok:true,noChange:true,rebased,data:fresh,aircraft};}
+  const next=structuredClone(fresh),target=next.fleet[key],now=new Date(),logs=rows(target.bitacora_horas),fecha=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Panama',day:'2-digit',month:'2-digit',year:'numeric'}).format(now),hora=new Intl.DateTimeFormat('es-PA',{timeZone:'America/Panama',hour:'numeric',minute:'2-digit'}).format(now);
+  target[field]='0.00';target[alias]='0.00';target.bitacora_reinicios_inspeccion=events;
+  target.bitacora_reinicios_inspeccion.push({id:requestId,limitHours:limit,before:(expectedCents/100).toFixed(2),after:'0.00',hour_offset:logs.length,effective_hour_offset:logs.length,reason:motive,createdAt:now.toISOString(),fecha,hora});
+  next.undoFleet||={};delete next.undoFleet[key];
+  try{
+   await window.cloudWrite(next);previewData=structuredClone(next);
+   return{ok:true,rebased,data:next,aircraft:next.fleet[key]};
+  }catch(error){
+   if(attempt<2&&/los datos cambiaron/i.test(String(error?.message||'')))continue;
+   throw error;
+  }
+ }
+ throw Error('Los datos cambiaron repetidamente. Actualiza la aplicación antes de volver a reiniciar.');
+};
 function validateBackup(data){
  if(!data||typeof data!=='object'||Array.isArray(data)||!data.fleet||typeof data.fleet!=='object'||Array.isArray(data.fleet))throw Error('El archivo no es un respaldo del dashboard.');
  if(data.pilotos!=null&&!Array.isArray(data.pilotos))throw Error('La lista de pilotos no es válida.');
@@ -112,7 +151,9 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
-  const script=document.createElement('script');script.src='dashboard.js?v=20261120-inspection-history-1';
+ const historyScript=document.createElement('script');historyScript.src='functions/inspection-history.js?v=20261121-inspection-reset-1';
+ await new Promise((resolve,reject)=>{historyScript.onload=()=>window.HPInspectionHistory?resolve():reject(Error('No se pudo preparar el historial de inspecciones. Recarga la página.'));historyScript.onerror=()=>reject(Error('No se pudo cargar el historial de inspecciones. Recarga la página.'));document.body.appendChild(historyScript);});
+ const script=document.createElement('script');script.src='dashboard.js?v=20261121-inspection-reset-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261118-honorarios-scheduling-1';
