@@ -8,7 +8,7 @@ const {protectDeletion}=require('../functions/inspection-records');
 
 function clone(value){return structuredClone(value);}
 function resetEvent(overrides={}){return {id:'fictional-reset',limitHours:50,before:'38.21',after:'0.00',hour_offset:0,effective_hour_offset:0,reason:'Prueba ficticia',createdAt:'2026-11-20T12:00:00.000Z',fecha:'20/11/2026',hora:'7:00 a. m.',...overrides};}
-function aircraft(overrides={}){return {horas_acum_50:'0.00',horas_totales:'0.00',horas_acum_100:'0.00',horas_limite:'0.00',proxima_inspeccion:'',bitacora_horas:[],bitacora_inspecciones:[],bitacora_reinicios_inspeccion:[],...overrides};}
+function aircraft(overrides={}){return {horas_acum_50:'0.00',horas_totales:'0.00',horas_acum_100:'0.00',horas_limite:'0.00',proxima_inspeccion:'',bitacora_horas:[],bitacora_inspecciones:[],bitacora_reinicios_inspeccion:[],bitacora_ajustes_inspeccion:[],...overrides};}
 function deleteInspection(before,recordIndex){
  const expected=clone(before),record=expected.bitacora_inspecciones[recordIndex];
  expected.bitacora_inspecciones.splice(recordIndex,1);expected.proxima_inspeccion=expected.bitacora_inspecciones.length?String(expected.bitacora_inspecciones.at(-1).proxima??''):'';
@@ -88,5 +88,115 @@ test('deleting an earlier flight updates later inspection snapshots before the s
 test('HP880BL historical dual-TAC editing passes the aircraft into component adjustment',()=>{
  const source=fs.readFileSync(require.resolve('../dashboard.js'),'utf8');
  assert.match(source,/adjustDualAircraftComponents\(d,\(next\.left\.hours-old\.left\.hours\)\/100-maintenanceChange,/);
- const endpoint=fs.readFileSync(require.resolve('../functions/index.js'),'utf8');assert.match(endpoint,/inspection-resets'\)\.protect\(before,data,\{role:'Director'\}\)/);
+ const endpoint=fs.readFileSync(require.resolve('../functions/index.js'),'utf8');assert.match(endpoint,/inspection-resets'\)\.protect\(before,data,\{role:'Director',uid:user.uid/);
+});
+
+
+test('Director manual adjustment is recorded and preserved through a later TAC correction',()=>{
+ const before=aircraft({horas_acum_50:'10.00',horas_totales:'10.00',horas_acum_100:'10.00',horas_limite:'10.00',bitacora_horas:[{registryId:'fictional-flight-a',hv:'10.00',acum:'10.00'}],bitacora_reinicios_inspeccion:[
+  resetEvent({id:'fictional-reset-50',limitHours:50,before:'28.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:00:00.000Z'}),
+  resetEvent({id:'fictional-reset-100',limitHours:100,before:'44.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:01:00.000Z'})
+ ]});
+ const adjusted=clone(before);for(const [key,value]of [['horas_acum_50','15.00'],['horas_totales','15.00'],['horas_acum_100','15.00'],['horas_limite','15.00']])adjusted[key]=value;
+ protect({fleet:{0:before}},{fleet:{0:adjusted}},{role:'Director',uid:'fictional-director'});
+ assert.equal(adjusted.horas_acum_50,'15.00');assert.equal(adjusted.horas_acum_100,'15.00');
+ assert.equal(adjusted.bitacora_ajustes_inspeccion.length,1);
+ const event=adjusted.bitacora_ajustes_inspeccion[0];
+ assert.equal(event.source,'director-manual-adjustment');assert.equal(event.createdBy,'fictional-director');assert.equal(event.hour_offset,1);assert.equal(event.effective_hour_offset,1);
+ assert.equal(event.before50,'10.00');assert.equal(event.after50,'15.00');assert.equal(event.delta50,'5.00');
+ assert.equal(event.before100,'10.00');assert.equal(event.after100,'15.00');assert.equal(event.delta100,'5.00');
+ const corrected=clone(adjusted);corrected.bitacora_horas[0].hv='11.00';History.rebuild(corrected);
+ assert.equal(corrected.horas_acum_50,'16.00');assert.equal(corrected.horas_acum_100,'16.00');
+ protect({fleet:{0:adjusted}},{fleet:{0:corrected}},{role:'Director',uid:'fictional-director'});
+ assert.equal(corrected.horas_acum_50,'16.00');assert.equal(corrected.horas_acum_100,'16.00');
+ assert.equal(corrected.bitacora_ajustes_inspeccion[0].before50,'10.00');assert.equal(corrected.bitacora_ajustes_inspeccion[0].after50,'15.00');assert.equal(corrected.bitacora_ajustes_inspeccion[0].delta50,'5.00');
+});
+
+test('first manual adjustment anchors an unsegmented history for future TAC edits',()=>{
+ const before=aircraft({horas_acum_50:'15.00',horas_totales:'15.00',horas_acum_100:'25.00',horas_limite:'25.00',bitacora_horas:[{registryId:'fictional-flight-a',hv:'10.00',acum:'25.00'}]});
+ const adjusted=clone(before);adjusted.horas_acum_50='16.00';adjusted.horas_totales='16.00';adjusted.horas_acum_100='26.00';adjusted.horas_limite='26.00';
+ protect({fleet:{0:before}},{fleet:{0:adjusted}},{role:'Director',uid:'fictional-director'});
+ const event=adjusted.bitacora_ajustes_inspeccion[0];
+ assert.equal(event.opening_balance50,'5.00');assert.equal(event.opening_balance100,'15.00');
+ const corrected=clone(adjusted);corrected.bitacora_horas[0].hv='11.00';History.rebuild(corrected);
+ assert.equal(corrected.horas_acum_50,'17.00');assert.equal(corrected.horas_acum_100,'27.00');
+ protect({fleet:{0:adjusted}},{fleet:{0:corrected}},{role:'Director',uid:'fictional-director'});
+ assert.equal(corrected.horas_acum_50,'17.00');assert.equal(corrected.horas_acum_100,'27.00');
+});
+
+test('legacy unlogged manual balances are reconciled once during historical TAC correction',()=>{
+ const before=aircraft({horas_acum_50:'15.00',horas_totales:'15.00',horas_acum_100:'15.00',horas_limite:'15.00',bitacora_horas:[{registryId:'fictional-flight-a',hv:'10.00',acum:'10.00'}],bitacora_reinicios_inspeccion:[
+  resetEvent({id:'fictional-reset-50',limitHours:50,before:'28.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:00:00.000Z'}),
+  resetEvent({id:'fictional-reset-100',limitHours:100,before:'44.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:01:00.000Z'})
+ ]});
+ const corrected=clone(before);corrected.bitacora_horas[0].hv='11.00';History.rebuild(corrected);
+ assert.equal(corrected.horas_acum_50,'11.00');
+ protect({fleet:{0:before}},{fleet:{0:corrected}},{role:'Director',uid:'fictional-director'});
+ assert.equal(corrected.horas_acum_50,'16.00');assert.equal(corrected.horas_acum_100,'16.00');
+ assert.equal(corrected.bitacora_ajustes_inspeccion.length,1);
+ const event=corrected.bitacora_ajustes_inspeccion[0];
+ assert.equal(event.source,'legacy-counter-reconciliation');assert.equal(event.createdBy,null);assert.equal(event.before50,'10.00');assert.equal(event.after50,'15.00');assert.equal(event.delta50,'5.00');
+ const next=clone(corrected);next.bitacora_horas[0].hv='12.00';History.rebuild(next);
+ protect({fleet:{0:corrected}},{fleet:{0:next}},{role:'Director',uid:'fictional-director'});
+ assert.equal(next.horas_acum_50,'17.00');assert.equal(next.bitacora_ajustes_inspeccion.length,1);
+});
+
+test('successive adjustments and a deleted earlier flight preserve deltas and move only the effective offset',()=>{
+ const before=aircraft({horas_acum_50:'10.00',horas_totales:'10.00',horas_acum_100:'10.00',horas_limite:'10.00',bitacora_horas:[{registryId:'fictional-flight-a',hv:'4.00',acum:'4.00'},{registryId:'fictional-flight-b',hv:'6.00',acum:'10.00'}],bitacora_reinicios_inspeccion:[
+  resetEvent({id:'fictional-reset-50',limitHours:50,before:'28.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:00:00.000Z'}),
+  resetEvent({id:'fictional-reset-100',limitHours:100,before:'44.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:01:00.000Z'})
+ ]});
+ const first=clone(before);first.horas_acum_50='15.00';first.horas_totales='15.00';first.horas_acum_100='15.00';first.horas_limite='15.00';
+ protect({fleet:{0:before}},{fleet:{0:first}},{role:'Director',uid:'fictional-director'});
+ const second=clone(first);second.horas_acum_50='13.00';second.horas_totales='13.00';second.horas_acum_100='13.00';second.horas_limite='13.00';
+ protect({fleet:{0:first}},{fleet:{0:second}},{role:'Director',uid:'fictional-director'});
+ assert.deepEqual(second.bitacora_ajustes_inspeccion.map(e=>e.delta50),['5.00','-2.00']);
+ const deleted=clone(second);deleted.bitacora_horas.splice(0,1);deleted.bitacora_ajustes_inspeccion.forEach(e=>{if(e.effective_hour_offset>0)e.effective_hour_offset--;});History.rebuild(deleted);
+ assert.equal(deleted.bitacora_ajustes_inspeccion[0].hour_offset,2);assert.equal(deleted.bitacora_ajustes_inspeccion[0].effective_hour_offset,1);
+ assert.equal(deleted.horas_acum_50,'9.00');assert.equal(deleted.horas_acum_100,'9.00');
+ protect({fleet:{0:second}},{fleet:{0:deleted}},{role:'Director',uid:'fictional-director'});
+ assert.equal(deleted.bitacora_ajustes_inspeccion[0].effective_hour_offset,1);
+ assert.deepEqual(deleted.bitacora_ajustes_inspeccion.map(e=>e.delta50),['5.00','-2.00']);
+ const tacCorrected=clone(deleted);tacCorrected.bitacora_horas[0].hv='7.00';History.rebuild(tacCorrected);
+ assert.equal(tacCorrected.horas_acum_50,'10.00');assert.equal(tacCorrected.horas_acum_100,'10.00');
+ protect({fleet:{0:deleted}},{fleet:{0:tacCorrected}},{role:'Director',uid:'fictional-director'});
+ assert.equal(tacCorrected.horas_acum_50,'10.00');assert.equal(tacCorrected.horas_acum_100,'10.00');
+});
+
+test('a 50-hour reset leaves the adjusted 100-hour counter intact',()=>{
+ const before=aircraft({horas_acum_50:'10.00',horas_totales:'10.00',horas_acum_100:'10.00',horas_limite:'10.00',bitacora_horas:[{registryId:'fictional-flight-a',hv:'10.00',acum:'10.00'}],bitacora_reinicios_inspeccion:[
+  resetEvent({id:'fictional-reset-50',limitHours:50,before:'28.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:00:00.000Z'}),
+  resetEvent({id:'fictional-reset-100',limitHours:100,before:'44.00',hour_offset:0,effective_hour_offset:0,createdAt:'2026-11-20T10:01:00.000Z'})
+ ]});
+ const adjusted=clone(before);adjusted.horas_acum_50='15.00';adjusted.horas_totales='15.00';adjusted.horas_acum_100='15.00';adjusted.horas_limite='15.00';
+ protect({fleet:{0:before}},{fleet:{0:adjusted}},{role:'Director',uid:'fictional-director'});
+ const next=clone(adjusted);const stamp=new Date(Date.parse(next.bitacora_ajustes_inspeccion[0].createdAt)+1000).toISOString();
+ next.bitacora_reinicios_inspeccion.push(resetEvent({id:'fictional-reset-50-next',limitHours:50,before:'15.00',after:'0.00',hour_offset:1,effective_hour_offset:1,createdAt:stamp}));
+ next.horas_acum_50='0.00';next.horas_totales='0.00';History.rebuild(next);
+ assert.equal(next.horas_acum_50,'0.00');assert.equal(next.horas_acum_100,'15.00');
+ protect({fleet:{0:adjusted}},{fleet:{0:next}},{role:'Director',uid:'fictional-director'});
+ assert.equal(next.horas_acum_50,'0.00');assert.equal(next.horas_acum_100,'15.00');
+});
+
+test('non-Director cannot alter manual counters or forge adjustment history',()=>{
+ const before=aircraft({horas_acum_50:'5.00',horas_totales:'5.00',horas_acum_100:'8.00',horas_limite:'8.00'});
+ const forged=clone(before);forged.horas_acum_50='6.00';forged.horas_totales='6.00';
+ assert.throws(()=>protect({fleet:{0:before}},{fleet:{0:forged}},{role:'Piloto',uid:'fictional-pilot'}),/Solo el Director/);
+ forged.bitacora_ajustes_inspeccion=[{id:'forged',hour_offset:0,effective_hour_offset:0,delta50:'1.00',delta100:'0.00'}];
+ assert.throws(()=>protect({fleet:{0:before}},{fleet:{0:forged}},{role:'Director',uid:'fictional-director'}),/no puede editarse/);
+});
+
+test('TAC deletion shifts the adjustment event offset in the browser flow',()=>{
+ const source=fs.readFileSync(require.resolve('../registro.js'),'utf8');
+ assert.match(source,/bitacora_ajustes_inspeccion\)\)\{const offset=window\.HPInspectionHistory\.effectiveOffset\(adjustment\);if\(offset!==null&&offset>hi\)adjustment\.effective_hour_offset=offset-1/);
+});
+
+test('director-save returns server-created adjustment events before cloudWrite caches the saved payload',()=>{
+ const endpoint=fs.readFileSync(require.resolve('../functions/index.js'),'utf8'),cloud=fs.readFileSync(require.resolve('../cloud.js'),'utf8'),dashboard=fs.readFileSync(require.resolve('../dashboard.js'),'utf8');
+ assert.match(endpoint,/submittedFleet=JSON\.stringify\(data\.fleet\|\|\{\}\)/);
+ assert.match(endpoint,/serverFleetSync=JSON\.parse\(JSON\.stringify\(data\.fleet\|\|\{\}\)\)/);
+ assert.match(endpoint,/fleetSync:\{fleet:serverFleetSync\}/);
+ const apply=cloud.indexOf('if(result.fleetSync?.fleet)data.fleet=result.fleetSync.fleet;'),cache=cloud.indexOf('lastCloudPayload=JSON.stringify(data)',apply);
+ assert(apply>=0&&cache>apply,'The client must merge the server history before storing its next-write baseline.');
+ assert.match(dashboard,/Object\.assign\(data,decodeAircraft\(previewData\.fleet\[key\]\)\)/,'Aircraft editor state must receive the canonical adjustment history after save.');
 });

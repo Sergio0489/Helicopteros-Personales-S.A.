@@ -34,10 +34,14 @@ function compareEvents(a,b){
 function inspectionEvents(aircraft){
  return array(aircraft.bitacora_inspecciones).map((record,index)=>({kind:'inspection',record,index,offset:record.hour_offset})).filter(event=>Number.isInteger(event.offset)&&event.offset>=0);
 }
+function adjustmentEvents(aircraft){
+ return array(aircraft.bitacora_ajustes_inspeccion).map((record,index)=>({kind:'adjustment',record,index,offset:effectiveOffset(record)})).filter(event=>Number.isInteger(event.offset));
+}
 function timelineEvents(aircraft,limit){
  const inspections=inspectionEvents(aircraft);
  const manual=array(aircraft.bitacora_reinicios_inspeccion).map((record,index)=>({kind:'manual',record,index,offset:effectiveOffset(record)})).filter(event=>Number(event.record.limitHours)===limit&&Number.isInteger(event.offset));
- return [...inspections,...manual].sort(compareEvents);
+ const adjustments=adjustmentEvents(aircraft).filter(event=>event.record['delta'+limit]!==undefined&&event.record['delta'+limit]!==null);
+ return [...inspections,...manual,...adjustments].sort(compareEvents);
 }
 function resetEvents(aircraft,limit){
  return timelineEvents(aircraft,limit).filter(event=>event.kind==='manual'||(limit===50?[50,100].includes(Number(event.record.tipo)):Number(event.record.tipo)===100));
@@ -54,6 +58,10 @@ function candidateAnchors(aircraft,limit,extraAnchors){
  }
  for(const event of array(aircraft.bitacora_reinicios_inspeccion).map((record,index)=>({kind:'manual',record,index,offset:effectiveOffset(record)}))){
   if(Number(event.record.limitHours)===limit&&event.offset!==null&&event.record.before!==undefined)candidates.push({...event,baseline:asCents(event.record.before)});
+ }
+ for(const event of adjustmentEvents(aircraft)){
+  const value=event.record['opening_balance'+limit];
+  if(value!==undefined&&value!==null&&value!=='')candidates.push({kind:'anchor',record:event.record,index:event.index,offset:0,baseline:asCents(value)});
  }
  for(const item of extraAnchors){
   const record=item?.record||item,offset=Number(record?.hour_offset),value=record?.['before'+limit],index=Number.isInteger(item?.index)?item.index:Number.MAX_SAFE_INTEGER;
@@ -79,7 +87,11 @@ function replayLimit(aircraft,limit,extraAnchors=[]){
   if(event.kind==='inspection'){
    event.record['before'+limit]=asHours(balance);
    if(limit===50||Number(event.record.tipo)===100)balance=0;
-  }else balance=0;
+  }else if(event.kind==='manual')balance=0;
+  else{
+   balance+=signedCents(event.record['delta'+limit]??0);
+   if(balance<0)throw Error('El ajuste manual dejaría negativo el acumulado de inspección.');
+  }
  };
  let cursor=startOffset;
  for(let boundary=startOffset;boundary<=logs.length;boundary++){
@@ -99,7 +111,10 @@ function rebuild(aircraft,{anchors=[]}={}){
  aircraft.bitacora_horas=Array.isArray(aircraft.bitacora_horas)?aircraft.bitacora_horas:[];
  aircraft.bitacora_inspecciones=Array.isArray(aircraft.bitacora_inspecciones)?aircraft.bitacora_inspecciones:[];
  aircraft.bitacora_reinicios_inspeccion=Array.isArray(aircraft.bitacora_reinicios_inspeccion)?aircraft.bitacora_reinicios_inspeccion:[];
- for(const event of [...inspectionEvents(aircraft),...aircraft.bitacora_reinicios_inspeccion.map(record=>({record,offset:effectiveOffset(record)}))])if(!Number.isInteger(event.offset)||event.offset<0||event.offset>aircraft.bitacora_horas.length)throw Error('La posición del historial de inspecciones no coincide con la bitácora de horas.');
+ aircraft.bitacora_ajustes_inspeccion=Array.isArray(aircraft.bitacora_ajustes_inspeccion)?aircraft.bitacora_ajustes_inspeccion:[];
+ const adjustmentRows=adjustmentEvents(aircraft);
+ for(const event of [...inspectionEvents(aircraft),...aircraft.bitacora_reinicios_inspeccion.map(record=>({record,offset:effectiveOffset(record)})),...adjustmentRows])if(!Number.isInteger(event.offset)||event.offset<0||event.offset>aircraft.bitacora_horas.length)throw Error('La posición del historial de inspecciones no coincide con la bitácora de horas.');
+ for(const event of adjustmentRows)for(const limit of [50,100])if(event.record['delta'+limit]!==undefined)signedCents(event.record['delta'+limit]);
  replayLimit(aircraft,50,anchors);replayLimit(aircraft,100,anchors);
  aircraft.horas_totales=aircraft.horas_acum_50;aircraft.horas_limite=aircraft.horas_acum_100;
  return aircraft;

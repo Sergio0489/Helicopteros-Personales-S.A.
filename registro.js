@@ -189,6 +189,7 @@ function reverseAircraftRecord(reg,source,entry,baseline){
  if(isDualTAC(reg)&&hasDualMeters(tac)){const left=Number(tac.tacLeftHours100??entry.tacLeftHours100??0),right=Number(tac.tacRightHours100??entry.tacRightHours100??0),max=Math.round(amount*100);applyDualComponentChange(d,max-left,max-right);}
  for(const inspection of arr(d.bitacora_inspecciones))if(inspection.hour_offset>hi)inspection.hour_offset--;
  for(const reset of arr(d.bitacora_reinicios_inspeccion)){const offset=window.HPInspectionHistory.effectiveOffset(reset);if(offset!==null&&offset>hi)reset.effective_hour_offset=offset-1;}
+ for(const adjustment of arr(d.bitacora_ajustes_inspeccion)){const offset=window.HPInspectionHistory.effectiveOffset(adjustment);if(offset!==null&&offset>hi)adjustment.effective_hour_offset=offset-1;}
  const wasLast=d.bitacora_tac.at(-1)===tac;
  d.bitacora_horas.splice(hi,1);d.bitacora_tac=d.bitacora_tac.filter(t=>t!==tac);
  for(const t of d.bitacora_tac){const index=d.bitacora_horas.findIndex(h=>h.tac_id===t.id||h.registryId&&h.registryId===t.registryId);if(index>=0)t.hour_index=index;else if(Number.isInteger(t.hour_index)&&t.hour_index>hi)t.hour_index--;}

@@ -104,9 +104,9 @@ async function saveData(reg,data,options={}){
   }
   const ok=await commitPreview(next);
   if(ok){
-    data.bitacora_vencimientos=structuredClone(after.bitacora_vencimientos||[]);
+    Object.assign(data,decodeAircraft(previewData.fleet[key]));
     const idx=fleet.findIndex(ac=>ac.reg===reg);
-    if(idx>=0){state[idx].bitacora_vencimientos=structuredClone(data.bitacora_vencimientos);renderVencimientoLog(idx);}
+    if(idx>=0){state[idx]=data;renderVencimientoLog(idx);}
   }
   return ok;
 }
