@@ -35,12 +35,13 @@ function idleDays(data,id,targetDate){
  return Number.isFinite(days)?Math.max(0,Math.floor(days)-1):null;
 }
 function stateFor(data,d,now){
- date(d);const config=data.itinerary?.config||{},stored=data.itinerary?.days?.[d]||{},ps=pilots(data);
- const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id]};});
+ date(d);const config=data.itinerary?.config||{},stored=data.itinerary?.days?.[d]||{},ps=pilots(data),scheduleWindow=stored.scheduleWindow==null?null:copy(stored.scheduleWindow);
+ if(scheduleWindow!==null&&(!scheduleWindow||typeof scheduleWindow!=='object'||Array.isArray(scheduleWindow)||!E.validWindow(scheduleWindow)))error('El rango horario guardado para esta fecha no es válido.');
+ const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id],scheduleWindow:scheduleWindow?copy(scheduleWindow):null};});
  const confirmed=[...arr(data.itinerarios).filter(f=>iso(f.fecha)===d).map(f=>fromFlight(f,ps)),...copy(arr(stored.held)).map(q=>({...q,publicationStatus:'held'}))];
  const defaults=E.defaultTypeRules();if(config.aircraftOrder)for(const type of ['privado','xc','maniobras'])defaults[type]=copy(config.aircraftOrder);
  const typeRules={...defaults,...copy(config.typeRules||{})};
- return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
+ return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,scheduleWindow:scheduleWindow?copy(scheduleWindow):null,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
 }
 function scope(data,actor){
  if(identityReview.pending(actor.account))error(identityReview.message);
@@ -91,6 +92,8 @@ function publish(data,dateValue,now){
  const state=stateFor(data,dateValue,now);
  state.pilots.forEach(p=>{try{for(const q of [...state.requests,...state.confirmed].filter(q=>q.pilot===p.id))assertPilot(data,q,dateValue,now);}catch{p.valid=false;}});
  const result=E.simulate(state);
+ const outside=result.assignments.find(q=>E.scheduleWindowError(state.aircraft.find(a=>a.id===q.aircraft),q));
+ if(outside)error('No se puede publicar: '+(state.pilots.find(p=>p.id===outside.pilot)?.name||'Un piloto')+' quedaría fuera del horario permitido para esta fecha.');
  state.confirmed=result.assignments.map(q=>({...q,id:q.fixed?q.id:'scheduled-'+q.id,sourceRequestId:q.sourceRequestId||(!q.fixed?q.id:undefined)}));
  // JSON persistence excludes undefined; keep deterministic identities across retries.
  state.confirmed=JSON.parse(JSON.stringify(state.confirmed));
@@ -120,6 +123,18 @@ function apply(data,actor,body,now){
  if(action==='settings'){
   requireDirector();validateDateRange(dte,now);const c=setup(data).config ||= {};
   if((body.configurationRevision||0)!==(c.revision||0))error('Las prioridades cambiaron. Actualiza antes de guardar.');c.revision=(c.revision||0)+1;
+  if(Object.hasOwn(body,'scheduleWindow')){
+   const next=body.scheduleWindow===null?null:body.scheduleWindow;
+   if(next!==null&&(!next||typeof next!=='object'||Array.isArray(next)||!E.validWindow(next)))error('Elige una hora inicial anterior a la hora final.');
+   if(next!==null&&E.minutes(next.end)-E.minutes(next.start)<E.MIN_ASSIGNMENT_MINUTES)error('El rango debe permitir vuelos de al menos 1 hora y 30 minutos.');
+   const normalized=next===null?null:{start:next.start,end:next.end},changed=JSON.stringify(state.scheduleWindow||null)!==JSON.stringify(normalized);
+   if(d.published&&changed)error('El horario del día no se puede cambiar después de publicarlo.');
+   if(normalized){
+    const start=E.minutes(normalized.start),end=E.minutes(normalized.end);
+    if(state.confirmed.some(q=>E.minutes(q.start)<start||E.minutes(q.end)>end))error('Hay vuelos ya confirmados fuera del nuevo rango. Revisa esos vuelos antes de cambiarlo.');
+    d.scheduleWindow=normalized;
+   }else delete d.scheduleWindow;
+  }
   if(typeof body.nightEnabled==='boolean')d.nightEnabled=body.nightEnabled;
   if(body.aircraftOrder){const known=state.aircraft.filter(a=>a.category==='Monomotor').map(a=>a.id);if(!Array.isArray(body.aircraftOrder)||body.aircraftOrder.length!==known.length||new Set(body.aircraftOrder).size!==known.length||body.aircraftOrder.some(id=>!known.includes(id)))error('Revisa el orden de monomotores.');c.aircraftOrder=copy(body.aircraftOrder);}
   if(body.typeRules){for(const [type,ids]of Object.entries(body.typeRules)){if(!Object.hasOwn(E.flightTypes,type))error('Tipo de vuelo no válido.');const allowed=E.typeConfigAircraft(state,type).map(a=>a.id);if(!Array.isArray(ids)||ids.length>11||new Set(ids).size!==ids.length||ids.some(id=>!allowed.includes(id)))error('Revisa las aeronaves de cada tipo.');}(c.typeRules ||= copy(state.typeRules));Object.assign(c.typeRules,copy(body.typeRules));}
