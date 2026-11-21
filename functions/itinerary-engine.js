@@ -19,7 +19,7 @@ const fleet=[
 function minutes(t){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))return NaN;return Number(t.slice(0,2))*60+Number(t.slice(3));}
 function overlaps(a,b){return minutes(a.start)<minutes(b.end)&&minutes(b.start)<minutes(a.end);}
 function active(a){return a.slots.filter(s=>s.id!=='b5'||a.night);}
-function validWindow(q){return Number.isFinite(minutes(q.start))&&Number.isFinite(minutes(q.end))&&minutes(q.start)<minutes(q.end);}
+function validWindow(q){return !!q&&typeof q==='object'&&Number.isFinite(minutes(q.start))&&Number.isFinite(minutes(q.end))&&minutes(q.start)<minutes(q.end);}
 function coversWindow(windows,q){
  if(!validWindow(q))return false;
  let cursor=minutes(q.start),end=minutes(q.end);
