@@ -28,7 +28,7 @@ function setCloudStatus(text){
  el('cloud-status-detail').textContent=warning?text:'';el('cloud-status-detail').hidden=!warning;
 }
 function restoreCloudUiAfterWrite(){
- const resetLocked=el('dashboard-app')?.dataset.inspectionResetLock==='true';
+ const resetLocked=el('dashboard-app')?.dataset?.inspectionResetLock==='true';
  el('dashboard-app').inert=resetLocked;el('cloud-busy').hidden=!resetLocked;
  if(resetLocked)el('cloud-busy').textContent='Consultando y guardando reinicio…';
 }
