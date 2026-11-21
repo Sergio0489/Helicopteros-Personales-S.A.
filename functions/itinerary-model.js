@@ -1,4 +1,5 @@
 'use strict';
+const identityReview=require('./identity-review');
 // Pure production adapter. No Firebase, browser clock, demonstration users or seed data.
 const E=require('./itinerary-engine');
 const V=require('./pilot-validity');
@@ -42,6 +43,7 @@ function stateFor(data,d,now){
  return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
 }
 function scope(data,actor){
+ if(identityReview.pending(actor.account))error(identityReview.message);
  if(!actor.user?.emailVerified||actor.user.disabled||actor.account?.mergedInto)error('Verifica el correo e inicia sesión con una cuenta activa.');
  if(actor.director)return {role:'director',view:true,request:false,create:true,edit:true,settings:true};
  const p=policyFor(data,actor.account),box=id=>permissions(p,'itinerario',id);

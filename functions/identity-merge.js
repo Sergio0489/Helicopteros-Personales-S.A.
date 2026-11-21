@@ -91,7 +91,7 @@ function merge(root,memberKeys,actorUid,rootDirector,now=new Date().toISOString(
   for(const f of data.school?.registry?.entries||[])for(const k of ['pilot','copilot'])if(f[k]===r.nombre)f[k]=profile.name;
  }
  for(const u of ranked){accounts[u].syncedOperation=null;if(u!==uid){accounts[u].mergedInto=uid;accounts[u].mergedAt=now;accounts[u].mergedBy=actorUid;accounts[u].role='Estudiante';accounts[u].assignedAt=null;}}
- if(uid)Object.assign(accounts[uid],{role,profile,syncedOperation:null,identityReviewPending:false,mergedAt:now});
+ if(uid)Object.assign(accounts[uid],{role,profile,syncedOperation:null,identityReviewPending:false,syncStatus:'no-match',mergedAt:now});
  data.school ||= {};data.school.userProfiles ||= {};for(const u of ranked)if(u!==uid)delete data.school.userProfiles[u];if(uid){const desiredKind=role==='Piloto'?'pilot':role==='Estudiante'?'student':'personnel',preferred=linked.find(x=>x.kind===desiredKind)||linked.find(x=>x.kind===primary?.kind&&x.record.id===primary?.id)||linked[0];data.school.userProfiles[uid]={...data.school.userProfiles[uid],dossier:preferred?{kind:preferred.kind,id:preferred.record.id}:undefined};if(!preferred)delete data.school.userProfiles[uid].dossier;}
  data.school.identityLinks ||= {};const selectedRefs=new Set(originals.map(x=>x.kind+':'+x.record.id));for(const [key,value]of Object.entries(data.school.identityLinks))if((value.records||[]).some(r=>selectedRefs.has(r.kind+':'+r.id)))delete data.school.identityLinks[key];
  data.school.identityLinks[personId]={records:linked.map(x=>({kind:x.kind,id:x.record.id})),mergedAt:now};

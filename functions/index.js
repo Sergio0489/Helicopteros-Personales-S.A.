@@ -19,6 +19,7 @@ const {matchRecord}=require('./record-link');
 const selfProfile=require('./self-profile');
 const audit=require('./audit');
 const dossiers=require('./account-dossiers');
+const identityReview=require('./identity-review');
 const SYNC_VERSION=5;
 async function syncAccount(db,u,account,marker,readRoot){
  if(account?.mergedInto||!u.emailVerified||!u.email)return account||{};
@@ -55,7 +56,7 @@ async function syncAccount(db,u,account,marker,readRoot){
   if(old===null&&account)return old; // Retry an empty cache for an existing account.
   // A concurrent Director merge invalidates this account snapshot.
   if(old?.mergedInto||old?.mergedAt!==account?.mergedAt)return;
-  const identityReviewPending=!!old?.identityReviewPending||match.status==='duplicate-identity';
+  const identityReviewPending=identityReview.pending(old)||match.status==='duplicate-identity';
   return audit.attach(old,{...old,...patch,identityReviewPending,syncStatus:identityReviewPending?'duplicate-identity':match.status},null,'account','Sincronización de expediente y correo verificado',u.uid);
  });
  if(!synced.committed)throw Error('No se pudo sincronizar la identidad. Actualiza e intenta nuevamente.');
@@ -69,6 +70,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  if(!user.email){res.status(400).json({error:'La cuenta necesita correo electrónico.'});return;}
  const actorAccount=(await ref.get()).val();
  if(actorAccount?.mergedInto){res.status(403).json({error:'Esta cuenta fue unificada. Inicia sesión con la cuenta principal indicada por el Director.'});return;}
+ if(!identityReview.allowsRequest(actorAccount,action)){res.status(403).json({error:identityReview.message});return;}
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  let prospectPolicy={};
@@ -181,7 +183,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   let account=(await ref.get()).val();
   let root=(await db.ref('dashboard').get()).val();
   account=await syncAccount(db,user,account,root?.operation,async()=>root);
-  if(account?.identityReviewPending||account?.syncStatus==='duplicate-identity'){res.status(403).json({error:'Tu identidad está pendiente de revisión por el Director. Podrás entrar cuando confirme el expediente.'});return;}
+  if(identityReview.pending(account)){res.status(403).json({error:identityReview.message});return;}
   if(account?.syncedOperation&&root?.operation!==account.syncedOperation)root=(await db.ref('dashboard').get()).val();
   const data=root?.payload?JSON.parse(root.payload):{};
   const policy=policyFor(data,account),pages=visiblePages(policy);
@@ -234,7 +236,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
     const sameName=nameKey&&identities.personName(recordName)===nameKey&&(identities.email(r.email)!==identities.email(user.email)||!!r.authUid);
     return !!(sameIdentity||sameName);
    });
-   const identityReviewPending=!!(old?.identityReviewPending||accountCollision||dossierCollision);
+   const identityReviewPending=identityReview.pending(old)||!!(accountCollision||dossierCollision);
    if(identityReviewPending&&req.body.requestIdentityReview!==true)throw Error('La cédula o el nombre coincide con otro registro. Actualiza la página para solicitar revisión al Director.');
    requests[user.uid]=audit.attach(old,{...old,role:old?.role||'Estudiante',profile,email:user.email,identityReviewPending,syncedOperation:null,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()},actor,'account',req.body.reason,user.uid);return root;
   }catch(e){failure=e.message;return;}},undefined,false);
