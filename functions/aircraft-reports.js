@@ -2,6 +2,7 @@
 const {randomUUID,createHash}=require('node:crypto');
 const {policyFor}=require('./access');
 const {permissions}=require('./boxes');
+const identityReview=require('./identity-review');
 
 const REQUEST_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const panamaDate=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Panama',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
@@ -18,6 +19,7 @@ function tasksFor(data){
 }
 
 async function handle(db,{user,account,actor,body,now=()=>new Date().toISOString()}){
+ if(identityReview.pending(account))return {status:403,error:identityReview.message};
  if(user.disabled||!user.emailVerified||account?.role!=='Piloto'||!account.assignedAt||account.recordKind!=='pilot'||account.syncStatus!=='matched')return {status:403,error:'Solo un piloto con expediente vinculado puede reportar una aeronave.'};
  const registration=String(body.aircraft||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'_');
  const description=String(body.description||'').trim().slice(0,1000),idempotencyKey=body.idempotencyKey;

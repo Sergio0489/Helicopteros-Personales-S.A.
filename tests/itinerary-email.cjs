@@ -47,3 +47,4 @@ test('fake delivery sends a queued update once per authorized address and never 
  assert.deepEqual(reported,[]);
  assert.equal(receipts.size,targets.length);
 });
+

@@ -5,12 +5,12 @@
  const safeJSON=v=>JSON.stringify(v).replace(/</g,'\\u003c');
  async function asset(path){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(path+'?native=20261119-mobile-flight-log-2',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
+  try{const r=await fetch(path+'?native=20261121-inspection-reset-1',{signal:controller.signal});if(!r.ok)throw Error('No se pudo cargar '+path+'.');return await r.text();}
   catch(e){if(e.name==='AbortError')throw Error('La carga del diseño tardó demasiado. Intenta actualizar.');throw e;}
   finally{clearTimeout(timer);}
  }
  async function assets(page){
-  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','honorarios-ui.js','students.css','functions/boxes.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js','functions/company.js','company-ui.js','functions/itinerary-engine.js','itinerary-ui.js','itinerary.css'].map(asset)).catch(e=>{bundle=null;throw e;});
+  if(!bundle)bundle=Promise.all(['index.html','dashboard.js','students.js','registro.js','honorarios-ui.js','students.css','functions/boxes.js','functions/inspection-history.js','box-ui.js','functions/monthly-winners.js','monthly-winners-ui.js','pilots-ui.js','functions/school-certificates.js','school-info.js','functions/school-information.js','draft-recovery.js','home-search-model.js','home-ui.js','functions/company.js','company-ui.js','functions/itinerary-engine.js','itinerary-ui.js','itinerary.css'].map(asset)).catch(e=>{bundle=null;throw e;});
   if(page==='estadisticas'&&!chartBundle)chartBundle=asset('vendor/chart-4.4.0.umd.js').catch(e=>{chartBundle=null;throw e;});
   return [...await bundle,page==='estadisticas'?await chartBundle:''];
  }
@@ -75,6 +75,7 @@
    if(e.matches('[data-action="print-student"],[data-action="blank-registration"]'))return ['estudiantes','personal','print'];
    if(e.matches('[data-print],[data-own-statement-print]'))return cfg.page==='saldos'?(statementScope||['saldos','students','print']):['estudiantes','account','print'];
    if(e.matches('[data-receipt-print]'))return ['pagos','receipts','print'];
+   if(e.matches('[data-print-report]')&&e.closest('#panel-honorarios'))return ['honorarios','report','print'];
    if(e.matches('[data-aac-download]'))return ['estadisticas','aac','export'];
    if(e.matches('[data-hp-download]'))return ['estadisticas','company','export'];
    return null;
@@ -90,6 +91,7 @@
   function readonlyControl(e){
    if(e.matches('[data-pilot-aircraft-report]')||e.closest('[data-itinerary-control]'))return true;
    if(e.matches('[data-honorarios-date]'))return true;
+   if(e.matches('[data-pilot]')&&e.closest('#panel-honorarios'))return HPBoxes.permissions(cfg.policy,'honorarios','report').view;
    const output=outputFor(e);if(output)return !!mayOutput(output);
    if(e.matches('a[download][href^="blob:"]'))return !!mayOutput(outputContext)&&outputContext[2]==='export';
    if(e.matches('[data-receipt]'))return HPBoxes.permissions(cfg.policy,'pagos','receipts').view;
@@ -177,7 +179,7 @@
    function restrict(){
     HPBoxUI.annotate();
     if(cfg.page==='aeronaves'&&cfg.role==='Piloto'&&HPBoxes.permissions(cfg.policy,'aeronaves','status').view){
-     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const idx=Number(panel.id.slice(7)),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>openAircraftReport(aircraft);const header=panel.querySelector('.aircraft-header');header?.after(button);});
+     document.querySelectorAll('.aircraft-panel[id^="panel-"]').forEach(panel=>{if(panel.querySelector('[data-pilot-aircraft-report]'))return;const match=panel.id.match(/^panel-(\d+)$/);if(!match)return;const idx=Number(match[1]),aircraft=fleet[idx]?.reg;if(!aircraft)return;const button=document.createElement('button');button.type='button';button.dataset.pilotAircraftReport='true';button.className='save-btn';button.style.cssText='margin:12px 0;padding:9px 14px;background:#fff7e8;color:#704700;border:1px solid #e3b558;box-shadow:none';button.textContent='＋ Reportar problema a taller';button.onclick=()=>openAircraftReport(aircraft);const header=panel.querySelector('.aircraft-header');header?.after(button);});
     }
     document.querySelectorAll('[data-permission-box]').forEach(e=>{
      const rights=HPBoxes.permissions(cfg.policy||{},e.dataset.permissionPage,e.dataset.permissionBox);
@@ -216,7 +218,7 @@
  }
  async function mount(container,result,page,onAction){
   if(!result.native)throw Error('Para usar el diseño principal falta publicar la función actualizada en Firebase.');
-  const [html,dashboard,students,registro,honorariosUI,schoolCSS,boxesScript,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,companyModel,companyUI,itineraryEngine,itineraryUI,itineraryCSS,chart]=await assets(page);
+  const [html,dashboard,students,registro,honorariosUI,schoolCSS,boxesScript,inspectionHistory,boxUIScript,winnersMath,winnersUI,pilotsUI,schoolCertificates,schoolInformation,schoolContentModel,draftScript,homeModel,homeUI,companyModel,companyUI,itineraryEngine,itineraryUI,itineraryCSS,chart]=await assets(page);
   const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('script,link[rel=manifest]').forEach(n=>n.remove());doc.querySelectorAll('link[rel=stylesheet]').forEach(n=>{if(!n.getAttribute('href').startsWith('https://fonts.googleapis.com/'))n.remove();});
   const schoolStyle=document.createElement('style');schoolStyle.textContent=schoolCSS+'\n'+itineraryCSS;doc.head.appendChild(schoolStyle);
   const base=document.createElement('base');base.href=new URL('.',location.href).href;doc.head.prepend(base);
@@ -233,7 +235,7 @@
   add('window.ROLE_VIEW='+safeJSON(cfg)+';('+start.toString()+')();');
   // Only statistics needs Chart; serve the pinned version from this repository.
   add(chart);
-  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(dashboard);add(students);add(registro);add(honorariosUI);add('window.HonorariosUI.install();');add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HonorariosUI.installPersonalApproval();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
+  add(companyModel);add(schoolContentModel);add(schoolCertificates);add(inspectionHistory);add(dashboard);add(students);add(registro);add(honorariosUI);add('window.HonorariosUI.install();');add(winnersMath);add(winnersUI);add(pilotsUI);add(companyUI);add(schoolInformation);add(boxUIScript);add(itineraryEngine);add(itineraryUI);add('window.finishRoleView();window.HonorariosUI.installPersonalApproval();window.HPItineraryUI.install({api:window.itineraryRequest});if(window.ROLE_VIEW.searchTarget)window.HomeUI.focusTarget(window.ROLE_VIEW.searchTarget);');
   const scriptLoader=doc.createElement('script');scriptLoader.textContent="for(const node of [...document.querySelectorAll('[data-role-code]')]){const bytes=Uint8Array.from(atob(node.dataset.roleCode),char=>char.charCodeAt(0)),script=document.createElement('script');script.dataset.roleSource=node.dataset.roleSource;script.textContent=new TextDecoder().decode(bytes);node.remove();document.body.appendChild(script)}";doc.body.appendChild(scriptLoader);
   let settled=false,timer,resolveReady,rejectReady,searchCache=null,searchAt=0,reportStore,stopReportAuth=()=>{},reportQueue=Promise.resolve();const aircraftReportResponseKeys=new Map();
   const assertReportUser=()=>{if(!cfg.uid||window.firebase?.auth?.()?.currentUser?.uid!==cfg.uid)throw Error('La sesión cambió. Abre la aplicación con tu usuario antes de recuperar o enviar reportes.');};

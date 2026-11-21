@@ -112,18 +112,18 @@ test('Cancelling a schedule date change keeps the explicitly selected day',async
  await page.evaluate(()=>renderDailySchedule());
  assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-date'),selected);
 });
-test('Director sees detailed confirmed flights and cannot submit without route or observations',async t=>{
+test('Director sees detailed confirmed flights, requires route and allows blank observations',async t=>{
  const page=await app(t),result=response();Object.assign(result.state.confirmed[0],{route:'Chitré <referencia>',note:'Sin observaciones',studentId:'st1'});
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
  const details=await page.locator('[data-flight-list]').textContent();
  for(const value of ['Aeronave','Hora de inicio y fin','Ruta o destino','Cliente / Estudiante','Estudiante A','Chitré <referencia>'])assert.ok(details.includes(value),value);
  await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
  const form=page.locator('dialog form');
- assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name).map(el=>el.name).sort()),['aircraft','flightType','newDate','note','pilot','route'].sort());
+ assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','route'].sort());
  assert.equal(await form.evaluate(f=>f.querySelectorAll('[data-time-field] [required]').length),6);
  assert.equal(await form.evaluate(f=>f.elements.studentId.required),false);
  assert.equal(await form.evaluate(f=>f.checkValidity()),false);
- await page.locator('[name=route]').fill('MPMG – Chitré');await page.locator('[name=note]').fill('Sin observaciones');
+ await page.locator('[name=route]').fill('MPMG – Chitré');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false);
  await page.locator('[name=socioName]').fill('Socio de prueba');
@@ -158,4 +158,26 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  const bounds=await page.locator('dialog').boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=391);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
  await page.evaluate(result=>{window.commandResult=result;},result);await page.getByRole('button',{name:'Guardar',exact:true}).click();await page.locator('dialog').waitFor({state:'detached'});
  const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.deepEqual(saved[0].slots,result.state.aircraft.find(a=>a.id==='HP1907').slots);assert.equal(saved[0].release.from,'06:30');
+});
+async function assertExamDelegationValidity(page){
+ const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');
+ const field=page.locator('[name=delegationNumber]');assert.equal(await field.getAttribute('maxlength'),null,'custom validation matches the server after trimming');
+ assert.equal(await form.evaluate(f=>f.elements.delegationNumber.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false,'blank value is rejected');
+ await field.fill('   ');assert.equal(await form.evaluate(f=>f.checkValidity()),false,'spaces-only value is rejected');
+ await field.fill('FAA-26 / 007 #A +B');assert.equal(await form.evaluate(f=>f.checkValidity()),true,'alphanumeric value with signs and internal spaces is accepted');
+ await field.fill(' '+('A'.repeat(30))+' ');assert.equal(await form.evaluate(f=>f.checkValidity()),true,'length is measured after normalization, like the server');
+ await field.fill('A'.repeat(31));assert.equal(await form.evaluate(f=>f.checkValidity()),false,'more than 30 trimmed characters is rejected');
+ await field.evaluate(el=>{el.value='AB\u0001CD';el.dispatchEvent(new Event('input',{bubbles:true}));});assert.equal(await form.evaluate(f=>f.checkValidity()),false,'internal control characters are rejected');
+}
+test('Exam delegation browser validation matches the server in Director scheduling',async t=>{
+ const page=await app(t),result=response();await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();await assertExamDelegationValidity(page);
+});
+test('Exam delegation browser validation matches the server in pilot requests and released slots',async t=>{
+ const result=response();result.rights={role:'pilot',request:true,pilot:'b',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};
+ const requestPage=await app(t);await requestPage.evaluate(result=>resolveRead(result),result);await requestPage.locator('[data-date]').waitFor();
+ await requestPage.locator('[data-slot="HP1907:b1"]').click();await assertExamDelegationValidity(requestPage);
+ const slotResult=response();slotResult.rights={role:'pilot',request:true,pilot:'b',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};slotResult.state.published=true;slotResult.state.openSlots=[{id:'open-exam-test',aircraft:'HP1907',start:'06:30',end:'09:30',flightType:'examen'}];
+ const claimPage=await app(t);await claimPage.evaluate(result=>resolveRead(result),slotResult);await claimPage.locator('[data-date]').waitFor();
+ await claimPage.locator('[data-claim-slot="open-exam-test"]').click();await assertExamDelegationValidity(claimPage);
 });

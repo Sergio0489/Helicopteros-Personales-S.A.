@@ -1,10 +1,23 @@
 'use strict';
 
+const {createHash}=require('node:crypto');
+const {legacyId,normalized}=require('./pilot-identities');
+
 const AIRCRAFT=['HP1784','HP1819','HP1930','HP1815','HP1579','HP1907','HP880BL','HP18BLM','HP1186','HP1805BLM','HP11BL'];
 const aircraftKey=value=>String(value||'').replace(/[^a-z0-9]/gi,'').toUpperCase();
 const defaultRates=()=>Object.fromEntries(AIRCRAFT.map(id=>[id,{flightCents:['HP880BL','HP1805BLM'].includes(id)?5000:['HP18BLM','HP1186','HP11BL'].includes(id)?10000:3000,groundCents:id==='HP11BL'?10000:5000,noShowCents:3000}]));
 const list=v=>Array.isArray(v)?v:[];
 const cents=(value,label)=>{if(!Number.isSafeInteger(value)||value<0||value>100000000)throw Error('Revisa la tarifa de '+label+'.');return value;};
+const syntheticPilotId=key=>'legacy-name-'+createHash('sha256').update(key).digest('hex').slice(0,24);
+function pilotReportId(data,account={},authUid=''){
+ const pilots=list(data.pilotos),reportId=pilot=>{const id=String(pilot?.id||'');if(id&&!legacyId(id))return id;const key=normalized(pilot?.nombre||pilot?.name,'name');if(!key||pilots.filter(row=>normalized(row?.nombre||row?.name,'name')===key).length!==1)return '';return syntheticPilotId(key);};
+ const recordId=String(account.recordId||'');
+ if(recordId&&!legacyId(recordId)){const matches=pilots.filter(p=>String(p.id||'')===recordId);return matches.length===1?reportId(matches[0]):'';}
+ const uid=String(authUid||'');
+ if(uid){const matches=pilots.filter(p=>String(p.authUid||'')===uid);if(matches.length===1)return reportId(matches[0]);if(matches.length>1)return '';}
+ const name=normalized(account.recordName,'name');if(!name)return '';
+ const matches=pilots.filter(p=>normalized(p.nombre||p.name,'name')===name);return matches.length===1?reportId(matches[0]):'';
+}
 function rates(data){const defaults=defaultRates(),saved=data.school?.honorarios?.rates||{};return Object.fromEntries(AIRCRAFT.map(id=>[id,{...defaults[id],...(saved[id]||{})}]));}
 function validDate(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T12:00:00Z'))&&new Date(value+'T12:00:00Z').toISOString().slice(0,10)===value;}
 function utcDate(value){return new Date(value+'T12:00:00Z');}
@@ -39,11 +52,10 @@ function applyNewEntries(before,after,account){
   if(account.role==='Piloto'){
    if(account.syncStatus!=='matched'||account.recordKind!=='pilot'||!account.recordId)throw Error('Vincula tu usuario con un expediente de piloto.');
    entry.pilotId=String(account.recordId);entry.pilot=String(account.recordName||entry.pilot||'').trim();
-  }else{
-   const pilotIndex=list(before.pilotos).findIndex((p,index)=>String(p.id||'legacy-pilot-'+index)===String(entry.pilotId)||String(p.nombre||p.name||'').trim().toLocaleLowerCase('es')===String(entry.pilot||'').trim().toLocaleLowerCase('es'));
-   const pilot=list(before.pilotos)[pilotIndex];
-   if(!pilot)throw Error('Vincula el nombre con un expediente de piloto antes de guardar la bitácora.');entry.pilotId=String(pilot.id||'legacy-pilot-'+pilotIndex);entry.pilot=pilot.nombre||pilot.name;
   }
+  const pilots=list(after.pilotos),matches=pilots.filter(p=>entry.pilotId?String(p.id||'')===String(entry.pilotId):normalized(p.nombre||p.name,'name')===normalized(entry.pilot,'name'));
+  if(matches.length!==1||!matches[0].id||legacyId(matches[0].id))throw Error('Vincula la bitácora con un expediente de piloto con identificador permanente.');
+  const pilot=matches[0];entry.pilotId=String(pilot.id);entry.pilot=pilot.nombre||pilot.name;
   if(status==='flown'){
    if(!String(entry.book||'').trim()||!(Number(entry.hours100)>0))throw Error('El número de bitácora y las horas son obligatorios para registrar el vuelo.');
    const rateKey=aircraftKey(entry.aircraft);if(!AIRCRAFT.includes(rateKey))continue;
@@ -62,19 +74,29 @@ function applyNewEntries(before,after,account){
  }
 }
 function report(data,pilotId,date){
- const selected=period(date),stored=rates(data),pilotRows=list(data.pilotos).map((p,i)=>({...p,id:String(p.id||'legacy-pilot-'+i)})),pilots=new Map(pilotRows.map(p=>[String(p.id),p.nombre||p.name||'Piloto'])),pilotIdByName=name=>{const normalized=String(name||'').trim().toLocaleLowerCase('es'),matches=pilotRows.filter(p=>String(p.nombre||p.name||'').trim().toLocaleLowerCase('es')===normalized);return matches.length===1?String(matches[0].id):'';},resolvePilotId=(id,name)=>pilots.has(String(id||''))?String(id):pilotIdByName(name),records=list(data.school?.honorarios?.records),registryEntries=list(data.school?.registry?.entries),rows=records.filter(r=>r.date>=selected.start&&r.date<=selected.end).map(r=>{const linkedPilotId=resolvePilotId(r.pilotId,r.pilot);return {...r,pilotId:linkedPilotId,pilot:r.pilot||pilots.get(linkedPilotId)||'Piloto'};}).filter(r=>!pilotId||String(r.pilotId)===String(pilotId));
+ const selected=period(date),stored=rates(data),registryEntries=list(data.school?.registry?.entries),records=list(data.school?.honorarios?.records),basePilots=list(data.pilotos),nameCounts=new Map();
+ for(const p of basePilots){const name=normalized(p.nombre||p.name,'name');if(name)nameCounts.set(name,(nameCounts.get(name)||0)+1);}
+  const pilotRows=basePilots.map(p=>{const name=String(p.nombre||p.name||'Piloto'),key=normalized(name,'name'),storedId=String(p.id||''),id=storedId&&!legacyId(storedId)?storedId:((nameCounts.get(key)===1&&key)?syntheticPilotId(key):'');return {...p,id,name};});
+ const pilotIds=new Set();for(const p of pilotRows)if(p.id){if(pilotIds.has(p.id))throw Error('Hay identificadores de piloto duplicados. Revisa los expedientes antes de consultar Honorarios.');pilotIds.add(p.id);}
+ const pilots=new Map(pilotRows.filter(p=>p.id).map(p=>[p.id,p.name]));
+ const resolveName=name=>{const key=normalized(name,'name'),matches=pilotRows.filter(p=>p.id&&normalized(p.name,'name')===key);return matches.length===1?matches[0].id:'';};
+  const resolvePilotId=(id,name,unresolved=false)=>{if(unresolved)return '';const value=String(id||'');return value&&!legacyId(value)?value:resolveName(name);};
+ // Retain queryable history for deleted dossiers whose ledger records already
+ // carry permanent IDs. Positional legacy IDs never become historical identities.
+ for(const row of [...records,...registryEntries]){const id=String(row.pilotId||'');if(id&&!legacyId(id)&&!pilots.has(id)){const name=String(row.pilot||'Piloto histórico');pilots.set(id,name);pilotRows.push({id,name,historical:true});}}
+  const rows=records.filter(r=>r.date>=selected.start&&r.date<=selected.end).map(r=>{const linkedPilotId=resolvePilotId(r.pilotId,r.pilot,r.pilotIdentityUnresolved);return {...r,pilotId:linkedPilotId,pilot:r.pilot||pilots.get(linkedPilotId)||'Piloto'};}).filter(r=>!pilotId||String(r.pilotId)===String(pilotId));
  // Include flown entries missing from the ledger to keep an interrupted migration visible.
  for(const entry of registryEntries){
   if(typeof entry.date!=='string'||entry.date<selected.start||entry.date>selected.end||entry.bookStatus!=='flown'||!(Number(entry.hours100)>0)||!AIRCRAFT.includes(aircraftKey(entry.aircraft))||records.some(r=>r.entryId===entry.id))continue;
-  const linkedPilotId=resolvePilotId(entry.pilotId,entry.pilot),displayName=entry.pilot||pilots.get(linkedPilotId)||'Piloto';if(pilotId&&String(linkedPilotId)!==String(pilotId))continue;
+   const linkedPilotId=resolvePilotId(entry.pilotId,entry.pilot,entry.pilotIdentityUnresolved),displayName=entry.pilot||pilots.get(linkedPilotId)||'Piloto';if(pilotId&&String(linkedPilotId)!==String(pilotId))continue;
   const pay=entry.pilotHonorarium||addFlightPay(entry,stored[aircraftKey(entry.aircraft)]);
   rows.push({id:'flight-'+entry.id,entryId:entry.id,pilotId:linkedPilotId,pilot:displayName,date:entry.date,aircraft:entry.aircraft,kind:entry.operationType==='charter'?'charter':'flight',...pay});
  }
  const entryById=new Map(registryEntries.map(e=>[String(e.id),e]));
  const detailedRows=rows.map(row=>{const entry=entryById.get(String(row.entryId))||{};return {...row,origin:entry.origin||'',destination:list(entry.destinations).join(' → '),book:entry.book||'',personName:entry.personName||'',bookStatus:entry.bookStatus||'',operationType:entry.operationType||'',noShowCount:row.kind==='no-show'?1:0};});
- const grouped=new Map();for(const row of detailedRows){const kind=row.kind==='charter'?'charter':row.kind==='no-show'?'no-show':'flight',key=String(row.pilotId)+'|'+row.aircraft+'|'+kind;if(!grouped.has(key))grouped.set(key,{pilotId:row.pilotId,pilot:row.pilot,aircraft:row.aircraft,kind,flightHours100:0,groundHours100:0,noShowCount:0,totalCents:0,entries:0});const g=grouped.get(key);g.flightHours100+=Number(row.flightHours100||0);g.groundHours100+=Number(row.timeOnGround100||0);g.noShowCount+=Number(row.noShowCount||0);g.totalCents+=Number(row.totalCents||0);g.entries++;}
- const totals=new Map();for(const row of detailedRows){const key=String(row.pilotId);if(!totals.has(key))totals.set(key,{totalCents:0,flightHours100:0,groundHours100:0,noShowCount:0});const value=totals.get(key);value.totalCents+=Number(row.totalCents||0);value.flightHours100+=Number(row.flightHours100||0);value.groundHours100+=Number(row.timeOnGround100||0);value.noShowCount+=Number(row.noShowCount||0);}
- const pilotList=pilotRows.filter(p=>!pilotId||String(p.id)===String(pilotId)).map(p=>({id:String(p.id),name:p.nombre||p.name||'Piloto',license:p.numeroLicencia||p.licenseNumber||p.licencia||'',...(totals.get(String(p.id))||{totalCents:0,flightHours100:0,groundHours100:0,noShowCount:0})})).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+ const grouped=new Map();for(const row of detailedRows){const kind=row.kind==='charter'?'charter':row.kind==='no-show'?'no-show':'flight',pilotKey=String(row.pilotId||'unresolved:'+row.id),key=pilotKey+'|'+row.aircraft+'|'+kind;if(!grouped.has(key))grouped.set(key,{pilotId:row.pilotId,pilot:row.pilot,aircraft:row.aircraft,kind,flightHours100:0,groundHours100:0,noShowCount:0,totalCents:0,entries:0});const g=grouped.get(key);g.flightHours100+=Number(row.flightHours100||0);g.groundHours100+=Number(row.timeOnGround100||0);g.noShowCount+=Number(row.noShowCount||0);g.totalCents+=Number(row.totalCents||0);g.entries++;}
+ const totals=new Map();for(const row of detailedRows){const key=String(row.pilotId||'unresolved:'+row.id);if(!totals.has(key))totals.set(key,{totalCents:0,flightHours100:0,groundHours100:0,noShowCount:0});const value=totals.get(key);value.totalCents+=Number(row.totalCents||0);value.flightHours100+=Number(row.flightHours100||0);value.groundHours100+=Number(row.timeOnGround100||0);value.noShowCount+=Number(row.noShowCount||0);}
+ const pilotList=pilotRows.filter(p=>p.id&&(!pilotId||String(p.id)===String(pilotId))).map(p=>({id:String(p.id),name:p.nombre||p.name||'Piloto',license:p.numeroLicencia||p.licenseNumber||p.licencia||'',...(totals.get(String(p.id))||{totalCents:0,flightHours100:0,groundHours100:0,noShowCount:0})})).sort((a,b)=>a.name.localeCompare(b.name,'es'));
  return {period:selected,rates:stored,pilots:pilotList,rows:detailedRows.sort((a,b)=>a.date.localeCompare(b.date)||String(a.pilot).localeCompare(String(b.pilot),'es')),groups:[...grouped.values()].sort((a,b)=>a.pilot.localeCompare(b.pilot,'es')||a.aircraft.localeCompare(b.aircraft)||a.kind.localeCompare(b.kind))};
 }
 function validateRates(value){
@@ -96,4 +118,5 @@ function protect(before,after){
  }
  if([...oldEntries.values()].some(e=>e.bookStatus==='no-show'||e.pilotHonorarium||e.instructorHonorariumCents))throw Error('No se puede eliminar una bitácora que ya registró honorarios o un no show.');
 }
-module.exports={AIRCRAFT,aircraftKey,defaultRates,rates,period,validDate,addFlightPay,applyNewEntries,report,validateRates,protect};
+module.exports={AIRCRAFT,aircraftKey,defaultRates,rates,period,validDate,addFlightPay,applyNewEntries,report,pilotReportId,validateRates,protect};
+

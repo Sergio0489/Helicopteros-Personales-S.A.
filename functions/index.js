@@ -19,6 +19,7 @@ const {matchRecord}=require('./record-link');
 const selfProfile=require('./self-profile');
 const audit=require('./audit');
 const dossiers=require('./account-dossiers');
+const identityReview=require('./identity-review');
 const SYNC_VERSION=5;
 async function syncAccount(db,u,account,marker,readRoot){
  if(account?.mergedInto||!u.emailVerified||!u.email)return account||{};
@@ -55,7 +56,7 @@ async function syncAccount(db,u,account,marker,readRoot){
   if(old===null&&account)return old; // Retry an empty cache for an existing account.
   // A concurrent Director merge invalidates this account snapshot.
   if(old?.mergedInto||old?.mergedAt!==account?.mergedAt)return;
-  const identityReviewPending=!!old?.identityReviewPending||match.status==='duplicate-identity';
+  const identityReviewPending=identityReview.pending(old)||match.status==='duplicate-identity';
   return audit.attach(old,{...old,...patch,identityReviewPending,syncStatus:identityReviewPending?'duplicate-identity':match.status},null,'account','Sincronización de expediente y correo verificado',u.uid);
  });
  if(!synced.committed)throw Error('No se pudo sincronizar la identidad. Actualiza e intenta nuevamente.');
@@ -69,6 +70,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  if(!user.email){res.status(400).json({error:'La cuenta necesita correo electrónico.'});return;}
  const actorAccount=(await ref.get()).val();
  if(actorAccount?.mergedInto){res.status(403).json({error:'Esta cuenta fue unificada. Inicia sesión con la cuenta principal indicada por el Director.'});return;}
+ if(!identityReview.allowsRequest(actorAccount,action)){res.status(403).json({error:identityReview.message});return;}
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  let prospectPolicy={};
@@ -151,8 +153,8 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}
   if(typeof req.body.payload!=='string'||Buffer.byteLength(req.body.payload)>10000000)throw Error('Datos no válidos.');
   let data=JSON.parse(req.body.payload);if(!data||typeof data!=='object'||!data.fleet)throw Error('Respaldo no válido.');
-  let failure='',serverSchoolSync=null;const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';serverSchoolSync=null;data=JSON.parse(req.body.payload);if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{},submittedSchool=JSON.stringify(data.school||null);require('./honorarios').protect(before,data);require('./honorarios').applyNewEntries(before,data,actor);identities.syncLinked(before,data);identities.assertUnique(before,data);require('./itinerary-model').protect(before,data);require('./itinerary-model').reconcile(before,data,new Date().toISOString());if(JSON.stringify(data.school||null)!==submittedSchool)serverSchoolSync=JSON.parse(JSON.stringify(data.school||{}));}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
-  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision,...(serverSchoolSync?{schoolSync:{school:serverSchoolSync}}:{}),...(data.itinerary?{itinerarySync:{itinerarios:data.itinerarios,itinerary:data.itinerary}}:{})});return;
+  let failure='',serverSchoolSync=null,serverPilotSync=null;const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';serverSchoolSync=null;serverPilotSync=null;data=JSON.parse(req.body.payload);if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{},submittedSchool=JSON.stringify(data.school||null),submittedPilots=JSON.stringify(data.pilotos||[]);require('./inspection-records').protectDeletion(before,data,{role:'Director',reason:req.body.reason});require('./inspection-resets').protect(before,data,{role:'Director'});require('./honorarios').protect(before,data);const pilotMigration=require('./pilot-identities').pilotIdentity(before,data);require('./honorarios').applyNewEntries(before,data,actor);identities.syncLinked(before,data);identities.assertUnique(before,data);require('./itinerary-model').protect(before,data,pilotMigration);require('./itinerary-model').reconcile(before,data,new Date().toISOString());if(JSON.stringify(data.school||null)!==submittedSchool)serverSchoolSync=JSON.parse(JSON.stringify(data.school||{}));if(JSON.stringify(data.pilotos||[])!==submittedPilots)serverPilotSync=JSON.parse(JSON.stringify(data.pilotos||[]));}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
+  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision,...(serverSchoolSync?{schoolSync:{school:serverSchoolSync}}:{}),...(serverPilotSync?{pilotSync:{pilotos:serverPilotSync}}:{}),...(data.itinerary?{itinerarySync:{itinerarios:data.itinerarios,itinerary:data.itinerary}}:{})});return;
  }
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
  if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:8,itineraryBlocks:true,prospectRolePermissions:true,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
@@ -181,7 +183,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   let account=(await ref.get()).val();
   let root=(await db.ref('dashboard').get()).val();
   account=await syncAccount(db,user,account,root?.operation,async()=>root);
-  if(account?.identityReviewPending||account?.syncStatus==='duplicate-identity'){res.status(403).json({error:'Tu identidad está pendiente de revisión por el Director. Podrás entrar cuando confirme el expediente.'});return;}
+  if(identityReview.pending(account)){res.status(403).json({error:identityReview.message});return;}
   if(account?.syncedOperation&&root?.operation!==account.syncedOperation)root=(await db.ref('dashboard').get()).val();
   const data=root?.payload?JSON.parse(root.payload):{};
   const policy=policyFor(data,account),pages=visiblePages(policy);
@@ -195,7 +197,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   const result=await db.ref('dashboard').transaction(root=>{
    failure='';writes=0;if(root===null){failure='No hay datos disponibles para guardar.';return null;}if(root.operation!==req.body.operation){failure='Los datos cambiaron. Actualiza la página antes de guardar.';return;}
    try{const data=JSON.parse(root.payload),policy=policyFor(data,actorAccount);if(!visiblePages(policy).some(p=>p.id===req.body.page))throw Error('Ya no tienes acceso a esta página.');
-    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid});writes=applied.writes;require('./itinerary-model').protect(data,applied.data);require('./itinerary-model').reconcile(data,applied.data,new Date().toISOString());
+    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid,reason:req.body.reason});writes=applied.writes;require('./itinerary-model').protect(data,applied.data);require('./itinerary-model').reconcile(data,applied.data,new Date().toISOString());
     return audit.attach(root,{...root,payload:JSON.stringify(applied.data),revision:(root.revision||0)+1,operation,updatedBy:user.uid,updatedAt:new Date().toISOString()},actor,'dashboard',req.body.reason);
    }catch(e){failure=e.message;return;}
   },undefined,false);
@@ -234,7 +236,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
     const sameName=nameKey&&identities.personName(recordName)===nameKey&&(identities.email(r.email)!==identities.email(user.email)||!!r.authUid);
     return !!(sameIdentity||sameName);
    });
-   const identityReviewPending=!!(old?.identityReviewPending||accountCollision||dossierCollision);
+   const identityReviewPending=identityReview.pending(old)||!!(accountCollision||dossierCollision);
    if(identityReviewPending&&req.body.requestIdentityReview!==true)throw Error('La cédula o el nombre coincide con otro registro. Actualiza la página para solicitar revisión al Director.');
    requests[user.uid]=audit.attach(old,{...old,role:old?.role||'Estudiante',profile,email:user.email,identityReviewPending,syncedOperation:null,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()},actor,'account',req.body.reason,user.uid);return root;
   }catch(e){failure=e.message;return;}},undefined,false);
@@ -250,6 +252,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',identityReviewPending:!!account.identityReviewPending,syncStatus:account.syncStatus||'',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 

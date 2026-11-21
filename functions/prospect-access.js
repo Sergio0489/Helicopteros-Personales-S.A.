@@ -2,8 +2,9 @@
 // Individual grants supplement the existing company role; they never broaden a role policy.
 const {email}=require('./prospects');
 const STAFF=['Administrativo','Gerente'];
+const identityReview=require('./identity-review');
 function scope(user,account,director=false,policy={}){
- if(!user.emailVerified||user.disabled||account?.mergedInto)return null;
+ if(!user.emailVerified||user.disabled||account?.mergedInto||identityReview.pending(account))return null;
  if(director)return {director:true,area:null,name:account?.profile?.name||user.displayName||''};
  if(Object.hasOwn(policy,'interesados')){
   if(account?.role!=='Administrativo'||!account.assignedAt)return null;

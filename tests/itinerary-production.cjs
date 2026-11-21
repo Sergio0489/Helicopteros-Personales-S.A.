@@ -64,15 +64,11 @@ test('grounded, aog and maintenance transitions notify authorized groups exactly
  assert.equal(M.reconcile(equivalent,d,now),false,'aog and grounded describe the same restriction');
  assert.equal(d.operationalNotices.length,1);
 });
-test('pilot flight requests allow optional observations while keeping all other scheduling fields required',()=>{
- for(const field of ['aircraft','pilot','start','end','flightType','route','note'])for(const value of ['', '   ',null]){
-  if(field==='note'){
-   if(value===null)continue;
-   const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);
-   continue;
-  }
+test('flight requests and director scheduling allow optional observations while requiring all other scheduling fields',()=>{
+ for(const field of ['aircraft','pilot','start','end','flightType','route'])for(const value of ['', '   ',null]){
   const d=fixture();assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP1907',{[field]:value})}),/Completa el campo/);assert.equal(d.itinerarios.length,0);
  }
+ const scheduled=fixture();apply(scheduled,director,'flight',{flight:flight('p1','HP1907',{note:''})});assert.equal(scheduled.itinerarios.length,1);assert.equal(scheduled.itinerarios[0].observaciones,'');
  const requested=fixture();apply(requested,pilot('p1'),'request',{flight:flight('p1','HP1907',{note:''})});assert.equal(requested.itinerary.days[date].requests[0].note,'');
  assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:''})}),/Completa el campo Ruta o destino/);
  const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP1907',{route:'  Chitré  ',studentId:''})});assert.equal(d.itinerarios[0].ruta,'Chitré');assert.equal(d.itinerarios[0].personId,'');
@@ -125,6 +121,32 @@ test('status loss reassigns approved mono for maintenance and grounded without c
 test('expired pilot rejected on server and closed requests require director',()=>{const d=fixture();d.pilotos[0].instructorExpiry='2026-10-30';assert.throws(()=>apply(d,director,'flight',{flight:flight()}),/vencido/);});
 test('cross-date flight edit is atomic and prevents target collision',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;apply(d,director,'flight',{id,originalDate:date,originalRevision:M.day(d,date).revision,date:'2026-11-01',flight:flight('p2','HP1819')});assert.equal(d.itinerarios.length,1);assert.equal(d.itinerarios[0].fecha,'2026-11-01');assert.equal(d.itinerarios[0].piloto,'Piloto Dos');});
 test('moving a published flight to an unpublished day emails only the source after ten idle minutes',()=>{const d=fixture(),movedAt='2026-10-30T13:15:00-05:00',target='2026-11-01';apply(d,director,'flight',{flight:flight()});const id=d.itinerarios[0].id;M.publish(d,date,now);const sourceRevision=M.day(d,date).revision;apply(d,director,'flight',{id,originalDate:date,originalRevision:sourceRevision,date:target,flight:flight('p2','HP1819')},movedAt);assert.equal(d.itinerarios[0].fecha,target);assert.ok(M.day(d,date).modifiedEmail);assert.equal(M.day(d,date).modifiedEmail.dueAt,'2026-10-30T18:25:00.000Z');assert.equal(M.day(d,target).modifiedEmail,undefined);assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:24:59Z'),null,'no email is produced before the idle window expires');const email=M.flushModifiedEmail(d,'2026-10-30T18:25:00Z');assert.equal(email.date,date);assert.deepEqual(email.flights,[]);assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:25:00Z'),null,'the same queued update is consumed once');});
+test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});
+test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
+test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
+test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
+test('published multimotor and helicopter reviews notify the Director with accurate reasons and keep assignments',()=>{
+ const d=fixture();
+ apply(d,director,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});
+ apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'socio',socioName:'Vuelo ficticio',slot:'b2',start:'10:00',end:'12:30'})});
+ M.publish(d,date,now);const original=d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin}));
+ const old=structuredClone(d);d.fleet.HP_880BL.status='grounded';d.fleet.HP_11BL.status='mantenimiento';
+ assert.equal(M.reconcile(old,d,now),true);
+ const expected=new Map([
+  ['HP880BL','Multimotor: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.'],
+  ['HP11BL','Helicóptero: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.']
+ ]);
+ const notices=d.itinerary.notices.filter(n=>n.kind==='review');assert.equal(notices.length,2);
+ for(const n of notices){
+  assert.equal(n.reason,expected.get(n.after.aircraft));assert.equal(n.before.aircraft,n.after.aircraft);
+  assert.equal(n.after.relocationPending,true);assert.deepEqual(n.recipients,[{kind:'group',id:'all'}]);
+ }
+ assert.deepEqual(M.visibleNotices(d,director,now).filter(n=>n.kind==='review').map(n=>n.reason).sort(),[...expected.values()].sort());
+ assert.deepEqual(d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin})),original);
+ const after=structuredClone(d),count=d.itinerary.notices.length;
+ assert.equal(M.reconcile(after,d,now),false);assert.equal(d.itinerary.notices.length,count);
+});
+
 test('moving a flight between two published days queues one correct email for each day',()=>{
  const d=fixture(),target='2026-11-01',movedAt='2026-10-30T13:15:00-05:00';
  apply(d,director,'flight',{flight:flight()});const movedId=d.itinerarios[0].id;
@@ -156,29 +178,4 @@ test('successive edits within ten minutes reset the deadline and coalesce to the
  const email=M.flushModifiedEmail(d,'2026-10-30T18:22:00Z');assert.equal(email.flights.length,1);
  assert.equal(email.flights[0].route,'MPMG – Las Tablas – MPMG');assert.equal(email.flights[0].pilot,'Piloto Dos');
  assert.equal(M.flushModifiedEmail(d,'2026-10-30T18:22:00Z'),null,'coalesced edits yield only one update');
-});
-test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});
-test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
-test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight()});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
-test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
-test('published multimotor and helicopter reviews notify the Director with accurate reasons and keep assignments',()=>{
- const d=fixture();
- apply(d,director,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});
- apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'socio',socioName:'Vuelo ficticio',slot:'b2',start:'10:00',end:'12:30'})});
- M.publish(d,date,now);const original=d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin}));
- const old=structuredClone(d);d.fleet.HP_880BL.status='grounded';d.fleet.HP_11BL.status='mantenimiento';
- assert.equal(M.reconcile(old,d,now),true);
- const expected=new Map([
-  ['HP880BL','Multimotor: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.'],
-  ['HP11BL','Helicóptero: la asignación se conserva y requiere revisión manual del Director; no se reasigna automáticamente.']
- ]);
- const notices=d.itinerary.notices.filter(n=>n.kind==='review');assert.equal(notices.length,2);
- for(const n of notices){
-  assert.equal(n.reason,expected.get(n.after.aircraft));assert.equal(n.before.aircraft,n.after.aircraft);
-  assert.equal(n.after.relocationPending,true);assert.deepEqual(n.recipients,[{kind:'group',id:'all'}]);
- }
- assert.deepEqual(M.visibleNotices(d,director,now).filter(n=>n.kind==='review').map(n=>n.reason).sort(),[...expected.values()].sort());
- assert.deepEqual(d.itinerarios.map(f=>({id:f.id,aircraft:f.aeronave,pilot:f.piloto,start:f.horaInicio,end:f.horaFin})),original);
- const after=structuredClone(d),count=d.itinerary.notices.length;
- assert.equal(M.reconcile(after,d,now),false);assert.equal(d.itinerary.notices.length,count);
 });

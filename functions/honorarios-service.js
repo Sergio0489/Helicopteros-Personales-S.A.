@@ -19,9 +19,9 @@ function myNoShows(data,context){
 }
 async function read(db,context,date){
  if(!context.user?.emailVerified||context.user.disabled||!mayView(context))denied('No tienes acceso a Honorarios.');
- const snapshot=await db.ref('dashboard').get(),root=snapshot.val(),data=JSON.parse(root?.payload||'{}'),pilotId=role(context)==='Piloto'&&context.account?.syncStatus==='matched'&&context.account.recordKind==='pilot'?context.account.recordId:null;
+  const snapshot=await db.ref('dashboard').get(),root=snapshot.val(),data=JSON.parse(root?.payload||'{}'),account=context.account||{},isPilot=role(context)==='Piloto',pilotId=isPilot&&account.syncStatus==='matched'&&account.recordKind==='pilot'?H.pilotReportId(data,account,context.user?.uid):null;
  if(!context.director&&!require('./access').visiblePages(require('./access').policyFor(data,context.account)).some(p=>p.id==='honorarios'))denied('No tienes acceso a Honorarios.');
- if(role(context)==='Piloto'&&!pilotId)denied('Vincula tu usuario con un expediente de piloto.');
+  if(isPilot&&!pilotId)denied('Vincula tu usuario con un expediente de piloto.');
  const selectedDate=date||new Intl.DateTimeFormat('en-CA',{timeZone:'America/Panama',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),report=H.report(data,pilotId,selectedDate);
  return {report,canEditRates:!!context.director,canVoidNoShow:context.director||role(context)==='Gerente',pilotId,myNoShows:myNoShows(data,context),operation:root?.operation||null};
 }
@@ -72,3 +72,4 @@ async function handle(db,context,action,body={}){
  throw Error('Operación de Honorarios no válida.');
 }
 module.exports={handle,read,mayView,linkedStudent,myNoShows};
+

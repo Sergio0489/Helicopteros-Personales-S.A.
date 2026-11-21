@@ -38,3 +38,4 @@ test('modified schedule enters the outbox only after ten quiet minutes and only 
  assert.equal(stored.itinerary.days[date].modifiedEmail,undefined);
  await S.flushModified(db,dueAt);assert.equal(Object.keys(db.value.itineraryEmailOutbox).length,1);
 });
+
