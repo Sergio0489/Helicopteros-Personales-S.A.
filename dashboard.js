@@ -779,7 +779,7 @@ async function resetInspectionBar(idx,limitHours){
  if(!Number.isFinite(current)||current<0){alert('El acumulado actual no es válido. Revisa las horas antes de reiniciar.');return false;}
  const previousReason=window.ChangeHistory?.getReason?.()||'';
  d[key]='0.00';if(limitHours===50)d.horas_totales='0.00';else d.horas_limite='0.00';
- d.bitacora_reinicios_inspeccion||=[];d.bitacora_reinicios_inspeccion.push({id:globalThis.crypto?.randomUUID?.()||'reset-'+Date.now()+'-'+Math.random().toString(16).slice(2),limitHours,before:current.toFixed(2),after:'0.00',hour_offset:(d.bitacora_horas||[]).length,reason:reason.trim(),createdAt:new Date().toISOString(),fecha:getFechaPanama(),hora:getHoraPanama()});
+ d.bitacora_reinicios_inspeccion||=[];const offset=(d.bitacora_horas||[]).length;d.bitacora_reinicios_inspeccion.push({id:globalThis.crypto?.randomUUID?.()||'reset-'+Date.now()+'-'+Math.random().toString(16).slice(2),limitHours,before:current.toFixed(2),after:'0.00',hour_offset:offset,effective_hour_offset:offset,reason:reason.trim(),createdAt:new Date().toISOString(),fecha:getFechaPanama(),hora:getHoraPanama()});
  window.ChangeHistory?.setReason?.(reason.trim());
  const ok=await saveData(reg,d,{clearUndo:true});if(!ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
  state[idx]=d;aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();updateUndoButtons();return true;
@@ -795,18 +795,8 @@ function requestInspectionDeleteReason(reg,record){
   dialog.addEventListener('close',()=>{finish('');dialog.remove();});document.body.append(dialog);dialog.showModal();input.focus();
  });
 }
-function inspectionResetOffsets(d,limitHours){
- const inspectionOffsets=(d.bitacora_inspecciones||[]).filter(r=>limitHours===50?[50,100].includes(Number(r.tipo)):Number(r.tipo)===100).map(r=>Number(r.hour_offset));
- const manualOffsets=(d.bitacora_reinicios_inspeccion||[]).filter(r=>Number(r.limitHours)===limitHours).map(r=>Number(r.hour_offset));
- return [...inspectionOffsets,...manualOffsets].filter(Number.isInteger).filter(n=>n>=0);
-}
-function recomputeInspectionAccumulators(d){
- const logs=Array.isArray(d.bitacora_horas)?d.bitacora_horas:(d.bitacora_horas=[]);
- for(const limit of [50,100]){const offsets=inspectionResetOffsets(d,limit).filter(n=>n<=logs.length),start=offsets.length?Math.max(...offsets):0;const total=logs.slice(start).reduce((sum,row)=>{const hours=Number(row.hv||0);if(!Number.isFinite(hours)||hours<0)throw Error('La bitácora contiene horas no válidas. No se eliminaron cambios.');return sum+hours;},0);d['horas_acum_'+limit]=total.toFixed(2);}
- const resets=inspectionResetOffsets(d,100).filter(n=>n<=logs.length).sort((a,b)=>a-b);let pointer=0,total=0;
- for(let i=0;i<logs.length;i++){while(pointer<resets.length&&resets[pointer]<=i){total=0;pointer++;}const hours=Number(logs[i].hv||0);if(!Number.isFinite(hours)||hours<0)throw Error('La bitácora contiene horas no válidas. No se eliminaron cambios.');total+=hours;logs[i].acum=total.toFixed(2);}
- d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
-}
+function inspectionResetOffsets(d,limitHours){return window.HPInspectionHistory.resetEvents(d,limitHours).map(event=>event.offset);}
+function recomputeInspectionAccumulators(d){window.HPInspectionHistory.rebuild(d);}
 async function deleteInspectionRecord(idx,ri){
  if(!canResetInspectionBar()||!fleet[idx])return false;
  const initial=state[idx]?.bitacora_inspecciones?.[ri];if(!initial)return false;
@@ -815,14 +805,9 @@ async function deleteInspectionRecord(idx,ri){
  if(!canResetInspectionBar())return false;
  const d=structuredClone(state[idx]),records=Array.isArray(d.bitacora_inspecciones)?d.bitacora_inspecciones:[],record=records[ri],logs=Array.isArray(d.bitacora_horas)?d.bitacora_horas:[];
  if(!record||![50,100].includes(Number(record.tipo))||!Number.isInteger(record.hour_offset)||record.hour_offset<0||record.hour_offset>logs.length){alert('No se puede recalcular esta inspección porque falta su posición en la bitácora.');return false;}
- const type=Number(record.tipo),offset=record.hour_offset,before50=Number(record.before50||0),before100=Number(record.before100||0),hoursAfter=logs.slice(offset).reduce((sum,row)=>{const hours=Number(row.hv||0);return Number.isFinite(hours)&&hours>=0?sum+hours:NaN;},0);
- if(!Number.isFinite(before50)||!Number.isFinite(before100)||!Number.isFinite(hoursAfter)){alert('La bitácora contiene acumulados no válidos. No se eliminó la inspección.');return false;}
  const previousReason=window.ChangeHistory?.getReason?.()||'';records.splice(ri,1);d.bitacora_inspecciones=records;d.proxima_inspeccion=records.length?records[records.length-1].proxima:'';
- const remaining50=inspectionResetOffsets(d,50).filter(n=>n>=offset),remaining100=inspectionResetOffsets(d,100).filter(n=>n>=offset);
- if([50,100].includes(type)&&!remaining50.length)d.horas_acum_50=(before50+hoursAfter).toFixed(2);
- if(type===100&&!remaining100.length)d.horas_acum_100=(before100+hoursAfter).toFixed(2);
- if(type===100){const next100=remaining100.length?Math.min(...remaining100):Infinity,end=Math.min(next100,logs.length);for(let i=offset;i<end;i++){const old=Number(logs[i].acum||0);if(!Number.isFinite(old)||old<0){alert('La bitácora contiene acumulados no válidos. No se eliminó la inspección.');return false;}logs[i].acum=(old+before100).toFixed(2);}}
- d.bitacora_horas=logs;d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
+ try{window.HPInspectionHistory.rebuild(d,{anchors:[{record,index:ri}]});}catch(error){alert(error.message||'No se pudo reconstruir el historial. No se eliminó la inspección.');return false;}
+ d.bitacora_horas=logs;
  window.ChangeHistory?.setReason?.(reason.trim());
  const ok=await saveData(fleet[idx].reg,d);if(!ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
  state[idx]=d;aircraftDirty.delete(idx);refreshPanel(idx);updateTAC(idx);updateSummary();buildResumen();updateUndoButtons();return true;
@@ -1552,10 +1537,11 @@ function adjustRecordedHours(d,r,delta){
  if(last100===null||hi>=last100)add('horas_acum_100');
  for(const key of ['ciclos_totales','ciclos_limite'])add(key);
  if(isMultimotor(fleetRecordReg(d)))for(const key of ['helice1_ciclos','helice2_ciclos'])add(key);
- d.bitacora_horas[hi].hv=(Number(d.bitacora_horas[hi].hv)+delta).toFixed(2);
+ window.HPInspectionHistory.shiftInspectionSnapshots(d,hi,delta);
  const nextReset=reset100.filter(at=>at>hi).reduce((nearest,at)=>Math.min(nearest,at),Infinity);
  for(let i=hi;i<d.bitacora_horas.length&&i<nextReset;i++)d.bitacora_horas[i].acum=(Number(d.bitacora_horas[i].acum||0)+delta).toFixed(2);
- d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
+ d.bitacora_horas[hi].hv=(Number(d.bitacora_horas[hi].hv)+delta).toFixed(2);
+ recomputeInspectionAccumulators(d);
 }
 function adjustDualAircraftComponents(d,leftChange,rightChange){
  for(const [key,change]of [['ciclos_totales',leftChange],['helice1_ciclos',leftChange],['ciclos_limite',rightChange],['helice2_ciclos',rightChange]]){const value=Number(d[key]||0)+change;if(value<0)throw Error('La corrección produciría horas negativas. Revisa las lecturas.');d[key]=value.toFixed(2);}
@@ -1573,7 +1559,7 @@ async function applyRecordChange(kind,idx,ri,f){
      const old={},next={};for(const m of DUAL_TAC_METERS){const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',previous=tacCents(f[m.key+'Anterior']),current=tacCents(f[m.key+'Actual']);if(!Number.isFinite(tacDifference(f[m.key+'Anterior'],f[m.key+'Actual'])))return 'Revisa TAC anterior y actual de '+m.label+'.';old[m.key]={previous:Number(r[stem+'Previous100']),current:Number(r[stem+'Current100']),hours:Number(r[stem+'Hours100']),measured:m.key==='hobbs'?Number(r.hobbsMeasuredHours100??r.hobbsHours100):Number(r[stem+'Hours100'])};next[m.key]={previous,current,hours:current-previous};}
      const oldMax=Math.max(old.left.hours,old.right.hours),newMax=Math.max(next.left.hours,next.right.hours),winner=next.left.hours>=next.right.hours?'left':'right';next.hobbs.hours=newMax;next.hobbs.measured=next.hobbs.current-next.hobbs.previous;const maintenanceChange=(newMax-oldMax)/100,before={fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.flatMap(m=>{const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';return [[stem+'Previous100',r[stem+'Previous100']],[stem+'Current100',r[stem+'Current100']],[stem+'Hours100',r[stem+'Hours100']]];})),hobbsMeasuredHours100:r.hobbsMeasuredHours100,hobbsAccountingSource:r.hobbsAccountingSource};
      if(maintenanceChange)adjustRecordedHours(d,r,maintenanceChange);
-     adjustDualAircraftComponents((next.left.hours-old.left.hours)/100-maintenanceChange,(next.right.hours-old.right.hours)/100-maintenanceChange);
+     adjustDualAircraftComponents(d,(next.left.hours-old.left.hours)/100-maintenanceChange,(next.right.hours-old.right.hours)/100-maintenanceChange);
      const hi=Number.isInteger(r.hour_index)?r.hour_index:(d.bitacora_horas||[]).findIndex(h=>h.tac_id===r.id||h.registryId&&h.registryId===r.registryId),linked=d.bitacora_horas[hi];if(linked)linked.fecha=f.fecha;
      Object.assign(r,{fecha:f.fecha,hv:(newMax/100).toFixed(2),hobbsAccountingSource:winner});for(const m of DUAL_TAC_METERS){const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',reading=next[m.key];r[stem+'Previous100']=reading.previous;r[stem+'Current100']=reading.current;r[stem+'Hours100']=m.key==='hobbs'?newMax:reading.hours;if(m.key==='hobbs')r.hobbsMeasuredHours100=reading.measured;if(linked){linked[stem+'Previous100']=reading.previous;linked[stem+'Current100']=reading.current;linked[stem+'Hours100']=m.key==='hobbs'?newMax:reading.hours;if(m.key==='hobbs'){linked.hobbsMeasuredHours100=reading.measured;linked.hobbsAccountingSource=winner;}}if(ri===d.bitacora_tac.length-1){const meter=DUAL_TAC_METERS.find(x=>x.key===m.key);d[meter.previous]=(reading.current/100).toFixed(2);d[meter.current]='';}}
      r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes,despues:{fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.map(m=>[m.key+'Actual',r[(m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs')+'Current100']]))}});
