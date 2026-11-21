@@ -18,6 +18,7 @@ const cloudUi=section(cloud,'function restoreCloudUiAfterWrite(){','function sho
 const resetCloud=section(cloud,'window.cloudResetInspectionBar=async function({reg,limitHours,expectedBefore,id,reason}={}){','function validateBackup(data){');
 
 const dashboardFixture=`<!doctype html><meta charset="utf-8"><div id="dashboard-app"><label>Serial<input id="serial-0" value="LOCAL-SERIAL"></label></div><div id="cloud-busy" hidden>Guardando en Firebase…</div><div id="doc-list-0"></div><output id="state-output"></output><script>
+function el(id){return document.getElementById(id)}
 function isDualTAC(){return false}
 function escapeRecord(value){return String(value??'')}
 function docStatusBadge(){return '<span>OK</span>'}
