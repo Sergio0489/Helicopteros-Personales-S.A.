@@ -1,4 +1,5 @@
 'use strict';
+const identityReview=require('./identity-review');
 // Pure production adapter. No Firebase, browser clock, demonstration users or seed data.
 const E=require('./itinerary-engine');
 const V=require('./pilot-validity');
@@ -19,7 +20,7 @@ function pilots(data){return arr(data.pilotos).map((p,i)=>({id:String(p.id||'leg
 function hasPendingNoShow(student){return arr(student?.expenses).some(e=>e?.noShowId&&!e.voidedAt&&!e.acceptance?.acceptedAt);}
 function students(data){return [...arr(data.school?.students).map(p=>({id:'student:'+p.id,name:p.name,blockedForFlights:hasPendingNoShow(p)})),...arr(data.school?.registry?.clients).map(p=>({id:'client:'+p.id,name:p.name,blockedForFlights:false}))].sort((a,b)=>a.name.localeCompare(b.name,'es'));}
 function legacyId(f){return f.id==null?'legacy-'+hash(f):String(f.id);}
-function fromFlight(f,ps){return {...f.schedule,publicationStatus:'published',id:legacyId(f),date:iso(f.fecha),aircraft:key(f.aeronave),pilot:f.schedule?.pilot||ps.find(p=>p.name===f.piloto)?.id||'legacy-name:'+f.piloto,studentName:f.estudiante||'',studentId:f.personId&&f.personKind?f.personKind+':'+f.personId:f.schedule?.studentId||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',flightType:f.schedule?.flightType||'privado',note:f.observaciones||f.schedule?.note||'',route:f.ruta||f.schedule?.route||'',fixed:true,legacy:!f.schedule};}
+function fromFlight(f,ps){return {...f.schedule,publicationStatus:'published',id:legacyId(f),date:iso(f.fecha),aircraft:key(f.aeronave),pilot:f.schedule?.pilot||f.pilotId||(f.pilotIdentityUnresolved?'legacy-name:'+f.piloto:ps.find(p=>p.name===f.piloto)?.id||'legacy-name:'+f.piloto),studentName:f.estudiante||'',studentId:f.personId&&f.personKind?f.personKind+':'+f.personId:f.schedule?.studentId||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',flightType:f.schedule?.flightType||'privado',note:f.observaciones||f.schedule?.note||'',route:f.ruta||f.schedule?.route||'',fixed:true,legacy:!f.schedule};}
 function idleDays(data,id,targetDate){
  const entry=Object.entries(data.fleet||{}).find(([registration])=>key(registration)===id)?.[1]||{};
  const logs=Array.isArray(entry.bitacora_horas)?entry.bitacora_horas:Object.values(entry.bitacora_horas||{});
@@ -42,6 +43,7 @@ function stateFor(data,d,now){
  return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
 }
 function scope(data,actor){
+ if(identityReview.pending(actor.account))error(identityReview.message);
  if(!actor.user?.emailVerified||actor.user.disabled||actor.account?.mergedInto)error('Verifica el correo e inicia sesión con una cuenta activa.');
  if(actor.director)return {role:'director',view:true,request:false,create:true,edit:true,settings:true};
  const p=policyFor(data,actor.account),box=id=>permissions(p,'itinerario',id);
@@ -71,15 +73,17 @@ function storeFlights(data,state){
 }
 function notice(data,event,now,id){if(!event)return;const s=setup(data);s.notices ||= [];if(s.notices.some(n=>n.id===id))return;s.notices.push({...copy(event),id,createdAt:now});s.notices=s.notices.slice(-500);}
 function changeNotice(data,before,after,published,now,id,all=false){const n=E.publishedChange(before,after,published);if(n){if(all)n.recipients=[{kind:'group',id:'all'}];notice(data,n,now,id);}}
-function cleanFlight(input,id,now,allowEmptyNote=false){
+function cleanFlight(input,id,now){
  if(!input||typeof input!=='object'||Array.isArray(input))error('Vuelo no válido.');
- for(const [field,label,max]of [['aircraft','Aeronave',40],['pilot','Piloto',200],['start','Hora de inicio',5],['end','Hora de culminación',5],['flightType','Tipo de vuelo',40],['route','Ruta o destino',200],...allowEmptyNote?[]:[['note','Observaciones',1000]]]){
+ for(const [field,label,max]of [['aircraft','Aeronave',40],['pilot','Piloto',200],['start','Hora de inicio',5],['end','Hora de culminación',5],['flightType','Tipo de vuelo',40],['route','Ruta o destino',200]]){
   if(typeof input[field]!=='string'||!input[field].trim())error('Completa el campo '+label+'.');
   if(input[field].trim().length>max)error(label+': máximo '+max+' caracteres.');
  }
- if(allowEmptyNote&&input.note!=null&&(typeof input.note!=='string'||input.note.trim().length>1000))error('Observaciones: máximo 1000 caracteres.');
+ if(input.note!=null&&(typeof input.note!=='string'||input.note.trim().length>1000))error('Observaciones: máximo 1000 caracteres.');
  if(!Object.hasOwn(E.flightTypes,input.flightType))error('Vuelo no válido.');
- return {id,aircraft:key(input.aircraft),pilot:String(input.pilot||''),studentId:String(input.studentId||''),start:String(input.start||''),end:String(input.end||''),slot:String(input.slot||'b1'),flightType:String(input.flightType||'privado'),socioName:String(input.socioName||'').trim().slice(0,120),route:input.route.trim(),note:String(input.note||'').trim().slice(0,1000),created:Date.parse(now)};
+ const flight={id,aircraft:key(input.aircraft),pilot:String(input.pilot||''),studentId:String(input.studentId||''),start:String(input.start||''),end:String(input.end||''),slot:String(input.slot||'b1'),flightType:String(input.flightType||'privado'),socioName:String(input.socioName||'').trim().slice(0,120),route:input.route.trim(),note:String(input.note||'').trim().slice(0,1000),created:Date.parse(now)};
+ if(input.flightType==='examen')flight.delegationNumber=String(input.delegationNumber||'').trim();
+ return flight;
 }
 function checkExpected(d,body){if(body.revision!==d.revision)error('El horario cambió. Actualiza y revisa antes de volver a guardar.');}
 function publish(data,dateValue,now){
@@ -128,7 +132,7 @@ function apply(data,actor,body,now){
  }else if(action==='request'){
   if(!rights.request)error(rights.role==='pilot'&&!rights.pilot?'Vincula tu usuario con un expediente de piloto.':'El director debe habilitar «Solicitudes de vuelos» para tu cargo.');
   const old=d.requests.find(q=>q.id===body.id);if(body.id&&(!old||old.pilot!==rights.pilot||old.status==='approved'||d.cancelled.includes(old.id)))error('No puedes modificar esta solicitud.');
-  let q=cleanFlight({...body.flight,pilot:rights.pilot},old?.id||'request-'+body.actionId,now,true);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
+  let q=cleanFlight({...body.flight,pilot:rights.pilot},old?.id||'request-'+body.actionId,now);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
   q=E.normalizeRequest(state,q);const reason=E.requestError(state,q);if(reason)error(reason);assertPilot(data,q,dte,now);q.sourceSlots=E.sourceSnapshot(state.aircraft.find(a=>a.id===q.aircraft),q);
   d.requests=d.requests.filter(x=>x.id!==q.id);d.requests.push(q);
  }else if(action==='cancel-request'){
@@ -168,8 +172,8 @@ function apply(data,actor,body,now){
   if(!state.published)error('El horario todavía no está publicado.');
   const open=d.openSlots.find(x=>x.id===body.id);if(!open)error('Este espacio ya fue tomado. Actualiza el itinerario.');
   const clock=E.panamaClock(now);if(dte<clock.date||dte===clock.date&&E.minutes(open.start)<=E.minutes(clock.time))error('Este espacio ya inició o ya pasó.');
-  const flight=cleanFlight({...body.flight,pilot:rights.pilot,aircraft:open.aircraft,start:open.start,end:open.end},'claimed-'+body.actionId,now,true);flight.pilot=rights.pilot;flight.fixed=true;flight.createdByRole='pilot';flight.createdByUid=actor.user.uid;
-  const aircraft=state.aircraft.find(a=>a.id===open.aircraft);if(!aircraft||!E.bookable(aircraft,dte)||!E.canChooseFlightType(state,typeOf(flight),'pilot',aircraft)||!E.compatible(state,flight,aircraft))error('No estás habilitado para este tipo de vuelo o aeronave.');const metadataError=E.flightDataError(state,flight);if(metadataError)error(metadataError);
+  const flight=cleanFlight({...body.flight,pilot:rights.pilot,aircraft:open.aircraft,start:open.start,end:open.end},'claimed-'+body.actionId,now);flight.pilot=rights.pilot;flight.fixed=true;flight.createdByRole='pilot';flight.createdByUid=actor.user.uid;
+  const aircraft=state.aircraft.find(a=>a.id===open.aircraft);if(!aircraft||!E.bookable(aircraft,dte)||!E.canChooseFlightType(state,E.typeOf(flight),'pilot',aircraft)||!E.compatible(state,flight,aircraft))error('No estás habilitado para este tipo de vuelo o aeronave.');const metadataError=E.flightDataError(state,flight);if(metadataError)error(metadataError);
   if(E.minutes(flight.end)-E.minutes(flight.start)<E.MIN_ASSIGNMENT_MINUTES)error('El espacio debe durar al menos 1 hora y 30 minutos.');if(!E.flightAvailable(aircraft,flight,dte)||state.confirmed.some(q=>(q.aircraft===flight.aircraft||q.pilot===flight.pilot)&&E.overlaps(q,flight)))error('El espacio ya no está disponible para todo el intervalo.');assertPilot(data,flight,dte,now);
   state.confirmed.push(flight);d.openSlots=d.openSlots.filter(x=>x.id!==open.id);storeFlights(data,state);changeNotice(data,null,flight,state.published,now,receipt,true);
  }else if(action==='publish'){requireDirector();validateDateRange(dte,now);const alreadyPublished=!!d.published;if(publish(data,dte,now)&&!alreadyPublished)emailPublication=publicationEmail(data,dte);}
@@ -182,9 +186,51 @@ function apply(data,actor,body,now){
 }
 function timeFromMinutes(value){return String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0');}
 // Preserve server-owned requests/config and reject bypass through the legacy generic saver.
-function protect(before,after){
- if(before.itinerary?.version){if(!eq(before.itinerarios||[],after.itinerarios||[]))error('Actualiza el itinerario desde la nueva página para conservar las reglas y los avisos.');after.itinerary=copy(before.itinerary);}
- else delete after.itinerary;
+function pilotNameKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');}
+function pilotReference(value,migration){
+ if(typeof value!=='string')return value;
+ const id=migration?.pilotIdMap?.[value];if(id)return id;
+ if(value.startsWith('legacy-name:')&&migration?.changed)return migration?.pilotNameMap?.[pilotNameKey(value.slice(12))]||value;
+ return value;
+}
+function remapPilotReferences(value,migration){
+ if(Array.isArray(value))return value.map(item=>remapPilotReferences(item,migration));
+ if(!value||typeof value!=='object')return value;
+ const out={};
+ for(const [field,item]of Object.entries(value)){
+  if((field==='pilot'||field==='pilotId')&&typeof item==='string'){
+   const mapped=value.pilotIdentityUnresolved===true?item:pilotReference(item,migration);out[field]=mapped;
+   if(migration?.changed&&item.startsWith('legacy-name:')&&mapped===item)out.pilotIdentityUnresolved=true;
+  }else if(field==='pilots'&&Array.isArray(item))out[field]=item.map(id=>pilotReference(id,migration));
+  else if(field==='id'&&value.kind==='pilot'&&typeof item==='string'){
+   const mapped=value.pilotIdentityUnresolved===true?item:pilotReference(item,migration);out[field]=mapped;
+   if(migration?.changed&&item.startsWith('legacy-name:')&&mapped===item)out.pilotIdentityUnresolved=true;
+  }else out[field]=remapPilotReferences(item,migration);
+ }
+ return out;
+}
+function remapFlights(rows,migration){
+ const dates=new Set(),flights=arr(rows).map(row=>{
+  const flight=remapPilotReferences(row,migration);
+  if(migration?.changed&&!flight.schedule?.pilot&&!flight.pilotId&&flight.pilotIdentityUnresolved!==true&&String(flight.piloto||'').trim()){
+   const id=migration?.pilotNameMap?.[pilotNameKey(flight.piloto)];if(id)flight.pilotId=id;else flight.pilotIdentityUnresolved=true;
+  }
+  if(!eq(row,flight)){if(row.id==null)flight.id=legacyId(row);const date=iso(row.fecha);if(date)dates.add(date);}
+  return flight;
+ });
+ return {flights,dates};
+}
+function protect(before,after,migration={}){
+ if(before.itinerary?.version){
+  if(!eq(before.itinerarios||[],after.itinerarios||[]))error('Actualiza el itinerario desde la nueva página para conservar las reglas y los avisos.');
+  const mapped=remapFlights(before.itinerarios,migration),itinerary=remapPilotReferences(before.itinerary,migration);
+  after.itinerarios=mapped.flights;
+  const oldConfig=before.itinerary.config||{},newConfig=itinerary.config||{};
+  if(!eq(oldConfig,newConfig)){itinerary.config ||= {};itinerary.config.revision=(Number(oldConfig.revision)||0)+1;}
+  for(const date of mapped.dates){const old=before.itinerary.days?.[date],next=itinerary.days?.[date];if(next)next.revision=(Number(old?.revision)||0)+1;}
+  for(const [date,old]of Object.entries(before.itinerary.days||{})){const next=itinerary.days?.[date];if(next&&!mapped.dates.has(date)&&!eq(old,next))next.revision=(Number(old.revision)||0)+1;}
+  after.itinerary=itinerary;
+ }else{delete after.itinerary;after.itinerarios=remapFlights(after.itinerarios,migration).flights;}
 }
 function reconcile(before,data,now){
  let changed=false;
@@ -229,7 +275,7 @@ function visibleNotices(data,actor,now){
 }
 function view(data,actor,d,now){
  const rights=scope(data,actor);if(!rights.view)error('No tienes permiso para consultar el itinerario.');const state=stateFor(data,d,now);
- if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot;return own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};}):[];
+ if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;});state.confirmed.forEach(q=>{if(q.pilot!==rights.pilot)delete q.delegationNumber;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot,row=own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};if(!own)delete row.delegationNumber;return row;}):[];
   if(!rights.boxes.flights&&!rights.boxes.planner)state.confirmed=[];
   state.lastResults=state.lastResults.filter(q=>q.pilot===rights.pilot);
  }
@@ -254,3 +300,4 @@ function calendar(data,actor,year,now){
  return {version:1,year,days};
 }
 module.exports={E,date,key,day,setup,stateFor,scope,view,calendar,apply,publish,publicationEmail,queueModifiedEmail,flushModifiedEmail,protect,reconcile,operational,visibleNotices,storeFlights,assertPilot};
+

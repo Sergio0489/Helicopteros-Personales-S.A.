@@ -187,13 +187,8 @@ function reverseAircraftRecord(reg,source,entry,baseline){
  const amount=Number(tac.hv);if(!Number.isFinite(amount)||amount<0)throw Error('Revisa las horas del registro antes de eliminarlo.');tac.hour_index=hi;
  const dual=isDualTAC(reg)&&hasDualMeters(tac);d.audit_aircraft_reg=reg;adjustRecordedHours(d,tac,-amount,{adjustComponents:!dual});delete d.audit_aircraft_reg;
  if(dual){const left=Number(tac.tacLeftHours100??entry.tacLeftHours100??0),right=Number(tac.tacRightHours100??entry.tacRightHours100??0);applyDualComponentChange(d,-left,-right);}
- const contribution=(field,total,offset)=>{const starting=Number(baseline?.[field]);if(!Number.isFinite(starting))return amount;const following=arr(d.bitacora_horas).slice(hi+1,offset).reduce((n,h)=>n+Number(h.hv||0),0),candidates=[amount,...arr(entry.modifications).flatMap(m=>[m.before?.tacCurrent100,m.after?.tacCurrent100].filter(Number.isFinite).map(v=>(v-entry.tacPrevious100)/100)),...arr(entry.modifications).flatMap(m=>[m.before?.aircraftHours100,m.after?.aircraftHours100]).filter(Number.isFinite).map(v=>v/100)];return candidates.find(n=>Math.abs(starting+n+following-Number(total))<0.005)??amount;};
- let reset50=false,reset100=false;
- for(const inspection of arr(d.bitacora_inspecciones))if(inspection.hour_offset>hi){
-  if(!reset50&&inspection.before50!==undefined)inspection.before50=Math.max(0,Number(inspection.before50||0)-contribution('horas_acum_50',inspection.before50,inspection.hour_offset)).toFixed(2);
-  if(!reset100&&inspection.before100!==undefined)inspection.before100=Math.max(0,Number(inspection.before100||0)-contribution('horas_acum_100',inspection.before100,inspection.hour_offset)).toFixed(2);
-  if(Number(inspection.tipo)===50||Number(inspection.tipo)===100)reset50=true;if(Number(inspection.tipo)===100)reset100=true;inspection.hour_offset--;
- }
+ for(const inspection of arr(d.bitacora_inspecciones))if(inspection.hour_offset>hi)inspection.hour_offset--;
+ for(const reset of arr(d.bitacora_reinicios_inspeccion)){const offset=window.HPInspectionHistory.effectiveOffset(reset);if(offset!==null&&offset>hi)reset.effective_hour_offset=offset-1;}
  const wasLast=d.bitacora_tac.at(-1)===tac;
  d.bitacora_horas.splice(hi,1);d.bitacora_tac=d.bitacora_tac.filter(t=>t!==tac);
  for(const t of d.bitacora_tac){const index=d.bitacora_horas.findIndex(h=>h.tac_id===t.id||h.registryId&&h.registryId===t.registryId);if(index>=0)t.hour_index=index;else if(Number.isInteger(t.hour_index)&&t.hour_index>hi)t.hour_index--;}
@@ -209,7 +204,8 @@ function reverseAircraftRecord(reg,source,entry,baseline){
  }
  if(wasLast){const last=d.bitacora_horas.at(-1);d.fecha_diaria=last?[last.fecha,last.hora].filter(Boolean).join(' '):baseline?.fecha_diaria||'';}
  const lastVenc=venc.at(-1);for(const [kind]of vencimientoComponents(reg)){const field=kind==='motor'?'fecha_motor':kind==='helices'?'fecha_helices':'fecha_'+kind;if(!arr(source.bitacora_vencimientos).length||arr(source.bitacora_vencimientos).at(-1)?.registryId===entry.id)d[field]=lastVenc?[lastVenc.fecha,lastVenc.hora].filter(Boolean).join(' '):baseline?.[field]||'';}
- for(const field of ['horas_acum_50','horas_acum_100','ciclos_totales','ciclos_limite','helice1_ciclos','helice2_ciclos'])if(baseline&&Object.hasOwn(baseline,field)&&Number(d[field]||0)===Number(baseline[field]||0))d[field]=baseline[field];d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
+ for(const field of ['ciclos_totales','ciclos_limite','helice1_ciclos','helice2_ciclos'])if(baseline&&Object.hasOwn(baseline,field)&&Number(d[field]||0)===Number(baseline[field]||0))d[field]=baseline[field];
+ window.HPInspectionHistory.rebuild(d);d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
  return d;
 }
 function prepareDeletion(base,id,now=Date.now()){

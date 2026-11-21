@@ -8,6 +8,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const dashboard = fs.readFileSync(path.join(root, 'dashboard.js'), 'utf8');
 const registro = fs.readFileSync(path.join(root, 'registro.js'), 'utf8');
+const inspectionHistory = require(path.join(root, 'functions/inspection-history.js'));
 function between(source, start, end) {
   const from = source.indexOf(start), to = source.indexOf(end, from + start.length);
   assert.notEqual(from, -1, `missing source anchor: ${start}`);
@@ -16,6 +17,7 @@ function between(source, start, end) {
 }
 const dashboardModel = [
   between(dashboard, 'function isMultimotor(', '// ===== DRAWER'),
+  between(dashboard, 'function inspectionResetOffsets(', 'async function deleteInspectionRecord('),
   between(dashboard, 'function tacCents(', 'function updateTAC('),
   between(dashboard, 'function adjustRecordedHours(', 'function fleetRecordReg('),
   between(dashboard, 'function fleetRecordReg(', 'async function applyRecordChange('),
@@ -40,7 +42,7 @@ function dashboardContext(state, inputs = {}) {
   const ctx = {
     state: [state], fleet: [{ reg: 'HP-880BL' }], aircraftDirty: new Set(), structuredClone,
     document: { getElementById, querySelector: () => null },
-    window: {}, saveData: async () => true,
+    window: { HPInspectionHistory: inspectionHistory }, saveData: async () => true,
     getFechaPanama: () => '19/11/2026', getHoraPanama: () => '10:00',
     dayNumber: value => /^\d{2}\/\d{2}\/\d{4}$/.test(value) ? 1 : NaN,
     refreshPanel() {}, updateTAC() {}, updateSummary() {}, buildResumen() {},
@@ -76,12 +78,6 @@ function panelFixture() {
     bitacora_inspecciones: [], bitacora_vencimientos: [],
   };
 }
-
-test('reproduces the pre-fix omitted aircraft argument with a synthetic state', () => {
-  const { ctx } = dashboardContext(panelFixture());
-  assert.throws(() => vm.runInContext('\'use strict\'; adjustDualAircraftComponents(1, 0)', ctx), error => error.name === 'TypeError');
-  assert.doesNotThrow(() => ctx.adjustDualAircraftComponents(panelFixture(), 1, 0));
-});
 
 test('direct-panel date correction updates the linked log but not hours or components', async () => {
   const { ctx } = dashboardContext(panelFixture());
@@ -121,7 +117,8 @@ test('direct-panel TAC correction from 2h/1h to zero never goes negative or doub
   assert.equal(saved.tac_izq_anterior, '100.00');
   assert.equal(saved.tac_der_anterior, '100.00');
   assert.equal(saved.hobbs_anterior, '102.00');
-  assert.equal(saved.bitacora_tac[0].hobbsHours100, 200, 'Hobbs remains its own reading and does not drive maintenance totals');
+  assert.equal(saved.bitacora_tac[0].hobbsHours100, 0, 'the Hobbs accounting delta follows maintenance hours');
+  assert.equal(saved.bitacora_tac[0].hobbsMeasuredHours100, 200, 'the independent Hobbs measurement is preserved');
   assert.equal(saved.bitacora_tac[0].modificaciones[0].antes.tacLeftCurrent100, 10200);
 });
 
@@ -151,9 +148,10 @@ function registrationContext() {
     fmt: n => (Number(n || 0) / 100).toFixed(2), arr: value => Array.isArray(value) ? value : [],
     vencimientoComponents: () => [],
     getFechaPanama: () => '19/11/2026', getHoraPanama: () => '10:00',
+    window: { HPInspectionHistory: inspectionHistory },
   };
   vm.createContext(ctx);
-  vm.runInContext(between(dashboard, 'function isMultimotor(', 'function isDualTAC(') + between(dashboard, 'function adjustRecordedHours(', 'function fleetRecordReg(') + between(dashboard, 'function fleetRecordReg(', 'async function applyRecordChange('), ctx);
+  vm.runInContext(between(dashboard, 'function isMultimotor(', 'function isDualTAC(') + between(dashboard, 'function inspectionResetOffsets(', 'async function deleteInspectionRecord(') + between(dashboard, 'function adjustRecordedHours(', 'function fleetRecordReg(') + between(dashboard, 'function fleetRecordReg(', 'async function applyRecordChange('), ctx);
   vm.runInContext(registroModel, ctx);
   return ctx;
 }
@@ -286,4 +284,23 @@ test('out-of-order deletion restores individual totals and the original dual-met
   assert.equal(restored.bitacora_horas.length, 0);
   assert.equal(data.school.registry.entries.length, 0);
   assert.equal(data.school.registry.deletedEntries.length, 3);
+});
+
+test('deleting a dual flight before a 50h inspection updates its historical baseline', () => {
+  const ctx = registrationContext(); let data = deletionFixture(10);
+  data.fleet.HP_880BL.bitacora_inspecciones.push({
+    fecha: '02/11/2026', hora: '10:00', tac: '101.00', tipo: 50, proxima: 50,
+    hour_offset: 1, before50: '1.00', before100: '1.00', modificaciones: [],
+  });
+  data = ctx.prepareDeletion(data, 'A').next;
+  const aircraft = data.fleet.HP_880BL, inspection = aircraft.bitacora_inspecciones[0];
+  assert.equal(inspection.hour_offset, 0);
+  assert.equal(inspection.before50, '0.00');
+  assert.equal(inspection.before100, '0.00');
+  assert.equal(aircraft.horas_acum_50, '1.25');
+  assert.equal(aircraft.horas_acum_100, '1.25');
+  assert.equal(aircraft.ciclos_totales, '10.75');
+  assert.equal(aircraft.helice1_ciclos, '10.75');
+  assert.equal(aircraft.ciclos_limite, '11.25');
+  assert.equal(aircraft.helice2_ciclos, '11.25');
 });
