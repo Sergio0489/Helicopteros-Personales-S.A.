@@ -197,6 +197,25 @@ function defaultAc(ac) {
   };
 }
 
+function normalizeAircraftState(ac, value, previous = {}) {
+  const defaultValues = defaultAc(ac);
+  const prior = previous && typeof previous === 'object' && !Array.isArray(previous)
+    ? structuredClone(previous)
+    : {};
+  const stored = value && typeof value === 'object' && !Array.isArray(value)
+    ? structuredClone(value)
+    : {};
+  const normalized = Object.assign(structuredClone(defaultValues), prior, stored);
+  for (const [key, fallback] of Object.entries(defaultValues)) {
+    if (Array.isArray(fallback) && !Array.isArray(normalized[key])) {
+      normalized[key] = Array.isArray(prior[key])
+        ? structuredClone(prior[key])
+        : structuredClone(fallback);
+    }
+  }
+  return normalized;
+}
+
 function daysUntil(dateStr) { const n=dayNumber(dateStr)-dayNumber(panamaISO());return Number.isFinite(n)?n:null; }
 function daysBadge(days) {
   if (days === null) return '<span class="days-badge days-empty">—</span>';
@@ -785,11 +804,19 @@ async function resetInspectionBar(idx,limitHours){
   const requestId=globalThis.crypto?.randomUUID?.()||'reset-'+Date.now()+'-'+Math.random().toString(16).slice(2);
   window.ChangeHistory?.setReason?.(reason.trim());
   let result;
+  const app=document.getElementById('dashboard-app'),busyIndicator=document.getElementById('cloud-busy');
+  const wasInert=app?.inert??false,wasBusyHidden=busyIndicator?.hidden??true,wasBusyText=busyIndicator?.textContent||'';
+  if(app){app.dataset.inspectionResetLock='true';app.inert=true;}
+  if(busyIndicator){busyIndicator.hidden=false;busyIndicator.textContent='Consultando y guardando reinicio…';}
   try{result=await window.cloudResetInspectionBar({reg,limitHours,expectedBefore:current.toFixed(2),id:requestId,reason:reason.trim()});}
   catch(error){window.ChangeHistory?.setReason?.(previousReason);alert(error.message||'No se pudo guardar el reinicio.');return false;}
+  finally{
+    if(app){delete app.dataset.inspectionResetLock;app.inert=wasInert;}
+    if(busyIndicator){busyIndicator.hidden=wasBusyHidden;busyIndicator.textContent=wasBusyText;}
+  }
   if(result.stale){
     window.ChangeHistory?.setReason?.(previousReason);
-    state[idx]=structuredClone(result.aircraft);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();
+    state[idx]=normalizeAircraftState(fleet[idx],result.aircraft,state[idx]);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();
     alert('Las horas cambiaron desde que abriste el panel. Actualicé los datos; revisa el acumulado y vuelve a reiniciar si aún corresponde.');
     if(result.rebased)location.reload();
     return false;
@@ -797,7 +824,7 @@ async function resetInspectionBar(idx,limitHours){
   if(!result.ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
   if(result.noChange)window.ChangeHistory?.setReason?.(previousReason);
   if(result.alreadyApplied)window.ChangeHistory?.consume?.(reason.trim());
-  state[idx]=structuredClone(result.aircraft);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();updateUndoButtons();
+  state[idx]=normalizeAircraftState(fleet[idx],result.aircraft,state[idx]);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();updateUndoButtons();
   if(result.rebased)location.reload();
   return true;
 }

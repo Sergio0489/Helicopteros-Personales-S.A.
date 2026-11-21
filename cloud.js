@@ -27,6 +27,11 @@ function setCloudStatus(text){
  el('preview-save').textContent=label;el('cloud-connection').dataset.state=state;el('cloud-connection').title=text;
  el('cloud-status-detail').textContent=warning?text:'';el('cloud-status-detail').hidden=!warning;
 }
+function restoreCloudUiAfterWrite(){
+ const resetLocked=el('dashboard-app')?.dataset.inspectionResetLock==='true';
+ el('dashboard-app').inert=resetLocked;el('cloud-busy').hidden=!resetLocked;
+ if(resetLocked)el('cloud-busy').textContent='Consultando y guardando reinicio…';
+}
 function showCloudError(error){setCloudStatus(error.message||'No se pudo guardar.');}
 window.showCloudError=showCloudError;
 async function cloudRequest(method,body,etag,{silent=false,path=""}={}){
@@ -68,7 +73,7 @@ const legacyCloudWrite=async function(data){
   setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado · historial pendiente de activar');
   return true;
  }catch(error){window.failedCloudData=structuredClone(data);cloudBlocked=true;showCloudError(error);throw error;}
- finally{cloudBusy=false;el('dashboard-app').inert=false;el('cloud-busy').hidden=true;}
+ finally{cloudBusy=false;restoreCloudUiAfterWrite();}
 };
 let historyBackendReady=null;
 window.cloudWrite=async function(data){
@@ -91,7 +96,7 @@ window.cloudWrite=async function(data){
   setCloudStatus(cloudBlocked?'Guardado confirmado. Actualiza antes de seguir editando.':'✓ Guardado en Firebase');
   return true;
  }catch(error){window.failedCloudData=structuredClone(data);cloudBlocked=true;showCloudError(error);throw error;}
- finally{cloudBusy=false;el('dashboard-app').inert=false;el('cloud-busy').hidden=true;}
+ finally{cloudBusy=false;restoreCloudUiAfterWrite();}
 };
 const draftCloudWrite=window.cloudWrite;
 window.cloudWrite=async data=>{await window.DraftRecovery?.beforeSave();try{const result=await draftCloudWrite(data);window.DraftRecovery?.saved();return result;}catch(error){window.DraftRecovery?.error(error.message);throw error;}};
@@ -151,9 +156,9 @@ function validateBackup(data){
 async function openDashboard(data){
  window.CLOUD_INITIAL=validateBackup(data);
  window.DASHBOARD_READY=false;
- const historyScript=document.createElement('script');historyScript.src='functions/inspection-history.js?v=20261121-inspection-reset-1';
+ const historyScript=document.createElement('script');historyScript.src='functions/inspection-history.js?v=20261121-inspection-reset-response-1';
  await new Promise((resolve,reject)=>{historyScript.onload=()=>window.HPInspectionHistory?resolve():reject(Error('No se pudo preparar el historial de inspecciones. Recarga la página.'));historyScript.onerror=()=>reject(Error('No se pudo cargar el historial de inspecciones. Recarga la página.'));document.body.appendChild(historyScript);});
- const script=document.createElement('script');script.src='dashboard.js?v=20261121-inspection-reset-1';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261121-inspection-reset-response-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261118-honorarios-scheduling-1';
