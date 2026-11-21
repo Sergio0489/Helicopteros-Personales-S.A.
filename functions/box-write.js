@@ -74,7 +74,7 @@ function applyChanges(current,before,after,policy,account){
   const remaining=clone(next);
   for(const task of records){const match=maintenanceMatchIndex(task,remaining);if(match>=0)remaining.splice(match,1);else assertPendingTaskRemoval(path,task);}
  };
- const check=(path,context)=>{if(path[0]==='fleet'&&path[2]==='bitacora_reinicios_inspeccion'&&account.role!=='Director')throw Error('Solo el Director puede registrar reinicios de inspección.');if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
+ const check=(path,context)=>{if(path[0]==='fleet'&&path[2]==='bitacora_reinicios_inspeccion'&&path[4]!=='effective_hour_offset'&&account.role!=='Director')throw Error('Solo el Director puede registrar reinicios de inspección.');if(path[0]==='school'&&path[1]==='paymentReceiverNames'&&path[2]!==account.uid)throw Error('Solo puedes registrar tu nombre como receptor.');if(account.role==='Piloto'&&path[0]==='pilotos'){
    const pilot=root.pilotos?.[path[1]];
    if(!pilot||account.syncStatus!=='matched'||account.recordKind!=='pilot'||pilot.id!==account.recordId)throw Error('Solo puedes modificar tu expediente de piloto autorizado.');
   }if(account.role==='Administrativo'&&path[0]==='school'&&path[1]==='personnel'){
