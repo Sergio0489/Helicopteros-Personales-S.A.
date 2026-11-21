@@ -85,8 +85,9 @@ test('deleting an earlier flight updates later inspection snapshots before the s
  assert.throws(()=>protect({fleet:{0:before}},{fleet:{0:stale}},{role:'Director'}),/historial de inspecciones/);
 });
 
-test('HP880BL historical dual-TAC editing passes the aircraft into component adjustment',()=>{
+test('HP880BL historical dual-TAC editing applies maintenance and component deltas once',()=>{
  const source=fs.readFileSync(require.resolve('../dashboard.js'),'utf8');
- assert.match(source,/adjustDualAircraftComponents\(d,\(next\.left\.hours-old\.left\.hours\)\/100-maintenanceChange,/);
+ assert.match(source,/adjustRecordedHours\(d,r,maintenanceChange,\{adjustComponents:false\}\)/);
+ assert.match(source,/adjustDualAircraftComponents\(d,\(next\.left\.hours-old\.left\.hours\)\/100,\(next\.right\.hours-old\.right\.hours\)\/100\)/);
  const endpoint=fs.readFileSync(require.resolve('../functions/index.js'),'utf8');assert.match(endpoint,/inspection-resets'\)\.protect\(before,data,\{role:'Director'\}\)/);
 });
