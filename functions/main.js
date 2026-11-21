@@ -10,5 +10,6 @@ exports.auditAccounts=onValueCreated({...options,ref:'/accountRequests/{uid}/aud
 
 Object.assign(exports,require('./wix-interests'));
 Object.assign(exports,require('./prospect-email-trigger'));
+Object.assign(exports,require('./itinerary-email-trigger'));
 
 Object.assign(exports,require('./itinerary-jobs'));

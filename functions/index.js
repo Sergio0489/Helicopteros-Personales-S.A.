@@ -9,7 +9,7 @@ const {nativeView}=require('./native-view');
 const {boxView}=require('./box-view');
 const {applyChanges}=require('./box-write');
 const {randomUUID}=require('node:crypto');
-const DIRECTOR='glCsyjLhlyNRmazYA6Y9Gj3u0l13';
+const DIRECTOR=require('./role-ids').DIRECTOR_UID;
 const fields=['name','identity','birthDate','nationality','address','previousSchool','residentialPhone','phone','fatherName','motherName','emergencyName','emergencyPhone','funding','interests','notes','referredBy'];
 const identities=require('./identity-merge');
 const roles=identities.ROLES;
@@ -62,7 +62,7 @@ async function syncAccount(db,u,account,marker,readRoot){
  if(!synced.committed)throw Error('No se pudo sincronizar la identidad. Actualiza e intenta nuevamente.');
  return synced.snapshot.val();
 }
-exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2},async(req,res)=>{
+exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergio0489.github.io'],minInstances:0,maxInstances:2,secrets:['HP_WIX_INTERESTS_CONFIG']},async(req,res)=>{
  res.set('Cache-Control','no-store');if(req.method==='GET'){res.json({ready:true});return;}if(req.method!=='POST'){res.status(405).end();return;}
  try{
  const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!token){res.status(401).json({error:'Inicia sesión.'});return;}
@@ -74,12 +74,20 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  const actor={uid:user.uid,name:actorAccount?.profile?.name||user.displayName||user.email,role:actorAccount?.role||'Estudiante'};
  const isDirector=!user.disabled&&(user.uid===DIRECTOR||(user.emailVerified&&actorAccount?.role==='Director'&&!!actorAccount.assignedAt));
  let prospectPolicy={};
- if(!isDirector&&(action==='access'||String(action||'').startsWith('prospect-'))){
+ if(!isDirector&&(action==='access'||String(action||'').startsWith('prospect-')||String(action||'').startsWith('quote-'))){
   const payload=(await db.ref('dashboard/payload').get()).val();
   const data=typeof payload==='string'?JSON.parse(payload):payload||{};
   prospectPolicy=data.school?.accessConfiguration?.roles?.[actorAccount?.role]||{};
  }
  const prospectScope=require('./prospect-access').scope(user,actorAccount,isDirector,prospectPolicy);
+ if(String(action||'').startsWith('quote-')){
+  const quotes=require('./quotes');
+  if(!quotes.permitted(prospectScope)){res.status(403).json({error:'No tienes acceso a las cotizaciones de Charters.'});return;}
+  if(action==='quote-save'&&prospectScope.edit===false){res.status(403).json({error:'Solo tienes permiso de consulta.'});return;}
+  const current=quotes.policy(require('./prospects').authorizedConfig(process.env.HP_WIX_INTERESTS_CONFIG));
+  if(action==='quote-session'){res.json({access:{view:true,edit:prospectScope.edit!==false},policy:current});return;}
+  res.json(await quotes.handle(db,action,req.body,actor,current));return;
+ }
  if(action==='prospect-configure'){
   if(!isDirector||!prospectScope){res.status(403).json({error:'Solo el Director con correo verificado puede conceder accesos.'});return;}
   res.json(await require('./prospect-access').configure(getAuth(),db,req.body,{...actor,role:'Director'}));return;
@@ -122,6 +130,11 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  }
  if(action==='audit-list'||action==='audit-detail'){if(!isDirector){res.status(403).json({error:'Solo Directores pueden consultar el historial.'});return;}res.json(await (action==='audit-list'?audit.list(db,req.body):audit.detail(db,req.body)));return;}
  if(isDirector)actor.role='Director';
+ if(['honorarios-read','honorarios-rates-save','no-show-own-read','no-show-accept','no-show-remove'].includes(action)){
+  try{res.json(await require('./honorarios-service').handle(db,{user,account:actorAccount,director:isDirector},action,req.body||{}));}
+  catch(error){res.status(error.status||400).json({error:error.message||'No se pudo completar la operación.'});}
+  return;
+ }
  if(action==='operational-notices'){
   if(user.disabled||!user.emailVerified||!isDirector&&!actorAccount?.assignedAt)throw Error('Verifica tu correo y confirma tu cargo para consultar alertas.');
   const root=(await db.ref('dashboard').get()).val(),data=JSON.parse(root?.payload||'{}');
@@ -134,13 +147,14 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(report.status){res.status(report.status).json({error:report.error});return;}
   res.json(report);return;
  }
+ if(String(action||'').startsWith('itinerary-practice-')){res.status(410).json({error:'El itinerario de práctica ya no está disponible.'});return;}
  if(String(action||'').startsWith('itinerary-')){res.json(await require('./itinerary-service').handle(db,{user,account:actorAccount,director:isDirector},req.body));return;}
  if(action==='director-save'){
   if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}
   if(typeof req.body.payload!=='string'||Buffer.byteLength(req.body.payload)>10000000)throw Error('Datos no válidos.');
   let data=JSON.parse(req.body.payload);if(!data||typeof data!=='object'||!data.fleet)throw Error('Respaldo no válido.');
-  let failure='';const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';data=JSON.parse(req.body.payload);if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{};identities.syncLinked(before,data);identities.assertUnique(before,data);require('./itinerary-model').protect(before,data);require('./itinerary-model').reconcile(before,data,new Date().toISOString());}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
-  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision,...(data.itinerary?{itinerarySync:{itinerarios:data.itinerarios,itinerary:data.itinerary}}:{})});return;
+  let failure='',serverSchoolSync=null,serverPilotSync=null;const operation=randomUUID();const saved=await db.ref('dashboard').transaction(root=>{failure='';serverSchoolSync=null;serverPilotSync=null;data=JSON.parse(req.body.payload);if(root===null&&req.body.operation!=null){failure='Los datos cambiaron. Actualiza antes de guardar.';return null;}if((root?.operation||null)!==(req.body.operation||null)){failure='Los datos cambiaron. Actualiza antes de guardar.';return;}try{const before=root?.payload?JSON.parse(root.payload):{},submittedSchool=JSON.stringify(data.school||null),submittedPilots=JSON.stringify(data.pilotos||[]);require('./inspection-records').protectDeletion(before,data,{role:'Director',reason:req.body.reason});require('./inspection-resets').protect(before,data,{role:'Director'});require('./honorarios').protect(before,data);const pilotMigration=require('./pilot-identities').pilotIdentity(before,data);require('./honorarios').applyNewEntries(before,data,actor);identities.syncLinked(before,data);identities.assertUnique(before,data);require('./itinerary-model').protect(before,data,pilotMigration);require('./itinerary-model').reconcile(before,data,new Date().toISOString());if(JSON.stringify(data.school||null)!==submittedSchool)serverSchoolSync=JSON.parse(JSON.stringify(data.school||{}));if(JSON.stringify(data.pilotos||[])!==submittedPilots)serverPilotSync=JSON.parse(JSON.stringify(data.pilotos||[]));}catch(e){failure=e.message;return;}return audit.attach(root,{...root,schemaVersion:1,payload:JSON.stringify(data),operation,revision:(root?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:user.uid},actor,'dashboard',req.body.reason);},undefined,false);
+  if(!saved.committed||failure){res.status(409).json({error:failure||'No se pudo confirmar el guardado.'});return;}res.json({ok:true,operation,revision:saved.snapshot.val().revision,...(serverSchoolSync?{schoolSync:{school:serverSchoolSync}}:{}),...(serverPilotSync?{pilotSync:{pilotos:serverPilotSync}}:{}),...(data.itinerary?{itinerarySync:{itinerarios:data.itinerarios,itinerary:data.itinerary}}:{})});return;
  }
  if(action==='session'){res.json({director:isDirector,name:actorAccount?.profile?.name||user.displayName||''});return;}
  if(action==='permission-capabilities'){if(!isDirector){res.status(403).json({error:'Solo Directores.'});return;}res.json({version:8,itineraryBlocks:true,prospectRolePermissions:true,auditHistory:true,selfProfile:true,outputPermissions:true,schoolCertificates:true,pilotDossiers:true,boxEditing:true,aircraftSchedule:true,ownStatement:true,monthlyWinners:true});return;}
@@ -169,7 +183,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   let account=(await ref.get()).val();
   let root=(await db.ref('dashboard').get()).val();
   account=await syncAccount(db,user,account,root?.operation,async()=>root);
-  if(identityReview.pending(account)){res.status(403).json({error:'Tu identidad está pendiente de revisión por el Director. Podrás entrar cuando confirme el expediente.'});return;}
+  if(identityReview.pending(account)){res.status(403).json({error:identityReview.message});return;}
   if(account?.syncedOperation&&root?.operation!==account.syncedOperation)root=(await db.ref('dashboard').get()).val();
   const data=root?.payload?JSON.parse(root.payload):{};
   const policy=policyFor(data,account),pages=visiblePages(policy);
@@ -183,7 +197,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   const result=await db.ref('dashboard').transaction(root=>{
    failure='';writes=0;if(root===null){failure='No hay datos disponibles para guardar.';return null;}if(root.operation!==req.body.operation){failure='Los datos cambiaron. Actualiza la página antes de guardar.';return;}
    try{const data=JSON.parse(root.payload),policy=policyFor(data,actorAccount);if(!visiblePages(policy).some(p=>p.id===req.body.page))throw Error('Ya no tienes acceso a esta página.');
-    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid});writes=applied.writes;require('./itinerary-model').protect(data,applied.data);require('./itinerary-model').reconcile(data,applied.data,new Date().toISOString());
+    const applied=applyChanges(data,req.body.before,req.body.after,policy,{...actorAccount,uid:user.uid,reason:req.body.reason});writes=applied.writes;require('./itinerary-model').protect(data,applied.data);require('./itinerary-model').reconcile(data,applied.data,new Date().toISOString());
     return audit.attach(root,{...root,payload:JSON.stringify(applied.data),revision:(root.revision||0)+1,operation,updatedBy:user.uid,updatedAt:new Date().toISOString()},actor,'dashboard',req.body.reason);
    }catch(e){failure=e.message;return;}
   },undefined,false);
@@ -238,6 +252,7 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
  res.json({profile:account.profile,email:user.email,verified:user.emailVerified,role:account.role||'Estudiante',matched:user.emailVerified&&account.syncStatus==='matched',identityReviewPending:!!account.identityReviewPending,syncStatus:account.syncStatus||'',needsProfile:false});
  }catch(error){const authError=String(error.code||'').startsWith('auth/');res.status(authError?401:400).json({error:authError?'No se pudo verificar la sesión. Inicia sesión nuevamente.':error.message||'No se pudo guardar la solicitud.'});}
 });
+
 
 
 

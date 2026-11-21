@@ -10,6 +10,13 @@
 })(typeof globalThis!=='undefined'?globalThis:this);
 
 function isMultimotor(reg){return ['HP-880BL','HP-18BLM','HP-1805BLM','HP1186'].includes(reg);}
+function isDualTAC(reg){return ['HP880BL'].includes(String(reg||'').replace(/-/g,'').toUpperCase());}
+const DUAL_TAC_METERS=[
+ {key:'left',label:'TAC motor izquierdo',previous:'tac_izq_anterior',current:'tac_izq_actual',previousLog:'tacLeftPrevious100',currentLog:'tacLeftCurrent100',hoursLog:'tacLeftHours100'},
+ {key:'right',label:'TAC motor derecho',previous:'tac_der_anterior',current:'tac_der_actual',previousLog:'tacRightPrevious100',currentLog:'tacRightCurrent100',hoursLog:'tacRightHours100'},
+ {key:'hobbs',label:'Hobbs',previous:'hobbs_anterior',current:'hobbs_actual',previousLog:'hobbsPrevious100',currentLog:'hobbsCurrent100',hoursLog:'hobbsHours100'}
+];
+function hasDualTACLog(record){return !!record&&['tacLeftPrevious100','tacLeftCurrent100','tacLeftHours100','tacRightPrevious100','tacRightCurrent100','tacRightHours100','hobbsPrevious100','hobbsCurrent100','hobbsHours100'].every(k=>record[k]!==undefined&&record[k]!==null&&record[k]!==''&&Number.isFinite(Number(record[k])));}
 // ===== DRAWER HAMBURGUESA (móvil) =====
 function openDrawer() {
   document.getElementById('sidebar').classList.add('open');
@@ -84,15 +91,15 @@ function updateUndoButtons(){
 async function commitPreview(next){
  try{window.HPCompany?.validateChanges(previewData,arguments[0]);window.HPSchoolInformation?.validateChanges(previewData,arguments[0]);PilotValidity.validateChanges(previewData,arguments[0]);window.HPSchoolCertificates?.validateChanges(previewData,arguments[0]);}catch(e){alert(e.message);return false;}
 
- try{await window.cloudWrite(next);const flightsChanged=JSON.stringify(previewData.itinerarios)!==JSON.stringify(next.itinerarios);previewData=structuredClone(next);if(flightsChanged&&window.DASHBOARD_READY){flightsData=structuredClone(next.itinerarios||[]);renderDailySchedule();}return true;}
+ try{await window.cloudWrite(next);const flightsChanged=JSON.stringify(previewData.itinerarios)!==JSON.stringify(next.itinerarios),pilotsChanged=JSON.stringify(previewData.pilotos||[])!==JSON.stringify(next.pilotos||[]);previewData=structuredClone(next);if(pilotsChanged){pilotosData.splice(0,pilotosData.length,...structuredClone(next.pilotos||[]));renderPilotos();window.PilotDossiers?.refresh();window.Registro?.refresh();}if(flightsChanged&&window.DASHBOARD_READY){flightsData=structuredClone(next.itinerarios||[]);renderDailySchedule();}return true;}
  catch(e){if(window.ROLE_VIEW){pilotosData.splice(0,pilotosData.length,...structuredClone(previewData.pilotos||[]));flightsData=structuredClone(previewData.itinerarios||[]);renderPilotos();renderCalendar();if(calSelectedDate)renderDayFlights(calSelectedDate);}window.showCloudError(e);return false;}
 }
-async function saveData(reg,data){
+async function saveData(reg,data,options={}){
   const key=aircraftKey(reg),next=structuredClone(previewData);
   const before=decodeAircraft(previewData.fleet[key]),after=decodeAircraft(data);
   appendVencimientoRecord(reg,before,after);
   if(JSON.stringify(before)!==JSON.stringify(after)){
-    const history=next.undoFleet[key] ||= [];history.push(before);if(history.length>20)history.shift();
+    if(options.clearUndo){next.undoFleet||={};delete next.undoFleet[key];}else{next.undoFleet||={};const history=next.undoFleet[key] ||= [];history.push(before);if(history.length>20)history.shift();}
     next.fleet[key]=after;
   }
   const ok=await commitPreview(next);
@@ -167,6 +174,7 @@ function defaultAc(ac) {
   return {
     status: "",
     serial: "", year: "", voltaje: "", motor_fabricante: "", motor_modelo: "", motor_serie: "", helice_fabricante: "", helice_modelo: "", helice_serie: "", limite_motor: "", limite_helice: "", horas_diarias: "", horas_acum_50: "", horas_acum_100: "", bitacora_horas: [], ultimo_venc_hv: "", ultimo_venc_fecha: "",
+    ...(isDualTAC(ac.reg)?{tac_izq_anterior:"",tac_izq_actual:"",tac_der_anterior:"",tac_der_actual:"",hobbs_anterior:"",hobbs_actual:""}:{}),
     horas_totales: "", horas_limite: "", fecha_50: "", fecha_100: "",
     ciclos_totales: "", ciclos_limite: "",
     helice1_ciclos: "", helice1_limite: "", fecha_helice1: "",
@@ -362,7 +370,6 @@ function buildPanel(ac, data, idx) {
           <option value="mantenimiento" ${data.status==='mantenimiento'?'selected':''}>🔧 Mantenimiento</option>
           <option value="aog" ${data.status==='aog'?'selected':''}>🔴 GROUNDED</option>
         </select>
-        <!-- Aeronave info grid -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:3px">N.º DE SERIE</div>
@@ -378,7 +385,6 @@ function buildPanel(ac, data, idx) {
           </div>
         </div>
         ${isMultimotor(ac.reg) ? componentInfoMultimotor('motor', data, idx) : `
-        <!-- Motor info -->
         <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--accent2);letter-spacing:2px;margin-bottom:6px">${componentIcon('motor')} MOTOR</div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -398,7 +404,6 @@ function buildPanel(ac, data, idx) {
         </div>
         `}
         ${isMultimotor(ac.reg) ? componentInfoMultimotor('helice', data, idx) : `
-        <!-- Helice info -->
         <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--accent2);letter-spacing:2px;margin-bottom:6px">${componentIcon('helice')} HÉLICE</div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -425,13 +430,12 @@ function buildPanel(ac, data, idx) {
       <div class="card">
         <div class="card-title">✈ Inspección de 50 / 100 horas</div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        ${isDualTAC(ac.reg)?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px">${DUAL_TAC_METERS.map(m=>`<div><div class="field-label" style="margin-bottom:5px">${m.label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-${m.key}-anterior-${idx}" aria-label="${m.label} anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.previous]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx})"></label><label class="field-label">TAC actual<input type="number" class="field-input" id="tac-${m.key}-actual-${idx}" aria-label="${m.label} actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.current]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx})"></label></div></div>`).join('')}</div>`:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
           <label class="field-label">TAC actual<input type="number" class="field-input" id="tac-actual-${idx}" aria-label="TAC actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
-        </div>
+        </div>`}
         <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">Ingresa ambos TAC para calcular las horas.</div>
         <div class="inspection-controls"><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,50)">✓ Resuelto · 50 horas</button><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,100)">✓ Resuelto · 100 horas</button></div>
-        <!-- Daily hours input -->
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -457,8 +461,9 @@ function buildPanel(ac, data, idx) {
           <div class="progress-bar">
             <div id="pb-100-${idx}" class="progress-fill ${inspectionFill(data.horas_acum_100, 100)}" style="width:${Math.min(100,parseFloat(data.horas_acum_100||0)/100*100)}%"></div>
           </div>
+          ${canResetInspectionBar()?`<div class="inspection-controls" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px"><button type="button" class="record-btn" onclick="resetInspectionBar(${idx},50)" aria-label="Reiniciar barra de inspección de 50 horas">Reiniciar barra 50 h</button><button type="button" class="record-btn" onclick="resetInspectionBar(${idx},100)" aria-label="Reiniciar barra de inspección de 100 horas">Reiniciar barra 100 h</button></div>`:''}
+          <div id="inspection-reset-log-${idx}" class="inspection-reset-history"></div>
         </div>
-        <!-- Hidden fields for compatibility -->
         <input type="hidden" id="horas_totales-${idx}" value="${data.horas_acum_50||''}">
         <input type="hidden" id="horas_limite-${idx}" value="${data.horas_acum_100||''}">
         <span id="fecha50-${idx}" style="display:none"></span>
@@ -467,15 +472,11 @@ function buildPanel(ac, data, idx) {
         <div id="pb-horas-${idx}" style="display:none"></div>
       </div>
 
-      <!-- Bitacora de horas -->
-      <div class="card">
+      <div class="card" data-flight-log="${isDualTAC(ac.reg)?'dual':'standard'}">
         <div class="card-title">📋 Bitácora de Horas de Vuelo</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 80px 80px 30px;gap:6px;padding:4px 0;border-bottom:1px solid var(--dim)">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">FECHA</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HORA</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HV DÍA</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ACUM.</span>
-          <span></span>
+        <div class="flight-log-help"${isDualTAC(ac.reg)?'':' hidden'}>Cada registro muestra ambos TAC y el Hobbs medido; el tiempo contable de Hobbs y las inspecciones usa el TAC con mayor diferencia.</div>
+        <div class="flight-log-header"${isDualTAC(ac.reg)?' hidden':''} style="display:grid;grid-template-columns:1fr 1fr 65px 65px 1.6fr;gap:6px;padding:4px 0;border-bottom:1px solid var(--dim)">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">FECHA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HORA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">HV DÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ACUM.</span><span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">${isDualTAC(ac.reg)?'LECTURAS · TAC / HOBBS':' '}</span>
         </div>
         <div id="bitacora-horas-${idx}">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>
@@ -484,7 +485,6 @@ function buildPanel(ac, data, idx) {
 
       <div class="card">
         <div class="card-title">⚙️ Vencimientos en Horas</div>
-        <!-- Daily hours input for motor+helices -->
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -501,14 +501,12 @@ function buildPanel(ac, data, idx) {
             ${vencItemHtml(idx, 'Hélice derecha', 'helice2', 'helice2-manual', data.helice2_ciclos, data.helice2_limite, data.fecha_helice2, data, true)}
           </div>` : ''}
         </div>
-        <!-- Hidden fields for compatibility -->
         <input type="hidden" id="ciclos_totales-${idx}" value="${data.ciclos_totales||''}">
         <input type="hidden" id="ciclos_limite-${idx}" value="${data.ciclos_limite||''}">
         ${isMultimotor(ac.reg) ? `
         <input type="hidden" id="helice1_ciclos-${idx}" value="${data.helice1_ciclos||''}">
         <input type="hidden" id="helice2_ciclos-${idx}" value="${data.helice2_ciclos||''}">` : ''}
         <div style="display:none"><div id="pb-ciclos-${idx}"></div><span id="pct-ciclos-${idx}"></span></div>
-        <!-- Ultimo registro -->
         <div id="ultimo-venc-${idx}" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;display:${data.ultimo_venc_hv?'flex':'none'};justify-content:space-between;align-items:center">
           <div>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">ÚLTIMO REGISTRO: </span>
@@ -758,6 +756,79 @@ function estadoPiezaBadge(estado) {
 function isDirectorView() {
   return !window.ROLE_VIEW || window.ROLE_VIEW.role === 'Director';
 }
+function canResetInspectionBar(){return !window.ROLE_VIEW&&typeof window.isDirectorUser==='function'&&window.isDirectorUser();}
+function requestInspectionResetReason(reg,limitHours){
+ return new Promise(resolve=>{
+  const dialog=document.createElement('dialog');dialog.className='record-dialog';
+  dialog.innerHTML='<form><h3>Reiniciar barra de inspección de '+limitHours+' horas · '+escapeRecord(reg)+'</h3><p>El acumulado se pondrá en cero y el motivo quedará registrado en el historial.</p><label class="full-field">Motivo obligatorio<textarea name="reason" maxlength="500" rows="4" required placeholder="Explica por qué se reinicia esta barra"></textarea></label><div class="record-error" role="alert"></div><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button type="submit" class="save-btn">Reiniciar barra</button></div></form>';
+  const form=dialog.querySelector('form'),input=form.elements.reason;let settled=false;
+  const finish=value=>{if(settled)return;settled=true;resolve(value);};
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  input.oninput=()=>input.setCustomValidity('');
+  form.onsubmit=event=>{event.preventDefault();const reason=input.value.trim();if(!reason){input.setCustomValidity('El motivo es obligatorio.');input.reportValidity();return;}finish(reason);dialog.close();};
+  dialog.addEventListener('close',()=>{finish('');dialog.remove();});
+  document.body.append(dialog);dialog.showModal();input.focus();
+ });
+}
+async function resetInspectionBar(idx,limitHours){
+  limitHours=Number(limitHours);
+  if(!canResetInspectionBar()||![50,100].includes(limitHours)||!fleet[idx])return false;
+  const reg=fleet[idx].reg,reason=await requestInspectionResetReason(reg,limitHours);if(!reason)return false;
+  if(aircraftDirty.has(idx)&&!await savePanel(idx))return false;
+  if(!canResetInspectionBar())return false;
+  if(aircraftDirty.size){alert('Guarda primero los cambios pendientes en las demás aeronaves.');return false;}
+  if(window.hasDraftChanges?.()){alert('Guarda o descarta los cambios pendientes antes de reiniciar una barra.');return false;}
+  const d=state[idx],key='horas_acum_'+limitHours,current=Number(d[key]||0);
+  if(!Number.isFinite(current)||current<0){alert('El acumulado actual no es válido. Revisa las horas antes de reiniciar.');return false;}
+  if(typeof window.cloudResetInspectionBar!=='function'){alert('No está disponible el guardado seguro del reinicio. Actualiza la aplicación e inténtalo de nuevo.');return false;}
+  const previousReason=window.ChangeHistory?.getReason?.()||'';
+  const requestId=globalThis.crypto?.randomUUID?.()||'reset-'+Date.now()+'-'+Math.random().toString(16).slice(2);
+  window.ChangeHistory?.setReason?.(reason.trim());
+  let result;
+  try{result=await window.cloudResetInspectionBar({reg,limitHours,expectedBefore:current.toFixed(2),id:requestId,reason:reason.trim()});}
+  catch(error){window.ChangeHistory?.setReason?.(previousReason);alert(error.message||'No se pudo guardar el reinicio.');return false;}
+  if(result.stale){
+    window.ChangeHistory?.setReason?.(previousReason);
+    state[idx]=structuredClone(result.aircraft);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();
+    alert('Las horas cambiaron desde que abriste el panel. Actualicé los datos; revisa el acumulado y vuelve a reiniciar si aún corresponde.');
+    if(result.rebased)location.reload();
+    return false;
+  }
+  if(!result.ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
+  if(result.noChange)window.ChangeHistory?.setReason?.(previousReason);
+  if(result.alreadyApplied)window.ChangeHistory?.consume?.(reason.trim());
+  state[idx]=structuredClone(result.aircraft);aircraftDirty.delete(idx);refreshPanel(idx);updateSummary();buildResumen();updateUndoButtons();
+  if(result.rebased)location.reload();
+  return true;
+}
+function requestInspectionDeleteReason(reg,record){
+ return new Promise(resolve=>{
+  const dialog=document.createElement('dialog');dialog.className='record-dialog';
+  dialog.innerHTML='<form><h3>Eliminar inspección · '+escapeRecord(reg)+'</h3><p>Registro del '+escapeRecord(record.fecha)+' · '+escapeRecord(record.tipo)+' horas. El cambio se guardará en el historial.</p><label class="full-field">Motivo obligatorio<textarea name="reason" maxlength=500 rows=4 required placeholder="Explica por qué se creó esta inspección por error"></textarea></label><div class="record-error" role="alert"></div><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button type="submit" class="save-btn">Eliminar inspección</button></div></form>';
+  const form=dialog.querySelector('form'),input=form.elements.reason;let settled=false;
+  const finish=value=>{if(settled)return;settled=true;resolve(value);};
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();input.oninput=()=>input.setCustomValidity('');
+  form.onsubmit=event=>{event.preventDefault();const reason=input.value.trim();if(!reason){input.setCustomValidity('El motivo es obligatorio.');input.reportValidity();return;}finish(reason);dialog.close();};
+  dialog.addEventListener('close',()=>{finish('');dialog.remove();});document.body.append(dialog);dialog.showModal();input.focus();
+ });
+}
+function inspectionResetOffsets(d,limitHours){return window.HPInspectionHistory.resetEvents(d,limitHours).map(event=>event.offset);}
+function recomputeInspectionAccumulators(d){window.HPInspectionHistory.rebuild(d);}
+async function deleteInspectionRecord(idx,ri){
+ if(!canResetInspectionBar()||!fleet[idx])return false;
+ const initial=state[idx]?.bitacora_inspecciones?.[ri];if(!initial)return false;
+ const reason=await requestInspectionDeleteReason(fleet[idx].reg,initial);if(!reason)return false;
+ if(aircraftDirty.has(idx)&&!await savePanel(idx))return false;
+ if(!canResetInspectionBar())return false;
+ const d=structuredClone(state[idx]),records=Array.isArray(d.bitacora_inspecciones)?d.bitacora_inspecciones:[],record=records[ri],logs=Array.isArray(d.bitacora_horas)?d.bitacora_horas:[];
+ if(!record||![50,100].includes(Number(record.tipo))||!Number.isInteger(record.hour_offset)||record.hour_offset<0||record.hour_offset>logs.length){alert('No se puede recalcular esta inspección porque falta su posición en la bitácora.');return false;}
+ const previousReason=window.ChangeHistory?.getReason?.()||'';records.splice(ri,1);d.bitacora_inspecciones=records;d.proxima_inspeccion=records.length?records[records.length-1].proxima:'';
+ try{window.HPInspectionHistory.rebuild(d,{anchors:[{record,index:ri}]});}catch(error){alert(error.message||'No se pudo reconstruir el historial. No se eliminó la inspección.');return false;}
+ d.bitacora_horas=logs;
+ window.ChangeHistory?.setReason?.(reason.trim());
+ const ok=await saveData(fleet[idx].reg,d);if(!ok){window.ChangeHistory?.setReason?.(previousReason);return false;}
+ state[idx]=d;aircraftDirty.delete(idx);refreshPanel(idx);updateTAC(idx);updateSummary();buildResumen();updateUndoButtons();return true;
+}
 
 function diasEntreFechas(inicio, fin) {
   const a = dayNumber(inicio), b = dayNumber(fin);
@@ -788,7 +859,7 @@ function renderMaintList(idx, items) {
     mainRow.style = `display:grid;grid-template-columns:1fr 150px 60px auto auto${director ? ' auto' : ''};gap:8px;align-items:center;margin-bottom:6px`;
     mainRow.innerHTML = `
       <input type="text" class="maint-input" placeholder="Tarea de mantenimiento" value="${m.nombre||''}" onchange="updateMaint(${idx},${mi},'nombre',this.value)">
-      <input type="date" class="maint-input" aria-label="Fecha de inicio de la tarea" title="Fecha de inicio" value="${m.fecha||''}" onchange="updateMaint(${idx},${mi},'fecha',this.value);renderMaintList(${idx},state[${idx}].mantenimiento)">
+      <input type="date" class="maint-input" aria-label="Fecha de inicio de la tarea" title="Fecha de inicio" value="${isoFecha(m.fecha)||''}" onchange="updateMaint(${idx},${mi},'fecha',this.value);renderMaintList(${idx},state[${idx}].mantenimiento)">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);font-weight:700;text-align:center">${dias !== null ? dias + 'd' : '—'}</span>
       <button onclick="togglePiezas(${idx},${mi})" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:transparent;border:1px solid var(--border);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--muted)">🔩 Piezas</button>
       <button onclick="resolverTarea(${idx},${mi})" style="font-family:'IBM Plex Mono',monospace;font-size:8px;background:rgba(0,119,68,0.1);border:1px solid var(--ok);border-radius:8px;padding:2px 7px;cursor:pointer;color:var(--ok)">✓ Resuelto</button>
@@ -1005,14 +1076,33 @@ function renderSeguimiento(idx) {
 }
 
 async function resolverTarea(idx, mi) {
-  const previous = structuredClone(state[idx]);
-  const today = fechaVista(panamaISO());
+  const before=structuredClone(state[idx]);
+  const reg=fleet[idx].reg;
+  const today = panamaISO();
   state[idx].mantenimiento[mi].resuelto = true;
   state[idx].mantenimiento[mi].fecha_resuelto = today;
-  const saved = await savePanel(idx);
-  if (!saved) state[idx] = previous;
+  const draftKey='aircraft:'+reg;
+  let saved=false;
+  try{
+    window.DraftRecovery?.capture(draftKey);
+    saved=await saveData(reg,structuredClone(state[idx]));
+    if(saved)await window.DraftRecovery?.clear(draftKey);
+  }catch(e){showCloudError(e);}
+  if(!saved){
+    state[idx]=before;
+    refreshPanel(idx);
+    const msg=document.getElementById('save-msg-'+idx);
+    if(msg){msg.textContent='✗ Error al guardar';msg.style.color='var(--danger)';msg.style.opacity='1';}
+    return false;
+  }
+  aircraftDirty.delete(idx);
   renderMaintList(idx, state[idx].mantenimiento);
   renderBitacora(idx, state[idx].mantenimiento);
+  const msg=document.getElementById('save-msg-'+idx);
+  if(msg){msg.textContent='✓ Guardado';msg.style.color='var(--ok)';msg.style.opacity='1';setTimeout(()=>msg.style.opacity='0',2500);}
+  updateUndoButtons();
+  updateSummary();
+  return true;
 }
 
 function renderBitacora(idx, items) {
@@ -1035,10 +1125,10 @@ function renderBitacora(idx, items) {
     const director = isDirectorView();
     const dates = director ? `
       <label style="display:flex;flex-direction:column;gap:2px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">CREADO
-        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del mantenimiento" value="${m.fecha||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha',this.value)" style="font-size:10px;min-width:0;width:118px">
+        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de creación del mantenimiento" value="${isoFecha(m.fecha)||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha',this.value)" style="font-size:10px;min-width:0;width:118px">
       </label>
       <label style="display:flex;flex-direction:column;gap:2px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--muted)">RESUELTO
-        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de cierre del mantenimiento" value="${m.fecha_resuelto||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha_resuelto',this.value)" style="font-size:10px;min-width:0;width:118px">
+        <input type="date" data-preserve-empty class="maint-input" aria-label="Fecha de cierre del mantenimiento" value="${isoFecha(m.fecha_resuelto)||''}" onchange="updateMaintenanceLogDate(${idx},${origIdx},'fecha_resuelto',this.value)" style="font-size:10px;min-width:0;width:118px">
       </label>` : `
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">Inicio: ${fechaVista(m.fecha)||'—'}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ok);font-weight:700">✓ ${fechaVista(m.fecha_resuelto)||'—'}</span>`;
@@ -1156,7 +1246,7 @@ function updateDoc(idx, di, key, val) {
 }
 
 function addMaintRow(idx) {
-  state[idx].mantenimiento.push({ nombre: '', fecha: '', resuelto: false, piezas: [] });
+  state[idx].mantenimiento.push({ nombre: '', fecha: panamaISO(), resuelto: false, piezas: [] });
   renderMaintList(idx, state[idx].mantenimiento);
 }
 function addDocRow(idx) {
@@ -1184,20 +1274,42 @@ function renderBitacoraHoras(idx, items) {
   if (!container) return;
   const registros = Array.isArray(items) ? items : [];
   if (!registros.length) {
+    container.classList.remove('flight-log-list-dual');
     container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
     return;
   }
+  if (isDualTAC(fleet[idx].reg)) {
+    const meterValue=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';
+    container.classList.add('flight-log-list-dual');
+    container.innerHTML=[...registros].reverse().map((r,ri)=>{
+      const origIdx=registros.length-1-ri,isLast=origIdx===registros.length-1;
+      const meters=hasDualTACLog(r)?DUAL_TAC_METERS.map(m=>{
+        const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';
+        if(m.key==='hobbs'){const measured=r.hobbsMeasuredHours100??r.hobbsHours100,accounted=r.hobbsMeasuredHours100!==undefined?r.hobbsHours100:Math.round(Number(r.hv||0)*100),source=r.hobbsAccountingSource==='left'?'motor izquierdo':r.hobbsAccountingSource==='right'?'motor derecho':Number(r.tacLeftHours100)>=Number(r.tacRightHours100)?'motor izquierdo':'motor derecho';return '<div class="flight-log-meter"><strong class="flight-log-meter-name">Hobbs</strong><div><small class="flight-log-reading-label">Anterior</small><b class="flight-log-reading-value">'+meterValue(r.hobbsPrevious100)+'</b></div><div><small class="flight-log-reading-label">Actual</small><b class="flight-log-reading-value">'+meterValue(r.hobbsCurrent100)+'</b></div><div><small class="flight-log-reading-label">Hobbs medido</small><b class="flight-log-reading-value">'+meterValue(measured)+' h</b></div><div><small class="flight-log-reading-label">Contable · TAC '+source+'</small><b class="flight-log-reading-value">'+meterValue(accounted)+' h</b></div></div>';}
+        return '<div class="flight-log-meter"><strong class="flight-log-meter-name">'+escapeRecord(m.label)+'</strong><div><small class="flight-log-reading-label">Anterior</small><b class="flight-log-reading-value">'+meterValue(r[stem+'Previous100'])+'</b></div><div><small class="flight-log-reading-label">Actual</small><b class="flight-log-reading-value">'+meterValue(r[stem+'Current100'])+'</b></div><div><small class="flight-log-reading-label">Horas</small><b class="flight-log-reading-value">'+meterValue(r[stem+'Hours100'])+' h</b></div></div>';
+      }).join(''):'<div class="flight-log-legacy">Registro histórico con TAC único</div>';
+      return '<article class="flight-log-entry-dual'+(isLast?' flight-log-entry-latest':'')+'"><div class="flight-log-summary">'+[['Fecha',r.fecha||'—'],['Hora',r.hora||'—'],['HV día',parseFloat(r.hv||0).toFixed(2)+' h'],['Acumulado',parseFloat(r.acum||0).toFixed(2)+' h']].map(([label,value])=>'<div><small class="flight-log-summary-label">'+label+'</small><b class="flight-log-summary-value">'+escapeRecord(value)+'</b></div>').join('')+'</div><div class="flight-log-meters">'+meters+'</div>'+(isLast?'<div class="flight-log-delete"><button type="button" onclick="eliminarHoraBitacora('+idx+','+origIdx+')" aria-label="Eliminar último registro del '+escapeRecord(r.fecha||'')+'" title="Eliminar último registro">Eliminar último registro</button></div>':'')+'</article>';
+    }).join('');
+    return;
+  }
+  container.classList.remove('flight-log-list-dual');
   // Show most recent first
   const lastIdx = registros.length - 1;
+  const meterValue=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';
+  const meterDetails=r=>isDualTAC(fleet[idx].reg)?hasDualTACLog(r)?DUAL_TAC_METERS.map(m=>{
+    const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';
+    const p=r[stem+'Previous100'],c=r[stem+'Current100'],h=r[stem+'Hours100'];
+    return '<span style="display:inline-block;margin-right:8px">'+m.label+': '+meterValue(p)+' → '+meterValue(c)+' ('+meterValue(h)+' h)</span>';
+  }).join(''):'Registro histórico con TAC único':'—';
   container.innerHTML = [...registros].reverse().map((r, ri) => {
     const origIdx = registros.length - 1 - ri;
     const isLast = origIdx === lastIdx;
-    return `<div style="display:grid;grid-template-columns:1fr 1fr 80px 80px 30px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)${isLast?';background:rgba(0,102,204,0.04)':''}">
+    return `<div style="display:grid;grid-template-columns:1fr 1fr 65px 65px 1.6fr;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)${isLast?';background:rgba(0,102,204,0.04)':''}">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text)">${r.fecha||'—'}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted)">${r.hora||'—'}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--accent);font-weight:700">${parseFloat(r.hv||0).toFixed(2)}</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text)">${parseFloat(r.acum||0).toFixed(2)}</span>
-      ${isLast ? `<button onclick="eliminarHoraBitacora(${idx},${origIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0" title="Eliminar último registro">✕</button>` : '<span></span>'}
+      <span style="font-size:8px;line-height:1.6;color:var(--muted)">${meterDetails(r)}${isLast ? `<button onclick="eliminarHoraBitacora(${idx},${origIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0" title="Eliminar último registro">✕</button>` : ''}</span>
     </div>`;
   }).join('');
 }
@@ -1297,9 +1409,11 @@ function revertirVenc(idx) {
   const hv = parseFloat(d.ultimo_venc_hv);
   const isHP880 = isMultimotor(fleet[idx].reg);
   const vencTipos = isHP880 ? ['motor','helices','helice1','helice2'] : ['motor','helices'];
+  const lastComponents=new Map((d.bitacora_vencimientos?.at(-1)?.componentes||[]).map(c=>[c.key,Number(c.ingresadas||0)]));
   vencTipos.forEach(tipo => {
     const map = VENC_FIELD_MAP[tipo];
-    d[map.dataField] = Math.max(0, parseFloat(d[map.dataField]||0) - hv).toFixed(2);
+    const applied=isDualTAC(fleet[idx].reg)&&lastComponents.has(tipo)?lastComponents.get(tipo):hv;
+    d[map.dataField] = Math.max(0, parseFloat(d[map.dataField]||0) - applied).toFixed(2);
     const manInp = document.getElementById((tipo==='motor'?'motor-manual':tipo==='helices'?'helices-manual':tipo+'-manual') + '-' + idx);
     if (manInp) manInp.value = d[map.dataField] || '';
     const limInp = document.getElementById('limite-' + tipo + '-' + idx);
@@ -1346,9 +1460,29 @@ function tacDifference(previous,current){
   if(!Number.isFinite(a)||!Number.isFinite(b)||b<a)return NaN;
   return (b-a)/100;
 }
+function dualTACInputValues(idx){
+ const readings={};let any=false,complete=true;
+ for(const meter of DUAL_TAC_METERS){
+  const previous=document.getElementById('tac-'+meter.key+'-anterior-'+idx),current=document.getElementById('tac-'+meter.key+'-actual-'+idx);
+  if(!previous||!current)continue;
+  const delta=tacDifference(previous.value,current.value);if(current.value!==''||previous.value!=='')any=true;
+  current.setCustomValidity(current.value!==''&&Number.isNaN(delta)?meter.label+': el TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.':'');
+  if(current.value===''||previous.value===''||!Number.isFinite(delta))complete=false;
+  readings[meter.key]={previous:previous.value,current:current.value,delta};
+ }
+ return {readings,any,complete};
+}
 function updateTAC(idx){
+ const reg=fleet[idx]?.reg,msg=document.getElementById('tac-msg-'+idx);
+ if(isDualTAC(reg)){
+  const values=dualTACInputValues(idx),left=values.readings.left?.delta,right=values.readings.right?.delta,hobbs=values.readings.hobbs?.delta,winner=left>=right?'left':'right';
+  const delta=values.complete?Math.max(left,right):null;
+  for(const id of ['horas_diarias-','horas-venc-dia-']){const el=document.getElementById(id+idx);if(!el)continue;if(values.any&&!el.readOnly)el.dataset.manualHours=el.value;el.value=values.any&&Number.isFinite(delta)?delta.toFixed(2):'';el.readOnly=true;}
+  msg.textContent=values.any?(values.complete?'TAC izquierdo: '+left.toFixed(2)+' h · TAC derecho: '+right.toFixed(2)+' h · Hobbs medido: '+hobbs.toFixed(2)+' h · Hobbs contable e inspecciones: '+delta.toFixed(2)+' h (TAC '+(winner==='left'?'motor izquierdo':'motor derecho')+').':'Completa TAC anterior y actual de los dos motores y Hobbs.'):'Ingresa anterior y actual de los dos motores y Hobbs para calcular las horas.';
+  msg.style.color=values.any&&!values.complete?'var(--danger)':'var(--muted)';return;
+ }
   const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);
-  const delta=tacDifference(previous.value,current.value),msg=document.getElementById('tac-msg-'+idx);
+  const delta=tacDifference(previous.value,current.value);
   current.setCustomValidity(Number.isNaN(delta)?'El TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.':'');
   const hasTAC=current.value!=='';
   for(const id of ['horas_diarias-','horas-venc-dia-']){
@@ -1376,15 +1510,22 @@ function inspectionTACRows(records){
       hours:prior!==null&&Number.isFinite(prior)&&Number.isFinite(current)?((current-prior)/100).toFixed(2):null};
   }).reverse();
 }
+function renderInspectionResetHistory(idx){
+ const el=document.getElementById('inspection-reset-log-'+idx);if(!el)return;
+ const records=Array.isArray(state[idx].bitacora_reinicios_inspeccion)?state[idx].bitacora_reinicios_inspeccion:[];
+ el.innerHTML=records.length?'<details><summary>Reinicios registrados ('+records.length+')</summary>'+records.slice().reverse().map(r=>'<div class="record-audit"><b>'+escapeRecord(r.fecha||fechaVista(r.createdAt))+' · '+escapeRecord(r.hora||'')+' · '+escapeRecord(r.limitHours)+' horas</b><div>'+escapeRecord(r.before)+' → '+escapeRecord(r.after)+' HV</div><div>Motivo: '+escapeRecord(r.reason)+'</div></div>').join('')+'</details>':'';
+}
 function renderTACLogs(idx){
- const d=state[idx],tac=document.getElementById('tac-log-'+idx),insp=document.getElementById('inspection-log-'+idx);
+ const d=state[idx],tac=document.getElementById('tac-log-'+idx),insp=document.getElementById('inspection-log-'+idx);renderInspectionResetHistory(idx);
  const number=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?Number(v).toFixed(2):'—';
  const dateCell=(kind,r,i)=>'<td><span>'+escapeRecord(fechaVista(r.fecha))+'</span><small>'+escapeRecord(r.hora||'')+'</small>'+
    (kind==='inspection'?'<small>Insp. '+escapeRecord(r.tipo)+' h · Próxima '+escapeRecord(r.proxima)+' h</small>':'')+
-   '<button type="button" class="log-row-edit" onclick="openRecordEditor(\''+kind+'\','+idx+','+i+')" aria-label="Modificar registro del '+escapeRecord(fechaVista(r.fecha))+'">Editar</button></td>';
- const audit=r=>(r.modificaciones||[]).length?'<tr class="log-audit-row"><td colspan="4">'+renderAudit(r.modificaciones)+'</td></tr>':'';
+   '<button type="button" class="log-row-edit" onclick="openRecordEditor(\''+kind+'\','+idx+','+i+')" aria-label="Modificar registro del '+escapeRecord(fechaVista(r.fecha))+'">Editar</button>'+(kind==='inspection'&&canResetInspectionBar()?'<button type="button" class="log-row-edit log-row-delete" style="color:var(--danger);border-color:var(--danger)" onclick="deleteInspectionRecord('+idx+','+i+')" aria-label="Eliminar inspección del '+escapeRecord(fechaVista(r.fecha))+'">Eliminar</button>':'')+'</td>';
+ const dual=isDualTAC(fleet[idx].reg),audit=(r,span=4)=>(r.modificaciones||[]).length?'<tr class="log-audit-row"><td colspan="'+span+'">'+renderAudit(r.modificaciones)+'</td></tr>':'';
  const table=(headers,rows)=>'<table class="aircraft-log-table"><thead><tr>'+headers.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>';
- if(tac)tac.innerHTML=(d.bitacora_tac||[]).length?table(['Fecha','TAC Anterior','TAC Actual','Horas'],
+ if(tac)tac.innerHTML=(d.bitacora_tac||[]).length?dual?table(['Fecha','TAC motor izquierdo · anterior → actual · horas','TAC motor derecho · anterior → actual · horas','Hobbs · lecturas · medido / contable'],
+   d.bitacora_tac.map((r,i)=>{const val=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';const meter=(stem)=>val(r[stem+'Previous100'])+' → '+val(r[stem+'Current100'])+' · '+val(r[stem+'Hours100'])+' h';const measured=r.hobbsMeasuredHours100??r.hobbsHours100,accounted=r.hobbsMeasuredHours100!==undefined?r.hobbsHours100:Number(r.hv||0)*100,source=r.hobbsAccountingSource==='left'?'motor izquierdo':r.hobbsAccountingSource==='right'?'motor derecho':Number(r.tacLeftHours100)>=Number(r.tacRightHours100)?'motor izquierdo':'motor derecho',hobbs=val(r.hobbsPrevious100)+' → '+val(r.hobbsCurrent100)+' · medido '+val(measured)+' h · contable '+val(accounted)+' h (TAC '+source+')';return '<tr>'+dateCell('tac',r,i)+(hasDualTACLog(r)?'<td>'+meter('tacLeft')+'</td><td>'+meter('tacRight')+'</td><td>'+hobbs+'</td>':'<td colspan="3">Registro histórico con TAC único: '+escapeRecord(number(r.anterior))+' → '+escapeRecord(number(r.actual))+' · '+escapeRecord(number(r.hv))+' h</td>')+'</tr>'+audit(r,4);}).reverse().join('')
+ ):table(['Fecha','TAC Anterior','TAC Actual','Horas'],
    d.bitacora_tac.map((r,i)=>'<tr>'+dateCell('tac',r,i)+'<td>'+escapeRecord(number(r.anterior))+'</td><td>'+escapeRecord(number(r.actual))+'</td><td>'+escapeRecord(number(r.hv))+'</td></tr>'+audit(r)).reverse().join('')
  ):'<div class="record-empty">Sin tacómetros registrados</div>';
  if(insp)insp.innerHTML=(d.bitacora_inspecciones||[]).length?table(['Fecha','TAC Insp. Anterior','TAC Actual','Horas'],
@@ -1396,8 +1537,9 @@ async function openRecordEditor(kind,idx,ri=-1,tipo=50){
  if(aircraftDirty.has(idx)&&!await savePanel(idx))return;
  const d=state[idx],newInspection=kind==='inspection'&&ri===-1;
  const r=newInspection?{fecha:getFechaPanama(),tipo,tac:d.tac_anterior||'',proxima:tipo===50?100:50}:kind==='tac'?d.bitacora_tac[ri]:d.bitacora_inspecciones[ri];
+ const logValue=v=>v!==undefined&&v!==null&&v!==''?(Number(v)/100).toFixed(2):'',dualTacFields=isDualTAC(fleet[idx].reg)&&hasDualTACLog(r)?DUAL_TAC_METERS.map(m=>{const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',meterLabel=m.key==='hobbs'?'Hobbs':m.label;return '<label>'+meterLabel+' · anterior<input name="'+m.key+'Anterior" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="'+escapeRecord(logValue(r[stem+'Previous100']))+'" required></label><label>'+meterLabel+' · actual<input name="'+m.key+'Actual" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="'+escapeRecord(logValue(r[stem+'Current100']))+'" required></label>';}).join(''):'';
  const dialog=document.createElement('dialog');dialog.className='record-dialog';
- dialog.innerHTML=`<form><h3>${newInspection?'Registrar inspección resuelta':kind==='tac'?'Modificar registro de TAC':'Modificar inspección'}</h3><div class="record-form"><label>Fecha<input name="fecha" value="${escapeRecord(r.fecha)}" placeholder="DD/MM/AAAA" required></label>${kind==='tac'?`<label>TAC anterior<input name="anterior" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.anterior)}" required></label><label>TAC actual<input name="actual" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.actual)}" required></label>`:`<label>Inspección realizada<select name="tipo"><option value="50" ${Number(r.tipo)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.tipo)===100?'selected':''}>100 horas</option></select></label><label>Tacómetro<input name="tac" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.tac)}" required></label><label>Próxima inspección<select name="proxima"><option value="50" ${Number(r.proxima)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.proxima)===100?'selected':''}>100 horas</option></select></label>`}${!newInspection?'<label class="full-field">Motivo de la modificación<textarea name="razon" required placeholder="Explica por qué corriges este registro"></textarea></label>':''}</div><div class="record-error" role="alert"></div><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button class="save-btn" type="submit">Guardar registro</button></div></form>`;
+ dialog.innerHTML=`<form><h3>${newInspection?'Registrar inspección resuelta':kind==='tac'?'Modificar registro de TAC':'Modificar inspección'}</h3><div class="record-form"><label>Fecha<input name="fecha" value="${escapeRecord(r.fecha)}" placeholder="DD/MM/AAAA" required></label>${kind==='tac'?(isDualTAC(fleet[idx].reg)&&hasDualTACLog(r)?dualTacFields:`<label>TAC anterior<input name="anterior" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.anterior)}" required></label><label>TAC actual<input name="actual" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.actual)}" required></label>`):`<label>Inspección realizada<select name="tipo"><option value="50" ${Number(r.tipo)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.tipo)===100?'selected':''}>100 horas</option></select></label><label>Tacómetro<input name="tac" type="number" min="0" max="99999.99" step="0.01" inputmode="decimal" value="${escapeRecord(r.tac)}" required></label><label>Próxima inspección<select name="proxima"><option value="50" ${Number(r.proxima)===50?'selected':''}>50 horas</option><option value="100" ${Number(r.proxima)===100?'selected':''}>100 horas</option></select></label>`}${!newInspection?'<label class="full-field">Motivo de la modificación<textarea name="razon" required placeholder="Explica por qué corriges este registro"></textarea></label>':''}</div><div class="record-error" role="alert"></div><div class="record-actions"><button type="button" class="record-btn" data-cancel>Cancelar</button><button class="save-btn" type="submit">Guardar registro</button></div></form>`;
  document.body.appendChild(dialog);dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());
  dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const f=Object.fromEntries(new FormData(event.target));const error=await applyRecordChange(kind,idx,ri,f);if(error){dialog.querySelector('.record-error').textContent=error;return;}dialog.close();};dialog.showModal();
 }
@@ -1405,17 +1547,21 @@ function adjustRecordedHours(d,r,delta){
  if(!delta)return;
  let hi=Number.isInteger(r.hour_index)?r.hour_index:(d.bitacora_horas||[]).findIndex(h=>h.tac_id===r.id || h.fecha===r.fecha&&h.hora===r.hora&&Number(h.hv)===Number(r.hv));
  if(hi<0)throw Error('No se encontró el registro de horas vinculado. No se aplicó la modificación.');
- const inspections=d.bitacora_inspecciones||[];
- const last50=[...inspections].reverse().find(x=>x.tipo===50||x.tipo===100),last100=[...inspections].reverse().find(x=>x.tipo===100);
+ const reset50=inspectionResetOffsets(d,50),reset100=inspectionResetOffsets(d,100);
+ const last50=reset50.length?Math.max(...reset50):null,last100=reset100.length?Math.max(...reset100):null;
  const add=key=>{const n=Number(d[key]||0)+delta;if(n<0)throw Error('La corrección produciría horas negativas. Revisa las lecturas.');d[key]=n.toFixed(2);};
- if(!last50||hi>=last50.hour_offset)add('horas_acum_50');
- if(!last100||hi>=last100.hour_offset)add('horas_acum_100');
+ if(last50===null||hi>=last50)add('horas_acum_50');
+ if(last100===null||hi>=last100)add('horas_acum_100');
  for(const key of ['ciclos_totales','ciclos_limite'])add(key);
  if(isMultimotor(fleetRecordReg(d)))for(const key of ['helice1_ciclos','helice2_ciclos'])add(key);
- d.bitacora_horas[hi].hv=(Number(d.bitacora_horas[hi].hv)+delta).toFixed(2);
- const nextReset=inspections.find(x=>x.tipo===100&&x.hour_offset>hi)?.hour_offset??Infinity;
+ window.HPInspectionHistory.shiftInspectionSnapshots(d,hi,delta);
+ const nextReset=reset100.filter(at=>at>hi).reduce((nearest,at)=>Math.min(nearest,at),Infinity);
  for(let i=hi;i<d.bitacora_horas.length&&i<nextReset;i++)d.bitacora_horas[i].acum=(Number(d.bitacora_horas[i].acum||0)+delta).toFixed(2);
- d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
+ d.bitacora_horas[hi].hv=(Number(d.bitacora_horas[hi].hv)+delta).toFixed(2);
+ recomputeInspectionAccumulators(d);
+}
+function adjustDualAircraftComponents(d,leftChange,rightChange){
+ for(const [key,change]of [['ciclos_totales',leftChange],['helice1_ciclos',leftChange],['ciclos_limite',rightChange],['helice2_ciclos',rightChange]]){const value=Number(d[key]||0)+change;if(value<0)throw Error('La corrección produciría horas negativas. Revisa las lecturas.');d[key]=value.toFixed(2);}
 }
 function fleetRecordReg(d){return d.audit_aircraft_reg||'';}
 async function applyRecordChange(kind,idx,ri,f){
@@ -1425,13 +1571,24 @@ async function applyRecordChange(kind,idx,ri,f){
  const original=structuredClone(state[idx]),d=structuredClone(state[idx]);d.audit_aircraft_reg=fleet[idx].reg;
  try{
  if(kind==='tac'){
-   const r=d.bitacora_tac[ri],hv=tacDifference(f.anterior,f.actual);if(!Number.isFinite(hv))return 'Revisa los TAC: máximo 5 dígitos, 2 decimales y diferencia no negativa.';
-   const before={fecha:r.fecha,anterior:r.anterior,actual:r.actual,hv:r.hv};
-   adjustRecordedHours(d,r,hv-Number(r.hv));
-   const linked=d.bitacora_horas[r.hour_index??-1];if(linked)linked.fecha=f.fecha;
-   Object.assign(r,{fecha:f.fecha,anterior:Number(f.anterior).toFixed(2),actual:Number(f.actual).toFixed(2),hv:hv.toFixed(2)});
-   r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes:before,despues:{fecha:r.fecha,anterior:r.anterior,actual:r.actual,hv:r.hv}});
-   if(ri===d.bitacora_tac.length-1)d.tac_anterior=r.actual;
+   const r=d.bitacora_tac[ri];
+   if(isDualTAC(fleet[idx].reg)&&hasDualTACLog(r)){
+     const old={},next={};for(const m of DUAL_TAC_METERS){const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',previous=tacCents(f[m.key+'Anterior']),current=tacCents(f[m.key+'Actual']);if(!Number.isFinite(tacDifference(f[m.key+'Anterior'],f[m.key+'Actual'])))return 'Revisa TAC anterior y actual de '+m.label+'.';old[m.key]={previous:Number(r[stem+'Previous100']),current:Number(r[stem+'Current100']),hours:Number(r[stem+'Hours100']),measured:m.key==='hobbs'?Number(r.hobbsMeasuredHours100??r.hobbsHours100):Number(r[stem+'Hours100'])};next[m.key]={previous,current,hours:current-previous};}
+     const oldMax=Math.max(old.left.hours,old.right.hours),newMax=Math.max(next.left.hours,next.right.hours),winner=next.left.hours>=next.right.hours?'left':'right';next.hobbs.hours=newMax;next.hobbs.measured=next.hobbs.current-next.hobbs.previous;const maintenanceChange=(newMax-oldMax)/100,before={fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.flatMap(m=>{const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';return [[stem+'Previous100',r[stem+'Previous100']],[stem+'Current100',r[stem+'Current100']],[stem+'Hours100',r[stem+'Hours100']]];})),hobbsMeasuredHours100:r.hobbsMeasuredHours100,hobbsAccountingSource:r.hobbsAccountingSource};
+     if(maintenanceChange)adjustRecordedHours(d,r,maintenanceChange);
+     adjustDualAircraftComponents(d,(next.left.hours-old.left.hours)/100-maintenanceChange,(next.right.hours-old.right.hours)/100-maintenanceChange);
+     const hi=Number.isInteger(r.hour_index)?r.hour_index:(d.bitacora_horas||[]).findIndex(h=>h.tac_id===r.id||h.registryId&&h.registryId===r.registryId),linked=d.bitacora_horas[hi];if(linked)linked.fecha=f.fecha;
+     Object.assign(r,{fecha:f.fecha,hv:(newMax/100).toFixed(2),hobbsAccountingSource:winner});for(const m of DUAL_TAC_METERS){const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs',reading=next[m.key];r[stem+'Previous100']=reading.previous;r[stem+'Current100']=reading.current;r[stem+'Hours100']=m.key==='hobbs'?newMax:reading.hours;if(m.key==='hobbs')r.hobbsMeasuredHours100=reading.measured;if(linked){linked[stem+'Previous100']=reading.previous;linked[stem+'Current100']=reading.current;linked[stem+'Hours100']=m.key==='hobbs'?newMax:reading.hours;if(m.key==='hobbs'){linked.hobbsMeasuredHours100=reading.measured;linked.hobbsAccountingSource=winner;}}if(ri===d.bitacora_tac.length-1){const meter=DUAL_TAC_METERS.find(x=>x.key===m.key);d[meter.previous]=(reading.current/100).toFixed(2);d[meter.current]='';}}
+     r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes,despues:{fecha:r.fecha,hv:r.hv,...Object.fromEntries(DUAL_TAC_METERS.map(m=>[m.key+'Actual',r[(m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs')+'Current100']]))}});
+     if(ri===d.bitacora_tac.length-1&&d.ultimo_venc_registry_id)d.ultimo_venc_hv=r.hv;
+   }else{
+     const hv=tacDifference(f.anterior,f.actual);if(!Number.isFinite(hv))return 'Revisa los TAC: máximo 5 dígitos, 2 decimales y diferencia no negativa.';
+     const before={fecha:r.fecha,anterior:r.anterior,actual:r.actual,hv:r.hv};adjustRecordedHours(d,r,hv-Number(r.hv));
+     const linked=d.bitacora_horas[r.hour_index??-1];if(linked)linked.fecha=f.fecha;
+     Object.assign(r,{fecha:f.fecha,anterior:Number(f.anterior).toFixed(2),actual:Number(f.actual).toFixed(2),hv:hv.toFixed(2)});
+     r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes:before,despues:{fecha:r.fecha,anterior:r.anterior,actual:r.actual,hv:r.hv}});
+     if(ri===d.bitacora_tac.length-1)d.tac_anterior=r.actual;
+   }
  }else{
    const tipo=Number(f.tipo),proxima=Number(f.proxima),tac=tacCents(f.tac);if(![50,100].includes(tipo)||![50,100].includes(proxima)||!Number.isFinite(tac))return 'Revisa el tipo de inspección y el tacómetro.';
    d.bitacora_inspecciones ||= [];
@@ -1441,7 +1598,8 @@ async function applyRecordChange(kind,idx,ri,f){
    }else{
      const r=d.bitacora_inspecciones[ri],before={fecha:r.fecha,tac:r.tac,tipo:r.tipo,proxima:r.proxima};
      const oldTipo=r.tipo;Object.assign(r,{fecha:f.fecha,tac:(tac/100).toFixed(2),tipo,proxima});r.modificaciones ||= [];r.modificaciones.push({fecha:getFechaPanama(),hora:getHoraPanama(),razon:f.razon.trim(),antes:before,despues:{fecha:r.fecha,tac:r.tac,tipo,proxima}});
-     if(ri===d.bitacora_inspecciones.length-1){d.proxima_inspeccion=proxima;if(oldTipo!==tipo){const since=(d.bitacora_horas||[]).slice(r.hour_offset).reduce((n,h)=>n+Number(h.hv||0),0);d.horas_acum_100=(tipo===100?since:Number(r.before100||0)+since).toFixed(2);}}
+     if(ri===d.bitacora_inspecciones.length-1)d.proxima_inspeccion=proxima;
+     if(oldTipo!==tipo)recomputeInspectionAccumulators(d);
    }
    d.horas_totales=d.horas_acum_50;d.horas_limite=d.horas_acum_100;
  }
@@ -1451,23 +1609,31 @@ async function applyRecordChange(kind,idx,ri,f){
  }catch(e){state[idx]=original;return e.message;}
 }
 async function savePanelInternal(idx){
-  const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);
-  const priorRaw=previous?.value||'',currentRaw=current?.value||'';
-  if(currentRaw!==''){
-    updateTAC(idx);
-    if(priorRaw===''){previous.setCustomValidity('Ingresa el TAC anterior.');previous.reportValidity();return false;}
-    previous.setCustomValidity('');
-  }else if(previous)previous.setCustomValidity('');
+  const dual=isDualTAC(fleet[idx].reg),dualInputs=dual?dualTACInputValues(idx):null;
+  let delta=null,meterLog=null,priorRaw='',currentRaw='';
+  if(dual){
+    if(!dualInputs.any&&((Number(document.getElementById('horas_diarias-'+idx)?.value)||0)>0||(Number(document.getElementById('horas-venc-dia-'+idx)?.value)||0)>0)){alert('Para registrar horas en esta aeronave, ingresa TAC anterior y actual de los dos motores y Hobbs.');return false;}
+    if(dualInputs.any&&!dualInputs.complete){const missing=DUAL_TAC_METERS.map(m=>({m,p:document.getElementById('tac-'+m.key+'-anterior-'+idx),c:document.getElementById('tac-'+m.key+'-actual-'+idx)})).find(x=>!x.p.value||!x.c.value);if(missing){if(!missing.p.value)missing.p.setCustomValidity('Ingresa el TAC anterior de '+missing.m.label+'.');else missing.c.setCustomValidity('Ingresa el TAC actual de '+missing.m.label+'.');(missing.p.value?missing.c:missing.p).reportValidity();}else document.querySelector('#panel-'+idx+' input:invalid')?.reportValidity();return false;}
+    if(dualInputs.any){const winner=dualInputs.readings.left.delta>=dualInputs.readings.right.delta?'left':'right';delta=Math.max(dualInputs.readings.left.delta,dualInputs.readings.right.delta);meterLog={};for(const meter of DUAL_TAC_METERS){const reading=dualInputs.readings[meter.key],stem=meter.key==='left'?'tacLeft':meter.key==='right'?'tacRight':'hobbs';meterLog[stem+'Previous100']=tacCents(reading.previous);meterLog[stem+'Current100']=tacCents(reading.current);meterLog[stem+'Hours100']=meter.key==='hobbs'?Math.round(delta*100):Math.round(reading.delta*100);if(meter.key==='hobbs')meterLog.hobbsMeasuredHours100=Math.round(reading.delta*100);}meterLog.hobbsAccountingSource=winner;}
+  }else{
+    const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);
+    priorRaw=previous?.value||'';currentRaw=current?.value||'';
+    if(currentRaw!==''){updateTAC(idx);if(priorRaw===''){previous.setCustomValidity('Ingresa el TAC anterior.');previous.reportValidity();return false;}previous.setCustomValidity('');}
+    else if(previous)previous.setCustomValidity('');
+    delta=currentRaw!==''?tacDifference(priorRaw,currentRaw):null;
+    if(currentRaw!==''&&!Number.isFinite(delta))return false;
+  }
   const invalid=document.querySelector('#panel-'+idx+' input:invalid');if(invalid){invalid.reportValidity();return false;}
-  const delta=currentRaw!==''?tacDifference(priorRaw,currentRaw):null;
-  if(currentRaw!==''&&!Number.isFinite(delta))return false;
   const before=structuredClone(state[idx]);
   const manualHours=document.getElementById('horas_diarias-'+idx)?.value||'';
   const vencHours=document.getElementById('horas-venc-dia-'+idx)?.value||'';
   const d=state[idx],fecha=getFechaPanama(),hora=getHoraPanama();
   d.active_tac_id='';
-  if(priorRaw!=='')d.tac_anterior=(tacCents(priorRaw)/100).toFixed(2);
-  if(delta!==null){
+  if(dual&&meterLog){
+    d.bitacora_tac ||= [];d.active_tac_id='tac-'+Date.now()+'-'+d.bitacora_tac.length;d.bitacora_tac.push({id:d.active_tac_id,hour_index:(d.bitacora_horas||[]).length,fecha,hora,anterior:'',actual:'',hv:delta.toFixed(2),...meterLog});d.active_meter_log=meterLog;
+    for(const meter of DUAL_TAC_METERS){const current=tacCents(dualInputs.readings[meter.key].current);d[meter.previous]=(current/100).toFixed(2);d[meter.current]='';document.getElementById('tac-'+meter.key+'-anterior-'+idx).value=d[meter.previous];document.getElementById('tac-'+meter.key+'-actual-'+idx).value='';}
+  }else if(!dual&&priorRaw!=='')d.tac_anterior=(tacCents(priorRaw)/100).toFixed(2);
+  if(!dual&&delta!==null){
     d.bitacora_tac ||= [];d.active_tac_id='tac-'+Date.now()+'-'+d.bitacora_tac.length;d.bitacora_tac.push({id:d.active_tac_id,hour_index:(d.bitacora_horas||[]).length,fecha,hora,anterior:(tacCents(priorRaw)/100).toFixed(2),actual:(tacCents(currentRaw)/100).toFixed(2),hv:delta.toFixed(2)});
     d.tac_anterior=(tacCents(currentRaw)/100).toFixed(2);
     if(delta===0){d.bitacora_horas ||= [];d.bitacora_horas.push({fecha,hora,hv:'0.00',tac_id:d.active_tac_id,acum:d.horas_acum_100||'0.00'});}
@@ -1475,14 +1641,14 @@ async function savePanelInternal(idx){
   const ok=await savePanelLegacy(idx);
   if(!ok){
     state[idx]=before;const old=document.getElementById('panel-'+idx),replacement=buildPanel(fleet[idx],state[idx],idx);replacement.className=old.className;old.replaceWith(replacement);refreshPanel(idx);
-    document.getElementById('tac-anterior-'+idx).value=priorRaw;document.getElementById('tac-actual-'+idx).value=currentRaw;
+    if(dual){for(const meter of DUAL_TAC_METERS){document.getElementById('tac-'+meter.key+'-anterior-'+idx).value=dualInputs.readings[meter.key].previous;document.getElementById('tac-'+meter.key+'-actual-'+idx).value=dualInputs.readings[meter.key].current;}}
+    else {document.getElementById('tac-anterior-'+idx).value=priorRaw;document.getElementById('tac-actual-'+idx).value=currentRaw;}
     document.getElementById('horas_diarias-'+idx).value=manualHours;document.getElementById('horas-venc-dia-'+idx).value=vencHours;
     updateTAC(idx);aircraftDirty.add(idx);updateUndoButtons();return false;
   }
-  if(previous)previous.value=d.tac_anterior||'';
-  if(current)current.value='';
+  if(!dual){const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);if(previous)previous.value=d.tac_anterior||'';if(current)current.value='';}
   for(const id of ['horas_diarias-','horas-venc-dia-']){const el=document.getElementById(id+idx);el.value='';el.readOnly=false;delete el.dataset.manualHours;}
-  const msg=document.getElementById('tac-msg-'+idx);if(msg)msg.textContent=delta!==null?'TAC registrado. Ingresa la siguiente lectura actual.':'Ingresa ambos TAC para calcular las horas.';
+  const msg=document.getElementById('tac-msg-'+idx);if(msg)msg.textContent=dual&&meterLog?'Lecturas registradas. Hobbs contable e inspecciones usan '+delta.toFixed(2)+' h del TAC con mayor diferencia. Ingresa las siguientes lecturas actuales.':delta!==null?'TAC registrado. Ingresa la siguiente lectura actual.':'Ingresa ambos TAC para calcular las horas.';
   renderVencimientoLog(idx);
   renderTACLogs(idx);return true;
 }
@@ -1522,7 +1688,7 @@ async function savePanelLegacy(idx) {
     d.horas_acum_100 = (parseFloat(d.horas_acum_100 || 0) + hvDiariasRaw).toFixed(2);
     d.fecha_diaria = fecha + ' ' + hora;
     if (!Array.isArray(d.bitacora_horas)) d.bitacora_horas = [];
-    d.bitacora_horas.push({ fecha, hora, tac_id:d.active_tac_id||'', hv: hvDiariasRaw.toFixed(2), acum: d.horas_acum_100 });
+    d.bitacora_horas.push({ fecha, hora, tac_id:d.active_tac_id||'', hv: hvDiariasRaw.toFixed(2), acum: d.horas_acum_100,...(d.active_meter_log||{}) });
     d.horas_diarias = '';
     // Status changes only through the manual selector.
     // Update display immediately
@@ -1541,6 +1707,9 @@ async function savePanelLegacy(idx) {
     if (pb100) { pb100.style.width = Math.min(100, parseFloat(d.horas_acum_100)/100*100) + '%'; pb100.className = 'progress-fill ' + (inspectionFill(d.horas_acum_100, 100)); }
     renderBitacoraHoras(idx, d.bitacora_horas);
   }
+  if(d.active_meter_log&&hvDiariasRaw<=0){
+    d.bitacora_horas ||= [];d.fecha_diaria=getFechaPanama()+' '+getHoraPanama();d.bitacora_horas.push({fecha:d.fecha_diaria.split(' ')[0],hora:d.fecha_diaria.split(' ').slice(1).join(' '),tac_id:d.active_tac_id||'',hv:'0.00',acum:d.horas_acum_100||'0.00',...d.active_meter_log});renderBitacoraHoras(idx,d.bitacora_horas);
+  }
   d.horas_totales = d.horas_acum_50 || '';
   d.horas_limite  = d.horas_acum_100 || '';
   d.fecha_50      = state[idx].fecha_50 || d.fecha_50 || '';
@@ -1551,10 +1720,11 @@ async function savePanelLegacy(idx) {
     const fechaV = getFechaPanama();
     const horaV = getHoraPanama();
     const isHP880 = isMultimotor(fleet[idx].reg);
-    const vencTipos = isHP880 ? ['motor','helices','helice1','helice2'] : ['motor','helices'];
-    vencTipos.forEach(tipo => {
+    const dual=isDualTAC(fleet[idx].reg)&&d.active_meter_log;
+    const vencChanges=dual?{motor:Number(d.active_meter_log.tacLeftHours100||0)/100,helices:Number(d.active_meter_log.tacRightHours100||0)/100,helice1:Number(d.active_meter_log.tacLeftHours100||0)/100,helice2:Number(d.active_meter_log.tacRightHours100||0)/100}:Object.fromEntries((isHP880?['motor','helices','helice1','helice2']:['motor','helices']).map(k=>[k,hvVencDia]));
+    Object.entries(vencChanges).filter(([,hours])=>hours>0).forEach(([tipo,hours]) => {
       const map = VENC_FIELD_MAP[tipo];
-      d[map.dataField] = (parseFloat(d[map.dataField] || 0) + hvVencDia).toFixed(2);
+      d[map.dataField] = (parseFloat(d[map.dataField] || 0) + hours).toFixed(2);
       const fechaFieldName = tipo === 'motor' ? 'fecha_motor' : tipo === 'helices' ? 'fecha_helices' : 'fecha_' + tipo;
       d[fechaFieldName] = fechaV + ' ' + horaV;
       const acumEl = document.getElementById(map.acumId + idx);
@@ -1595,6 +1765,7 @@ async function savePanelLegacy(idx) {
     d.helice1_limite = getVal('limite-helice1-' + idx) || '';
     d.helice2_limite = getVal('limite-helice2-' + idx) || '';
   }
+  delete d.active_meter_log;
   collectEmergencyDates(idx,d);
 
   // Update progress bars
@@ -2407,7 +2578,6 @@ itinerariosPanel.innerHTML = `
   </div>
 
   <div class="section-grid-2">
-    <!-- Calendario -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <button onclick="changeMonth(-1)" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;padding:4px 12px;font-size:16px;-webkit-tap-highlight-color:transparent">‹</button>
@@ -2426,14 +2596,12 @@ itinerariosPanel.innerHTML = `
       <div class="cal-grid" id="cal-cells"></div>
     </div>
 
-    <!-- Detalle del día -->
     <div class="card">
       <div class="card-title" id="cal-day-title">Selecciona una fecha</div>
       <div id="cal-day-flights" style="margin-bottom:12px">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);text-align:center;padding:20px 0">Toca una fecha en el calendario</div>
       </div>
 
-      <!-- Formulario agregar vuelo -->
       <div class="add-flight-form">
         <div class="card-title" style="margin-bottom:10px">+ Agregar Vuelo</div>
         <div class="form-grid">
@@ -3446,7 +3614,7 @@ function confirmFlightScheduling(flight) {
 
 
 function dateAlertLevel(days){return days<0?'danger':days<=5?'orange':days<=30?'warn':'ok';}
-function inspectionFill(hours,limit){const n=Number(hours||0);return n>=limit?'fill-danger':n>=limit-10?'fill-warn':'fill-ok';}
+function inspectionFill(hours,limit){const n=Number(hours||0);return n<=0?'fill-empty':n>=limit?'fill-danger':n>=limit-10?'fill-warn':'fill-ok';}
 
 function plannerFlightLabel(f,r){
   if(r.end-r.start<45)return '<b class="planner-tiny-icon" aria-hidden="true">◷</b>';

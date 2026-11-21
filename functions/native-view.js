@@ -16,12 +16,12 @@ function nativeView(data,account,policy,page){
  const personKeys='directoryKind peso estatura medicalClass medicalExpiry obtainedCredentials id name identity birthDate nationality address previousSchool phone residentialPhone email fatherName motherName emergencyName emergencyPhone referredBy enrolledDate createdAt stage funding interests notes observation observations withdrawalReason completedDate completedCourses';
  const moneyKeys='expenses extraPayments registryFlights deletedCourses';
  const courseKeys='id type status state startDate endDate licenseDate licenseNumber createdAt';
- const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 voidedAt deletedAt createdAt';
+ const entryKeys='id date aircraft book pilot pilotId copilot copilotId personName personId personKind origin destinations equipmentKind operationType observation paxOut paxBack hours100 tacPrevious100 tacCurrent100 aircraftHours100 tacLeftPrevious100 tacLeftCurrent100 tacLeftHours100 tacRightPrevious100 tacRightCurrent100 tacRightHours100 hobbsPrevious100 hobbsCurrent100 hobbsHours100 hobbsMeasuredHours100 hobbsAccountingSource voidedAt deletedAt createdAt';
  if(page==='aeronaves'){
   const groups={
    'Información y estatus':'status serial year voltaje estatus_nota horas_desde_revision horas_hasta_revision',
    'Motores y hélices':'motor_fabricante motor_modelo motor_serie motor_fabricante_izq motor_modelo_izq motor_serie_izq motor_fabricante_der motor_modelo_der motor_serie_der helice_fabricante helice_modelo helice_serie helice_fabricante_izq helice_modelo_izq helice_serie_izq helice_fabricante_der helice_modelo_der helice_serie_der component_schema_v2',
-   'Horas e inspecciones':'tac_anterior tac_actual horas_diarias horas_acum_50 horas_acum_100 horas_totales horas_limite fecha_50 fecha_100 ciclos_totales ciclos_limite limite_motor limite_helice fecha_motor fecha_helices helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_helice1 fecha_helice2 bitacora_horas bitacora_vencimientos bitacora_tac bitacora_tacometros proxima_inspeccion bitacora_inspecciones tacometros inspecciones tac_log inspection_log ultimo_venc_hv ultimo_venc_fecha',
+   'Horas e inspecciones':'tac_anterior tac_actual tac_izq_anterior tac_izq_actual tac_der_anterior tac_der_actual hobbs_anterior hobbs_actual horas_diarias horas_acum_50 horas_acum_100 horas_totales horas_limite fecha_50 fecha_100 ciclos_totales ciclos_limite limite_motor limite_helice fecha_motor fecha_helices helice1_ciclos helice2_ciclos helice1_limite helice2_limite fecha_helice1 fecha_helice2 bitacora_horas bitacora_vencimientos bitacora_tac bitacora_tacometros bitacora_reinicios_inspeccion proxima_inspeccion bitacora_inspecciones tacometros inspecciones tac_log inspection_log ultimo_venc_hv ultimo_venc_fecha',
    'Mantenimiento y taller':'mantenimiento',
    'Documentos y emergencia':'emerg_salvavidas emerg_extintor emerg_flares emerg_botiquin emerg_salvavidas_fechas emerg_extintor_fechas emerg_flares_fechas emerg_botiquin_fechas documentos salvavidas extintores flares botiquin salvavidas_fechas extintores_fechas flares_fechas botiquin_fechas',
    'Pedidos':'pedidos bitacora_pedidos seguimiento_pedidos'
@@ -50,16 +50,21 @@ function nativeView(data,account,policy,page){
   if(finance)out.school.registry.entries=entries.map(e=>pick(e,entryKeys+' costCents rateCents charge'));
  }
  if(page==='estadisticas'&&has('Estadísticas generales')){for(const [id,ac]of Object.entries(data.fleet||{}))out.fleet[id]=pick(ac,'bitacora_horas');}
+ if(page==='honorarios')out.school.honorarios={};
  if(page==='bitacora'||page==='estadisticas'){
+  if(page==='bitacora'){
+   out.school.students=students.map(p=>pick(p,'id name identity'));
+   out.school.registry.clients=clients.map(p=>pick(p,'id name identity'));
+  }
   const info=page==='estadisticas'||has('Vuelos e instructores')||has('Historial de registros');
-  out.school.registry.entries=entries.map(e=>({...pick(e,info?entryKeys:'id date aircraft book voidedAt'),...(page==='bitacora'&&has('Tacómetros y horas')?pick(e,'tacPrevious100 tacCurrent100 aircraftHours100 hours100'):{}),...(page==='bitacora'&&has('Cargos por servicios')?pick(e,'personName rateCents costCents charge'): {})}));
+  out.school.registry.entries=entries.map(e=>({...pick(e,info?entryKeys:'id date aircraft book voidedAt'),...(page==='bitacora'&&has('Tacómetros y horas')?pick(e,'tacPrevious100 tacCurrent100 aircraftHours100 tacLeftPrevious100 tacLeftCurrent100 tacLeftHours100 tacRightPrevious100 tacRightCurrent100 tacRightHours100 hobbsPrevious100 hobbsCurrent100 hobbsHours100 hours100'):{}),...(page==='bitacora'&&has('Cargos por servicios')?pick(e,'personName rateCents costCents charge'): {})}));
  }
  if(page==='pagos'){
   const receipts=list(s.paymentReceipts).filter(r=>account.role!=='Estudiante'||ids.has(r.personKey));
   out.school.paymentReceipts=receipts.map(r=>({...pick(r,'id personKey date number'),...(has('Abonos y recibos')?pick(r,'personName identity totalCents method bank reference receivedBy source voidedAt'):{}),...(has('Movimientos de pago')?pick(r,'lines'):{}),...(has('Comprobantes de transferencia')?pick(r,'attachment'): {})}));
   out.school.students=students.map(p=>({...pick(p,'id name'),courses:has('Movimientos de pago')?list(p.courses).map(c=>({...pick(c,'id type'),payments:copy(list(c.payments)),flights:[]})):[],...(has('Movimientos de pago')?pick(p,'extraPayments'): {})}));out.school.registry.clients=clients.map(p=>pick(p,has('Movimientos de pago')?'id name extraPayments':'id name'));
  }
- if(page==='charter'){out.school.charter={};if(has('Información de la empresa')&&s.charter?.information)out.school.charter.information=copy(s.charter.information);if(has('Documentos y vencimientos')){out.school.charter.certificates=copy(s.charter?.certificates||{});out.school.charter.information ||= {};const info=require('./company').value(s);out.school.charter.information.certificates=info.certificates;out.school.charter.information.certificatesEmpty=info.certificatesEmpty||false;}if(has('Personal de la empresa'))out.school.personnel=copy(list(s.personnel));}
+ if(page==='charter'){out.school.charter={};if(has('Información de la empresa')&&s.charter?.information)out.school.charter.information=copy(s.charter.information);if(has('Documentos y vencimientos')){out.school.charter.certificates=copy(s.charter?.certificates||{});out.school.charter.information ||= {};const info=require('./company').value(s);out.school.charter.information.certificates=info.certificates;out.school.charter.information.certificatesEmpty=info.certificatesEmpty||false;}if(has('Personal de la empresa')){const personnel=list(s.personnel);out.school.personnel=account.role==='Administrativo'?personnel.filter(p=>account.syncStatus==='matched'&&account.recordKind==='personnel'&&p.id===account.recordId&&p.authUid===account.uid):copy(personnel);}}
  if(page==='escuela'){if(has('Información y documentos')&&s.information)out.school.information=copy(s.information);if(has('Información y documentos'))out.school.certificates=copy(s.certificates||{});if(has('Cursos y fechas'))out.school.intakes=copy(list(s.intakes));if(has('Tarifas de servicios'))out.school.courseRates=copy(s.courseRates||{});}
 
  if(page==='pendientes'){
