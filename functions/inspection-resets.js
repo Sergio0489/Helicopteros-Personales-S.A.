@@ -30,6 +30,7 @@ function assertRebuiltHistory(expected,actual){
 function protectHistoricalHourChanges(oldAircraft,aircraft){
  const oldLogs=rows(oldAircraft.bitacora_horas),newLogs=rows(aircraft.bitacora_horas);let index=null,delta=0,deleteRow=false;
  if(oldLogs.length!==newLogs.length){
+  if(newLogs.length>oldLogs.length){if(oldLogs.some((row,i)=>!isDeepStrictEqual(row,newLogs[i])))throw Error('Agregar horas no puede modificar filas históricas en el mismo guardado.');return;}
   if(newLogs.length!==oldLogs.length-1)throw Error('Corrige una sola fila de la bitácora por guardado.');
   index=history.findDeletedLogIndex(oldLogs,newLogs);if(index===null)throw Error('No se pudo identificar con seguridad la fila eliminada de la bitácora.');
   deleteRow=true;delta=-Number(oldLogs[index]?.hv??0);
