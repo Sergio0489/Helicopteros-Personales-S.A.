@@ -181,3 +181,39 @@ test('Exam delegation browser validation matches the server in pilot requests an
  const claimPage=await app(t);await claimPage.evaluate(result=>resolveRead(result),slotResult);await claimPage.locator('[data-date]').waitFor();
  await claimPage.locator('[data-claim-slot="open-exam-test"]').click();await assertExamDelegationValidity(claimPage);
 });
+test('Director window editor saves exact AM/PM range and labels it for monomotors',async t=>{
+ const page=await app(t,390),result=response(),scheduleWindow={start:'08:00',end:'16:00'};
+ await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.getByRole('button',{name:'Horario monomotores',exact:true}).click();
+ for(const [field,hour,period]of [['windowStart','8','AM'],['windowEnd','4','PM']]){
+  await page.locator(`[data-time-field=${field}] [data-hour]`).fill(hour);
+  await page.locator(`[data-time-field=${field}] [data-minute]`).fill('0');
+  await page.locator(`[data-time-field=${field}] [data-period]`).selectOption(period);
+ }
+ const saved={...result,state:{...result.state,scheduleWindow,revision:1,aircraft:result.state.aircraft.map(a=>({...a,scheduleWindow:a.category==='Monomotor'?scheduleWindow:null}))}};
+ await page.evaluate(result=>{window.commandResult=result;},saved);await page.getByRole('button',{name:'Guardar',exact:true}).click();await page.locator('dialog').waitFor({state:'detached'});
+ const commands=await page.evaluate(()=>itineraryCommands);assert.equal(commands.length,1);assert.equal(commands[0].command,'settings');assert.deepEqual(commands[0].scheduleWindow,scheduleWindow);
+ assert.match(await page.locator('[data-message]').textContent(),/Guardado en Firebase/);assert.match(await page.locator('.hp-itinerary').textContent(),/Horario para monomotores/);
+});
+test('Pilot sees the daily range only when requesting a monomotor, not HP880BL',async t=>{
+ const result=response(),scheduleWindow={start:'08:00',end:'16:00'};
+ result.rights={role:'pilot',request:true,pilot:'a',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};
+ result.state.scheduleWindow=scheduleWindow;
+ result.state.aircraft=result.state.aircraft.map(a=>({...a,scheduleWindow:a.category==='Monomotor'?scheduleWindow:null}));
+ const page=await app(t,390);await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.locator('[data-slot="HP1907:b1"]').click();assert.match(await page.locator('dialog').textContent(),/Horario permitido para monomotores/);
+ await page.locator('dialog [data-close]').click();
+ await page.locator('[data-slot="HP880BL:b4"]').click();assert.doesNotMatch(await page.locator('dialog').textContent(),/Horario permitido para monomotores/);
+});
+test('A Multi request started from a monomotor uses HP880BL hours outside the mono window',async t=>{
+ const result=response(),scheduleWindow={start:'08:00',end:'16:00'};
+ result.rights={role:'pilot',request:true,pilot:'a',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};
+ result.state.scheduleWindow=scheduleWindow;
+ result.state.requests=[{id:'q9',pilot:'a',aircraft:'HP1907',slot:'b4',start:'15:30',end:'18:30',flightType:'ifr',created:9}];
+ result.state.aircraft=result.state.aircraft.map(a=>({...a,scheduleWindow:a.category==='Monomotor'?scheduleWindow:null}));
+ const page=await app(t,390);await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.locator('[data-request-edit="q9"]').click();const form=page.locator('dialog form'),windowNotice=form.locator('[data-day-window]'),submit=form.locator('[type=submit]');
+ await windowNotice.waitFor({state:'visible'});assert.equal(await submit.isDisabled(),true);
+ await form.locator('[name="flightType"]').selectOption('multi');
+ assert.equal(await windowNotice.isVisible(),false);assert.equal(await submit.isEnabled(),true);
+});
