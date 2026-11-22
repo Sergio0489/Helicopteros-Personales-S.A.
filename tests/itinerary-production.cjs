@@ -100,6 +100,32 @@ test('cancelled and rescheduled flights update the annual day counts',()=>{
  assert.deepEqual(M.calendar(d,director,'2026',now).days,[]);assert.deepEqual(M.calendar(d,director,'2027',now).days,[{date:'2027-01-02',count:1}]);
  apply(d,director,'cancel-flight',{date:'2027-01-02',id,reason:'Prueba del calendario'});assert.deepEqual(M.calendar(d,director,'2027',now).days,[]);
 });
+test('daily window constrains monomotors but leaves HP880BL and helicopters on their own hours',()=>{
+ const d=fixture(),scheduleWindow={start:'08:00',end:'16:00'};
+ apply(d,director,'flight',{flight:flight('p2','HP1907',{start:'12:30',end:'14:00'})});
+ apply(d,director,'flight',{flight:flight('p2','HP880BL',{start:'16:30',end:'18:30',flightType:'multi'})});
+ apply(d,pilot('p1'),'request',{flight:flight('p1','HP1907',{start:'06:30',end:'09:30'})});
+ apply(d,director,'settings',{scheduleWindow});
+ const state=M.view(d,director,date,now).state;
+ assert.deepEqual(state.scheduleWindow,scheduleWindow);
+ assert.deepEqual(state.aircraft.find(a=>a.id==='HP1907').scheduleWindow,scheduleWindow);
+ assert.equal(state.aircraft.find(a=>a.id==='HP880BL').scheduleWindow,null);
+ assert.throws(()=>apply(d,pilot('p2'),'request',{flight:flight('p2','HP1784',{start:'16:00',end:'17:30'})}),/deben quedar entre 08:00 y 16:00/);
+ apply(d,director,'flight',{flight:flight('p1','HP11BL',{start:'16:30',end:'18:30',flightType:'charter'})});
+ M.publish(d,date,now);
+ const flights=d.itinerarios.filter(f=>f.fecha===date);
+ const moved=flights.find(f=>f.schedule.sourceRequestId&&f.schedule.pilot==='p1');
+ assert.ok(moved);assert.equal(moved.horaInicio,'08:00');assert.equal(moved.horaFin,'11:00');
+ const fixedMono=flights.find(f=>f.aeronave==='HP-1907');assert.equal(fixedMono.horaInicio,'12:30');assert.equal(fixedMono.horaFin,'14:00');
+ assert.ok(flights.some(f=>f.aeronave==='HP-880BL'&&f.horaInicio==='16:30'&&f.horaFin==='18:30'));
+ assert.ok(flights.some(f=>f.aeronave==='HP-11BL'&&f.horaInicio==='16:30'&&f.horaFin==='18:30'));
+ const category=registration=>M.E.fleet.find(([id])=>id===String(registration).replace(/[^a-z0-9]/gi,'').toUpperCase())?.[2];
+ for(const f of flights)if(category(f.aeronave)==='Monomotor')assert.ok(f.horaInicio>='08:00'&&f.horaFin<='16:00',f.aeronave+' escaped '+JSON.stringify(scheduleWindow));
+ for(let i=0;i<flights.length;i++)for(let j=i+1;j<flights.length;j++){
+  const a=flights[i],b=flights[j],overlap=a.horaInicio<b.horaFin&&a.horaFin>b.horaInicio;
+  if(overlap){assert.notEqual(a.aeronave,b.aeronave,'aircraft conflict');assert.notEqual(a.piloto,b.piloto,'pilot conflict');}
+ }
+});
 test('two pending requests may overlap; publication separates monos without overlaps',()=>{const d=fixture();apply(d,pilot('p1'),'request',{flight:flight()});apply(d,pilot('p2'),'request',{flight:flight('p2')});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).requests.length,2);M.publish(d,date,now);assert.equal(d.itinerarios.length,2);assert.notEqual(d.itinerarios[0].aeronave,d.itinerarios[1].aeronave);assert.equal(d.itinerary.notices.length,1);M.publish(d,date,now);assert.equal(d.itinerary.notices.length,1);});
 test('pilot identity is bound on server; role and clock cannot be forged',()=>{const d=fixture();apply(d,pilot('p1'),'request',{flight:flight('p2'),role:'Director',now:'2030'});assert.equal(M.day(d,date).requests[0].pilot,'p1');assert.throws(()=>apply(d,pilot('p1'),'publish'),/director/);assert.throws(()=>apply(d,pilot('p1'),'request',{date:'2026-11-01',flight:flight()}),/mañana/);assert.throws(()=>apply(d,pilot('p1'),'request',{flight:flight()},'2026-10-30T20:00:00-05:00'),/cerradas/);});
 test('readonly request box, missing identity and unverified accounts cannot submit',()=>{const d=fixture();d.school.accessConfiguration.roles.Piloto.itinerario.boxes.requests.edit=false;assert.throws(()=>apply(d,pilot('p1'),'request',{flight:flight()}),/habilitar/);d.school.accessConfiguration.roles.Piloto=structuredClone(policy);assert.throws(()=>apply(d,pilot('absent'),'request',{flight:flight()}),/expediente/);const a=pilot('p1');a.user.emailVerified=false;assert.throws(()=>apply(d,a,'request',{flight:flight()}),/Verifica/);});
