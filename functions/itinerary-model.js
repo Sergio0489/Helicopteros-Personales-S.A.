@@ -37,7 +37,7 @@ function idleDays(data,id,targetDate){
 function stateFor(data,d,now){
  date(d);const config=data.itinerary?.config||{},stored=data.itinerary?.days?.[d]||{},ps=pilots(data),scheduleWindow=stored.scheduleWindow==null?null:copy(stored.scheduleWindow);
  if(scheduleWindow!==null&&(!scheduleWindow||typeof scheduleWindow!=='object'||Array.isArray(scheduleWindow)||!E.validWindow(scheduleWindow)))error('El rango horario guardado para esta fecha no es válido.');
- const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id],scheduleWindow:scheduleWindow?copy(scheduleWindow):null};});
+ const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id],scheduleWindow:scheduleWindow&&category==='Monomotor'?copy(scheduleWindow):null};});
  const confirmed=[...arr(data.itinerarios).filter(f=>iso(f.fecha)===d).map(f=>fromFlight(f,ps)),...copy(arr(stored.held)).map(q=>({...q,publicationStatus:'held'}))];
  const defaults=E.defaultTypeRules();if(config.aircraftOrder)for(const type of ['privado','xc','maniobras'])defaults[type]=copy(config.aircraftOrder);
  const typeRules={...defaults,...copy(config.typeRules||{})};
@@ -131,7 +131,7 @@ function apply(data,actor,body,now){
    if(d.published&&changed)error('El horario del día no se puede cambiar después de publicarlo.');
    if(normalized){
     const start=E.minutes(normalized.start),end=E.minutes(normalized.end);
-    if(state.confirmed.some(q=>E.minutes(q.start)<start||E.minutes(q.end)>end))error('Hay vuelos ya confirmados fuera del nuevo rango. Revisa esos vuelos antes de cambiarlo.');
+    if(state.confirmed.some(q=>state.aircraft.find(a=>a.id===q.aircraft)?.category==='Monomotor'&&(E.minutes(q.start)<start||E.minutes(q.end)>end)))error('Hay vuelos monomotor ya confirmados fuera del nuevo rango. Revisa esos vuelos antes de cambiarlo.');
     d.scheduleWindow=normalized;
    }else delete d.scheduleWindow;
   }
