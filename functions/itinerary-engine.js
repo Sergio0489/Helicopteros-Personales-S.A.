@@ -37,7 +37,7 @@ function availabilityStart(a,date){
 function bookable(a,date){return availabilityStart(a,date)!==null;}
 function bookingSlots(a,date){
  const from=availabilityStart(a,date);if(from===null)return [];
- const window=validWindow(a.scheduleWindow)?a.scheduleWindow:null;
+ const window=a.category==='Monomotor'&&validWindow(a.scheduleWindow)?a.scheduleWindow:null;
  return active(a).map(s=>{
   const start=Math.max(minutes(s.start),minutes(from),window?minutes(window.start):0),end=Math.min(minutes(s.end),window?minutes(window.end):1440);
   return {...s,start:timeLabel(start),end:timeLabel(end)};
@@ -45,7 +45,7 @@ function bookingSlots(a,date){
 }
 function covers(a,q,date){return coversWindow(bookingSlots(a,date),q);}
 function scheduleWindowError(a,q){
- const window=a?.scheduleWindow;if(!window)return '';
+ const window=a?.category==='Monomotor'?a.scheduleWindow:null;if(!window)return '';
  if(!validWindow(window))return 'El horario permitido para esta fecha no es válido. Actualiza la página o contacta a Dirección.';
  if(!validWindow(q))return '';
  return minutes(q.start)<minutes(window.start)||minutes(q.end)>minutes(window.end)?'Los vuelos de esta fecha deben quedar entre '+timeLabel(minutes(window.start))+' y '+timeLabel(minutes(window.end))+'.':'';
@@ -230,7 +230,7 @@ function competingRequests(state,request){
 }
 function timeLabel(value){return String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0');}
 function fitRequest(state,request,aircraft,assignments){
- const requestedStart=minutes(request.start),requestedDuration=minutes(request.end)-requestedStart,daily=validWindow(aircraft.scheduleWindow)?aircraft.scheduleWindow:null;
+ const requestedStart=minutes(request.start),requestedDuration=minutes(request.end)-requestedStart,daily=aircraft.category==='Monomotor'&&validWindow(aircraft.scheduleWindow)?aircraft.scheduleWindow:null;
  if(!Number.isFinite(requestedStart)||requestedDuration<MIN_ASSIGNMENT_MINUTES)return null;
  const windows=[];
  for(const row of bookingSlots(aircraft,state.date).filter(validWindow).sort((a,b)=>minutes(a.start)-minutes(b.start))){
