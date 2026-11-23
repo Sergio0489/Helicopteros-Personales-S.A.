@@ -18,6 +18,10 @@ Ruta o destino es una referencia de planificación. Se conserva al aprobar, publ
 - Al guardar un cambio de operativo a mantenimiento/grounded, el servidor reubica vuelos futuros de monomotores ya publicados cuando puede. Respeta horas, restricciones, piloto y estudiante; los casos sin solución y vuelos iniciados quedan señalados para revisión. El piloto puede cancelar su vuelo reubicado antes de su inicio.
 - Las fechas vencidas del piloto se validan en el servidor. Esto es un control administrativo de los vencimientos registrados, no una certificación de habilitación operacional o autorización de despacho.
 
+### Prioridades de asignación
+
+Dirección puede elegir un reparto balanceado de monomotores operativos o favorecer el orden manual de aeronaves. En el modo balanceado, el cierre intenta dar un vuelo a cada avión monomotor operativo compatible antes de repetir una matrícula. También puede escoger prioridad manual por piloto o balancear solicitudes por las horas ya agendadas en el ciclo de Honorarios (26–10 o 11–25) o en el mes calendario. El orden manual general de pilotos complementa las prioridades por aeronave. Estas preferencias solo resuelven solicitudes compatibles: no cambian el piloto, la categoría, el propósito del vuelo, las habilitaciones, los bloques, el horario diario ni los límites de conflicto; Examen de vuelo conserva prioridad máxima y HP880BL permanece protegido.
+
 ### Disponibilidad prevista y nuevas restricciones
 
 Una previsión habilitada permite una asignación **condicional** únicamente en su fecha y desde la hora indicada; no cambia el estado de mantenimiento/grounded ni autoriza el retorno al servicio. Para vuelos solos se intenta HP1819, HP1907 y HP1784, salvo configuración explícita del director.
