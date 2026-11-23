@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 10439)
-Total output lines: 526
-
 const test=require('node:test'),assert=require('node:assert/strict'),H={...require('../functions/itinerary-engine'),initial:require('./fixtures/itinerary-initial.cjs')};
 const base=()=>{const s=H.initial();s.requests=[];s.confirmed=[];return s;};
 const request=(id,pilot,type='general',aircraft='HP1907',slot='b1')=>({id,pilot,flightType:type,aircraft,slot,start:'06:30',end:'09:30',created:Number(id.slice(1))||1});
@@ -132,7 +129,293 @@ test('short adjacent flights share a base block without overlap',()=>{
  assert.deepEqual(assigned(r).map(q=>[q.start,q.end]),[['06:30','08:00'],['08:00','09:30']]);
 });
 test('whole long reservation blocks intersecting flight on aircraft and pilot',()=>{
- const s=base();s.requests=[{...request('q1','a'),end:'12:30'},{...request('q2','b'),start:'09:30',end:'12:30'},{...request('q3','a'),star…5439 tokens truncated…hedules,'2026-10-29T20:00:00-05:00');
+ const s=base();s.requests=[{...request('q1','a'),end:'12:30'},{...request('q2','b'),start:'09:30',end:'12:30'},{...request('q3','a'),start:'10:00',end:'11:00'}];
+ const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q3').status,'review');
+ assert.match(r.results.find(q=>q.id==='q3').reason,/1 hora y 30 minutos/);
+ const q1=r.results.find(q=>q.id==='q1'),q2=r.results.find(q=>q.id==='q2');assert.equal(q2.status,'assigned');
+ assert.ok(q1.assignedAircraft!==q2.assignedAircraft||H.minutes(q1.end)<=H.minutes(q2.start)||H.minutes(q2.end)<=H.minutes(q1.start));
+});
+test('gaps, invalid intervals and disabled night cannot be booked',()=>{
+ const s=base(),a=s.aircraft.find(a=>a.id==='HP1907'),q=request('q1','a');
+ a.slots[1].start='10:00';q.end='11:00';assert.match(H.requestError(s,q),/huecos/);
+ q.start='09:00';q.end='08:00';assert.match(H.requestError(s,q),/posterior/);
+ q.start='17:00';q.end='19:00';assert.notEqual(H.requestError(s,q),'');
+ a.slots[1].start='09:30';a.night=true;assert.equal(H.requestError(s,q),'');
+});
+test('confirmed flight conflicts checked against actual custom interval',()=>{
+ const s=base(),q=request('q1','a');s.confirmed=[{id:'existing',aircraft:'HP1907',pilot:'b',start:'10:00',end:'11:00',fixed:true}];
+ q.end='10:30';assert.match(H.requestError(s,q),/cruza/);
+ q.end='10:00';assert.equal(H.requestError(s,q),'');
+});
+test('forecast is date specific, preserves maintenance state, and rejects early starts',()=>{
+ const s=base(),a=s.aircraft.find(a=>a.id==='HP1930');assert.equal(H.bookable(a,s.date),false);
+ a.release={enabled:true,date:s.date,from:'11:00'};assert.equal(H.bookable(a,s.date),true);
+ assert.equal(H.bookable(a,'2026-10-31'),false);assert.equal(a.status,'mantenimiento');
+ const q={...request('q1','a','general','HP1930','b2'),start:'10:59',end:'12:30'};
+ assert.match(H.requestError(s,q),/habilitación/);q.start='11:00';assert.equal(H.requestError(s,q),'');
+ a.rank=0;s.typeRules.privado=['HP1930','HP1784'];s.requests=[q];const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP1930');assert.equal(assigned(r)[0].conditional,true);
+ assert.equal(a.status,'mantenimiento');
+ a.status='operativo';assert.equal(assigned(H.simulate(s))[0].conditional,false);
+});
+test('forecast cannot cover a request starting before its threshold after redistribution',()=>{
+ const s=base(),a=s.aircraft.find(a=>a.id==='HP1930');a.rank=0;a.release={enabled:true,date:s.date,from:'11:00'};
+ s.requests=[{...request('q1','a'),start:'10:30',end:'12:30'}];
+ assert.notEqual(assigned(H.simulate(s))[0].assignedAircraft,'HP1930');
+});
+test('Panama reservation window boundaries and next-day-only access',()=>{
+ const s=base(),q=request('q1','a');
+ s.now='2026-10-29T05:59:00-05:00';assert.match(H.requestError(s,q),/cerradas/);
+ s.now='2026-10-29T06:00:00-05:00';assert.equal(H.requestError(s,q),'');
+ s.now='2026-10-29T19:59:59-05:00';assert.equal(H.requestError(s,q),'');
+ s.now='2026-10-29T20:00:00-05:00';assert.match(H.requestError(s,q),/cerradas/);
+ s.now='2026-10-29T18:00:00-05:00';s.date='2026-10-31';assert.match(H.requestError(s,q),/mañana/);
+ assert.deepEqual(H.panamaClock('2026-11-01T01:00:00Z'),{date:'2026-10-31',time:'20:00',tomorrow:'2026-11-01'});
+});
+test('published schedule stops pilot edits while director can edit any date or time of day',()=>{
+ const s=base(),q=request('q1','a');s.published=true;assert.match(H.requestError(s,q),/publicado/);
+ s.date='2027-08-14';s.now='2026-10-29T23:00:00-05:00';assert.equal(H.directorFlightError(s,q),'');
+ s.confirmed=[{...q,id:'edit-me',fixed:true}];
+ assert.equal(H.directorFlightError(s,{...q,start:'07:00',end:'10:00'},'edit-me'),'');
+ s.confirmed.push({id:'other',aircraft:'HP1907',pilot:'b',start:'09:30',end:'12:30'});
+ assert.match(H.directorFlightError(s,{...q,start:'07:00',end:'10:00'},'edit-me'),/cruza/);
+});
+
+test('pilot selection is exactly all monomotors plus HP880BL',()=>{
+ const s=base();assert.deepEqual(s.aircraft.filter(H.pilotCanRequest).map(a=>a.id),['HP1784','HP1819','HP1930','HP1815','HP1579','HP1907','HP880BL']);
+ for(const id of ['HP18BLM','HP1186','HP1805BLM','HP11BL']){
+  const a=s.aircraft.find(a=>a.id===id);a.status='operativo';
+  const q=request('q1','d','general',id);assert.match(H.requestError(s,q),/director o administrativo/);
+  s.requests=[q];assert.equal(assigned(H.simulate(s)).length,0);assert.equal(H.simulate(s).results[0].status,'review');
+ }
+});
+test('administrative may manually schedule only multi and helicopters; director any aircraft',()=>{
+ const s=base();s.typeRules.privado=s.aircraft.map(a=>a.id);for(const a of s.aircraft){a.status='operativo';const q=request('q1','d','general',a.id);
+  assert.equal(H.directorFlightError(s,q,undefined,'director'),'');
+  if(a.category==='Monomotor')assert.match(H.directorFlightError(s,q,undefined,'admin'),/cargo/);
+  else assert.equal(H.directorFlightError(s,q,undefined,'admin'),'');
+  assert.match(H.directorFlightError(s,q,undefined,'pilot'),/cargo/);
+ }
+});
+test('only monomotors ever enter automatic aircraft priority order',()=>{
+ const s=base();s.aircraft.find(a=>a.id==='HP880BL').rank=-10;s.aircraft.find(a=>a.id==='HP11BL').rank=-20;
+ for(const type of ['general','ifr','solo'])assert.ok(H.aircraftOrder(s,type).every(a=>a.category==='Monomotor'));
+});
+test('HP880BL keeps exact plane, pilot and times regardless of pilot or fleet priorities',()=>{
+ const s=base();const q={...request('q1','b','multi','HP880BL'),start:'07:10',end:'10:20'};
+ s.requests=[q];s.aircraft.find(a=>a.id==='HP880BL').pilots=['a','d','c','b'];
+ const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP880BL');
+ const flight=r.assignments[0];assert.equal(flight.pilot,q.pilot);assert.equal(flight.start,q.start);assert.equal(flight.end,q.end);assert.equal(flight.protected,true);
+ s.aircraft.find(a=>a.id==='HP880BL').status='grounded';
+ const invalid=H.simulate(s);assert.equal(assigned(invalid).length,0);assert.equal(invalid.results[0].aircraft,'HP880BL');
+});
+test('HP880BL fixed reservation is protected from simultaneous mono priority allocation',()=>{
+ const s=base();s.requests=[request('q1','a','general','HP1907'),request('q2','a','multi','HP880BL')];
+ const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q2').assignedAircraft,'HP880BL');assert.equal(r.results.find(q=>q.id==='q1').status,'assigned');
+ assert.equal(r.assignments.find(q=>q.id==='q2').aircraft,'HP880BL');
+ assert.equal(H.overlaps(r.assignments.find(q=>q.id==='q1'),r.assignments.find(q=>q.id==='q2')),false);
+});
+test('two HP880BL requests are accepted for manual review without automatic reassignment',()=>{
+ const s=base(),first=request('q1','a','multi','HP880BL'),second=request('q2','b','multi','HP880BL');
+ s.requests=[first];assert.equal(H.requestError(s,second),'');assert.equal(H.competingRequests(s,second).length,1);
+ s.requests.push(second);const r=H.simulate(s);assert.equal(assigned(r).length,0);
+ for(const row of r.results){assert.equal(row.status,'review');assert.equal(row.aircraft,'HP880BL');assert.equal(row.start,'06:30');}
+});
+test('manual multi and helicopter flights are published unchanged and protect pilot occupancy',()=>{
+ const s=base();s.confirmed=[
+ {id:'manual-multi',aircraft:'HP1186',pilot:'a',start:'06:30',end:'10:00',flightType:'general',fixed:true},
+ {id:'manual-heli',aircraft:'HP11BL',pilot:'d',start:'08:00',end:'09:00',flightType:'general',fixed:true}
+ ];s.requests=[request('q1','a'),{...request('q2','d'),start:'08:00',end:'10:00'}];
+ const before=structuredClone(s.confirmed),r=H.simulate(s);
+ assert.deepEqual(r.assignments.filter(q=>q.fixed),before);assert.ok(r.results.every(q=>q.status==='assigned'));
+ for(const fixed of before)for(const scheduled of r.assignments.filter(q=>!q.fixed&&q.pilot===fixed.pilot))assert.equal(H.overlaps(scheduled,fixed),false);
+ assert.ok(r.results.every(q=>H.minutes(q.end)-H.minutes(q.start)>=H.MIN_ASSIGNMENT_MINUTES));
+});
+
+test('twelve requested flight types are available in the specified order',()=>{
+ assert.deepEqual(Object.values(H.flightTypes).map(t=>t.label),['Privado','Examen de vuelo','Vuelo solo','XC','Ley 89','Conversión','Maniobras comercial','IFR','Multi','Grob','Chárter','Socio']);
+});
+test('director per-type assignments constrain automatic monomotor selection',()=>{
+ const s=base();s.typeRules.privado=['HP1907'];s.requests=[request('q1','a','privado','HP1784')];
+ assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1907');
+ s.typeRules.xc=['HP1819'];s.requests=[request('q1','a','xc','HP1784')];assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1819');
+ s.typeRules.ifr=['HP1579'];s.requests=[request('q1','a','ifr','HP1784')];assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1579');
+});
+test('selecting Multi pins HP880BL even when a mono block was initially selected',()=>{
+ const s=base(),q={...request('q1','a','multi','HP1784'),studentId:'st1'};
+ assert.equal(H.requestError(s,q),'');const n=H.normalizeRequest(s,q);
+ assert.equal(n.aircraft,'HP880BL');assert.equal(n.preferredAircraft,'HP1784');assert.equal(n.studentId,'st1');
+ s.requests=[q];const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP880BL');assert.equal(r.assignments[0].studentId,'st1');assert.equal(r.assignments[0].protected,true);
+});
+test('Grob always assigns HP1930 and never substitutes another plane when unavailable',()=>{
+ const s=base(),q=request('q1','a','grob','HP1784');s.aircraft.find(a=>a.id==='HP1930').status='operativo';
+ assert.equal(H.requestError(s,q),'');s.requests=[q];assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1930');
+ s.aircraft.find(a=>a.id==='HP1930').status='mantenimiento';assert.notEqual(H.requestError(s,q),'');assert.equal(assigned(H.simulate(s)).length,0);
+});
+test('director can change Multi and Grob lists without expanding pilot permissions',()=>{
+ const s=base();s.typeRules.multi=['HP1186'];s.typeRules.grob=['HP1907'];
+ assert.deepEqual(H.allowedForType(s,'multi'),['HP1186']);assert.deepEqual(H.allowedForType(s,'grob'),['HP1907']);
+ assert.notEqual(H.requestError(s,request('q1','a','multi','HP880BL')),'');
+ assert.notEqual(H.requestError(s,request('q1','a','multi','HP1784')),'');
+ assert.equal(H.directorFlightError(s,request('q1','a','multi','HP1186')),'');
+ s.requests=[request('q1','a','grob','HP1784')];assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1907');
+});
+test('student optional and preserved throughout automatic aircraft reassignment',()=>{
+ const s=base(),q={...request('q1','a','privado','HP1907'),studentId:''};s.aircraft.find(a=>a.id==='HP1784').idleDays=3;
+ assert.equal(H.requestError(s,q),'');q.studentId='st2';assert.equal(H.requestError(s,q),'');s.requests=[q];
+ const r=H.simulate(s);assert.equal(r.assignments[0].aircraft,'HP1784');assert.equal(r.assignments[0].studentId,'st2');assert.equal(r.results[0].studentId,'st2');
+ q.studentId='missing';assert.match(H.requestError(s,q),/estudiante/);
+});
+
+
+test('configuration offers whole fleet except Multi and Charter category restrictions',()=>{
+ const s=base();for(const type of Object.keys(H.flightTypes)){
+ const offered=H.typeConfigAircraft(s,type);
+ if(type==='multi')assert.deepEqual(offered.map(a=>a.id),['HP880BL','HP18BLM','HP1186','HP1805BLM']);
+ else if(type==='charter')assert.deepEqual(offered.map(a=>a.id),['HP880BL','HP18BLM','HP1186','HP1805BLM','HP11BL']);
+ else assert.deepEqual(offered,s.aircraft);
+ }
+ s.typeRules.multi=['HP1784','HP1186','HP11BL'];assert.deepEqual(H.allowedForType(s,'multi'),['HP1186']);
+ s.typeRules.charter=['HP1784','HP11BL'];assert.deepEqual(H.allowedForType(s,'charter'),['HP11BL']);
+});
+test('each monomotor type uses its own ordered list before global aircraft rank',()=>{
+ const s=base();for(const type of ['privado','solo','xc','maniobras','ifr','grob','socio']){
+ s.typeRules[type]=['HP1907','HP1784'];s.requests=[{...request('q1','a',type,'HP1819'),socioName:'Socio de prueba'}];
+ assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1907');
+ s.typeRules[type].reverse();assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1784');
+ }
+});
+test('nonmono priority entries never allow automatic cross-category reassignment',()=>{
+ const s=base();s.aircraft.forEach(a=>a.status='operativo');s.typeRules.privado=['HP1186','HP11BL','HP1907'];s.requests=[request('q1','a','privado','HP1784')];
+ assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1907');
+ s.typeRules.privado=['HP1186','HP11BL'];assert.equal(assigned(H.simulate(s)).length,0);
+});
+test('Charter is director-only on multi or helicopter and immutable in automatic closure',()=>{
+ const s=base();s.aircraft.forEach(a=>a.status='operativo');
+ for(const id of ['HP1784','HP880BL','HP18BLM','HP1186','HP1805BLM','HP11BL']){
+ const q=request('q1','d','charter',id);
+ if(id==='HP1784')assert.match(H.directorFlightError(s,q),/Chárter/);else assert.equal(H.directorFlightError(s,q),'');
+ assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');assert.notEqual(H.requestError(s,q),'');
+ s.requests=[q];assert.equal(H.simulate(s).results[0].status,'review');
+ }
+ s.requests=[];s.confirmed=[{...request('charter1','d','charter','HP11BL'),fixed:true}];
+ assert.deepEqual(H.simulate(s).assignments,s.confirmed);
+});
+test('Socio requires name and preserves it with optional student through allocation',()=>{
+ const s=base(),q={...request('q1','a','socio','HP1907'),studentId:'st1',socioName:''};s.aircraft.find(a=>a.id==='HP1784').idleDays=3;
+ assert.match(H.requestError(s,q),/nombre del socio/);assert.match(H.directorFlightError(s,q),/nombre del socio/);
+ q.socioName='Socio de ejemplo';assert.equal(H.requestError(s,q),'');s.requests=[q];const r=H.simulate(s);
+ assert.equal(r.assignments[0].socioName,'Socio de ejemplo');assert.equal(r.assignments[0].studentId,'st1');assert.equal(r.assignments[0].aircraft,'HP1784');
+ q.socioName='   ';assert.equal(H.simulate(s).results[0].status,'review');
+});
+test('Socio on HP880BL stays fixed even if ordered below monomotors',()=>{
+ const s=base(),q={...request('q1','a','socio','HP880BL'),socioName:'Socio de ejemplo'};
+ assert.equal(H.requestError(s,q),'');s.requests=[q];const r=H.simulate(s);
+ assert.equal(r.assignments[0].aircraft,'HP880BL');assert.equal(r.assignments[0].socioName,q.socioName);assert.equal(r.assignments[0].protected,true);
+});
+
+
+test('director may schedule any time on every aircraft without blocks or night checkbox',()=>{
+ const s=base();s.typeRules.privado=s.aircraft.map(a=>a.id);s.aircraft.forEach(a=>{a.status='operativo';a.night=false;});
+ for(const a of s.aircraft)for(const [start,end] of [['00:00','01:30'],['05:00','07:00'],['18:30','20:00'],['21:15','23:59']]){
+ const q={...request('q1','d','privado',a.id),start,end,createdByRole:'director'};
+ assert.equal(H.directorFlightError(s,q,undefined,'director'),'');assert.equal(H.flightAvailable(a,q,s.date),true);
+ assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');assert.notEqual(H.requestError(s,q),'');
+ }
+ const q={...request('q1','a','privado','HP1784'),start:'21:00',end:'22:00'};s.confirmed=[{...q,id:'taken'}];
+ assert.match(H.directorFlightError(s,{...q,pilot:'b'}),/cruza/);
+});
+test('director may plan before forecast availability but operational eligibility stays false',()=>{
+ const s=base(),a=s.aircraft.find(a=>a.id==='HP1930');a.release={enabled:true,date:s.date,from:'21:00'};
+ const q={...request('q1','a','grob','HP1930'),start:'20:59',end:'23:00',createdByRole:'director'};
+ assert.equal(H.directorFlightError(s,q),'');assert.equal(H.flightAvailable(a,q,s.date),false);q.start='21:00';assert.equal(H.directorFlightError(s,q),'');
+ assert.equal(H.flightAvailable(a,q,s.date),true);s.confirmed=[{...q,fixed:true}];assert.deepEqual(H.simulate(s).assignments,s.confirmed);
+ a.release.enabled=false;assert.equal(H.flightAvailable(a,q,s.date),false);
+});
+
+
+const nightFlight=(id,aircraft,pilot='a',start='18:30',end='20:00')=>({id,aircraft,pilot,start,end,flightType:'privado',createdByRole:'director',fixed:true});
+test('night publication with zero or one aircraft holds night flights without touching day flights',()=>{
+ const s=base(),day=nightFlight('day','HP1819','d','06:30','09:30');
+ assert.equal(H.nightPublication(s,[day]).count,0);assert.deepEqual(H.nightPublication(s,[day]).blockedIds,[]);
+ const flight=nightFlight('night','HP1784');const before=JSON.stringify([day,flight]);
+ const p=H.nightPublication(s,[day,flight]);assert.equal(p.count,1);assert.equal(p.ready,false);assert.deepEqual(p.blockedIds,['night']);
+ assert.equal(JSON.stringify([day,flight]),before);
+});
+test('multiple flights on the same aircraft count as one, not two',()=>{
+ const s=base(),flights=[nightFlight('n1','HP1784','a','18:30','19:00'),nightFlight('n2','HP1784','b','19:00','20:00')];
+ const p=H.nightPublication(s,flights);assert.equal(p.count,1);assert.deepEqual(p.blockedIds,['n1','n2']);
+});
+test('two assigned distinct aircraft release nocturnals across categories',()=>{
+ const s=base(),flights=[nightFlight('n1','HP1784'),nightFlight('n2','HP880BL','b')];
+ const p=H.nightPublication(s,flights);assert.equal(p.count,2);assert.equal(p.ready,true);assert.deepEqual(p.blockedIds,[]);
+ assert.deepEqual(p.aircraft,['HP1784','HP880BL']);
+});
+test('pending requests, unavailable aircraft and cancelled flights do not meet the night minimum',()=>{
+ const s=base(),one=nightFlight('n1','HP1784'),two=nightFlight('n2','HP1819','b');
+ s.requests=[two];assert.equal(H.nightPublication(s,[one]).ready,false);
+ s.aircraft.find(a=>a.id==='HP1819').status='grounded';assert.equal(H.nightPublication(s,[one,two]).count,1);
+ s.aircraft.find(a=>a.id==='HP1819').status='operativo';s.cancelled.push(two.id);assert.equal(H.nightPublication(s,[one,two]).count,1);
+});
+test('editing or removing the second aircraft automatically rechecks the minimum',()=>{
+ const s=base(),flights=[nightFlight('n1','HP1784'),nightFlight('n2','HP1819','b')];
+ assert.equal(H.nightPublication(s,flights).ready,true);
+ flights[1].end='18:30';flights[1].start='17:00';assert.deepEqual(H.nightPublication(s,flights).blockedIds,['n1']);
+ flights.pop();assert.deepEqual(H.nightPublication(s,flights).blockedIds,['n1']);
+});
+test('night rule uses 18:30 boundary and preserves whole mixed and late director flights',()=>{
+ assert.equal(H.isNightFlight({start:'17:00',end:'18:30'}),false);
+ assert.equal(H.isNightFlight({start:'17:00',end:'18:31'}),true);
+ assert.equal(H.isNightFlight({start:'21:00',end:'22:30'}),true);
+ const s=base(),flights=[nightFlight('n1','HP1784','a','17:00','19:00'),nightFlight('n2','HP1819','b','21:00','22:30')];
+ const before=structuredClone(flights);assert.equal(H.nightPublication(s,flights).ready,true);assert.deepEqual(flights,before);
+});
+test('night minimum is checked after aircraft assignment, not based on requested aircraft',()=>{
+ const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.nightEnabled=true;s.aircraft.forEach(a=>a.night=true);
+ s.requests=[{...request('q1','a','privado','HP1907'),start:'17:00',end:'18:30'},{...request('q2','b','privado','HP1819'),start:'18:30',end:'20:00'}];
+ const r=H.simulate(s);assert.equal(r.assignments.length,2);assert.equal(new Set(r.assignments.map(q=>q.aircraft)).size,2);
+ assert.equal(H.nightPublication(s,r.assignments).ready,false);
+});
+
+test('director plans every aircraft regardless of status without broadening other roles or changing status',()=>{
+ const s=base();s.typeRules.privado=s.aircraft.map(a=>a.id);
+ for(const a of s.aircraft)for(const status of ['mantenimiento','grounded','sin registrar']){
+  a.status=status;a.release=null;
+  const q={...request('q1','d','privado',a.id),createdByRole:'director',fixed:true};
+  assert.equal(H.directorFlightError(s,q,undefined,'director'),'');
+  assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');
+  assert.notEqual(H.requestError(s,q),'');
+  assert.equal(a.status,status);assert.equal(a.release,null);
+  assert.equal(H.flightAvailable(a,q,s.date),false);
+  s.confirmed=[q];assert.deepEqual(H.simulate(s).assignments,[q]);s.confirmed=[];
+ }
+ const q=request('q1','d','privado','HP11BL');s.confirmed=[{...q,id:'taken'}];
+ assert.match(H.directorFlightError(s,q),/cruza/);
+ s.confirmed=[];s.pilots.find(p=>p.id==='d').valid=false;assert.match(H.directorFlightError(s,q),/piloto/);
+});
+test('director alerts begin exactly on previous Panama date and continue on flight date',()=>{
+ const s=base();s.confirmed=[{...request('q1','d','charter','HP11BL'),fixed:true}];
+ assert.equal(H.operationalAlerts([s],'2026-10-29T04:59:59Z').length,0);
+ let alerts=H.operationalAlerts([s],'2026-10-29T05:00:00Z');
+ assert.equal(alerts.length,1);assert.equal(alerts[0].when,'tomorrow');
+ assert.equal(alerts[0].aircraft,'HP11BL');assert.equal(alerts[0].status,'sin registrar');
+ alerts=H.operationalAlerts([s],'2026-10-30T05:00:00Z');assert.equal(alerts[0].when,'today');
+ assert.equal(H.operationalAlerts([s],'2026-10-31T05:00:00Z').length,0);
+});
+test('forecast does not silence alerts; operational state or flight removal does',()=>{
+ const s=base(),a=s.aircraft.find(a=>a.id==='HP11BL');
+ s.confirmed=[{...request('q1','d','charter','HP11BL'),fixed:true}];
+ a.release={enabled:true,date:s.date,from:'06:00'};
+ const now='2026-10-29T18:00:00-05:00';assert.equal(H.operationalAlerts([s],now).length,1);
+ a.status='operativo';assert.equal(H.operationalAlerts([s],now).length,0);
+ a.status='grounded';assert.equal(H.operationalAlerts([s],now).length,1);
+ s.confirmed=[];assert.equal(H.operationalAlerts([s],now).length,0);
+});
+test('alerts include all relevant schedule days, ignore requests and preserve input',()=>{
+ const today=base(),tomorrow=base(),future=base();
+ today.date='2026-10-29';future.date='2026-11-02';
+ for(const day of [today,tomorrow,future])day.confirmed=[{...request('q1','d','charter','HP11BL'),fixed:true}];
+ const schedules=[future,tomorrow,today],before=structuredClone(schedules);
+ const alerts=H.operationalAlerts(schedules,'2026-10-29T20:00:00-05:00');
  assert.deepEqual(alerts.map(a=>a.date),['2026-10-29','2026-10-30']);
  assert.equal(new Set(alerts.map(a=>a.id)).size,2);assert.deepEqual(schedules,before);
  today.confirmed=[];tomorrow.confirmed=[];today.requests=[request('q2','a','grob','HP1930')];
