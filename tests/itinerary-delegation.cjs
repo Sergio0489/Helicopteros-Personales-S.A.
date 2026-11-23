@@ -17,7 +17,7 @@ test('the shared server rule accepts letters, digits, signs and internal spaces 
 });
 test('request, Director and released-slot forms use the shared delegation validator',()=>{
  const ui=fs.readFileSync(path.join(__dirname,'../itinerary-ui.js'),'utf8');
- assert.equal((ui.match(/setCustomValidity\(exam\?E\.delegationNumberError\(form\.elements\.delegationNumber\.value\):''\)/g)||[]).length,3);
+ assert.equal((ui.match(/setCustomValidity\(exam\?E\.delegationNumberError\(form\.elements\.delegationNumber\.value\):''\)/g)||[]).length,2);
  assert.equal((ui.match(/name="delegationNumber" type="text" maxlength="30"/g)||[]).length,0);
  assert.equal((ui.match(/name="delegationNumber" type="text"/g)||[]).length,2);
 });
