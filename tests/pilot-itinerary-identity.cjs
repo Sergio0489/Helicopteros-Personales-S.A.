@@ -84,7 +84,7 @@ test('director save migrates pending requests, published flights, priorities, no
  const actor={user:{uid:'pilot-beto',email:'beto@example.test',emailVerified:true},account:{role:'Piloto',assignedAt:'fixture'},director:false};
  assert.equal(M.scope(data,actor).pilot,beto.id);
  const editDay=data.itinerary.days[editDate];assert.equal(editDay.revision,4);
- const updated=M.apply(data,actor,{date:editDate,command:'request',actionId:'update-own-request-fictitious-01',id:'request-beto-edit',revision:editDay.revision,flight:{aircraft:'HP1907',pilot:'legacy-pilot-0',start:'12:30',end:'14:00',slot:'b3',flightType:'privado',route:'MPMG - MPCL',note:''}},now);
+ const updated=M.apply(data,actor,{date:editDate,command:'request',actionId:'update-own-request-fictitious-01',id:'request-beto-edit',revision:editDay.revision,flight:{aircraft:'HP1907',pilot:'legacy-pilot-0',start:'12:30',end:'14:00',slot:'b3',flightType:'privado',route:'MPMG - MPCL',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio'}},now);
  assert.equal(updated.duplicate,false);
  const own=data.itinerary.days[editDate].requests.find(q=>q.id==='request-beto-edit');
  assert.equal(own.pilot,beto.id);assert.equal(own.start,'12:30');
