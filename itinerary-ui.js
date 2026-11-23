@@ -132,7 +132,7 @@
  }
  function formFlight(q,request){
   const s=model.state,selectedAircraft=s.aircraft.find(a=>a.id===q.aircraft),pilot880=model.rights.role==='pilot'&&selectedAircraft?.id==='HP880BL';
-  const typeIds=pilot880?['multi','ley89','conversion','charter','socio','examen']:Object.keys(E.flightTypes);
+  const typeIds=pilot880?['multi','multiLey89','multiConversion','charter','socio','examen']:Object.keys(E.flightTypes);
   if(q.flightType&&!typeIds.includes(q.flightType))typeIds.push(q.flightType);
   const types=select('flightType','Tipo de vuelo',typeIds.filter(id=>id!=='charter'||model.rights.role==='director'||pilot880).map(id=>({id,name:E.flightTypeLabel(id,q.aircraft)})),q.flightType||'privado');
   const identity=request?'<div class="hp-full hp-notice">'+esc(q.aircraft)+' · '+pretty(date)+' · '+esc(pilotName(model.rights.pilot))+'</div><div class="hp-full">'+types+'</div>':field('newDate','Fecha de vuelo',date,'date')+types+select('aircraft','Aeronave',s.aircraft.filter(a=>E.canSchedule(model.rights.role,a)).map(a=>({id:a.id,name:a.id+' · '+a.model})),q.aircraft)+select('pilot','Piloto / Instructor',s.pilots,q.pilot);
@@ -164,7 +164,7 @@
  function requestDialog(q){const gate=E.reservationGate(model.state);if(gate){modal('Reservas cerradas','<p>'+esc(timeText(gate))+'</p>');return;}const d=modal(q.id?'Modificar solicitud':'Solicitar vuelo',formFlight(q,true),async f=>save('request',{...(q.id?{id:q.id}:{}),flight:{...q,...f}}));watchFlight(d,q,true);}
  function claimSlotDialog(slot){
   if(!slot)return;
-  const s=model.state,aircraft=s.aircraft.find(a=>a.id===slot.aircraft),pilot880=aircraft?.id==='HP880BL',typeIds=pilot880?['multi','ley89','conversion','charter','socio','examen']:Object.keys(E.flightTypes);
+  const s=model.state,aircraft=s.aircraft.find(a=>a.id===slot.aircraft),pilot880=aircraft?.id==='HP880BL',typeIds=pilot880?['multi','multiLey89','multiConversion','charter','socio','examen']:Object.keys(E.flightTypes);
   if(slot.flightType&&!typeIds.includes(slot.flightType))typeIds.push(slot.flightType);
   const types=typeIds.filter(id=>E.canChooseFlightType(s,id,'pilot',aircraft)).map(id=>({id,name:E.flightTypeLabel(id,aircraft?.id)})),d=modal('Tomar espacio liberado · '+slot.aircraft,'<div class="hp-form-grid">'+select('flightType','Tipo de vuelo',types,slot.flightType||'privado')+'<label class="hp-full" data-delegation '+(slot.flightType==='examen'?'':'hidden')+'>Número de delegación<input name="delegationNumber" type="text"></label>'+personFieldsMarkup({flightType:slot.flightType||'privado'})+'<label class="hp-full">Ruta o destino<input name="route" required maxlength="200" placeholder="Ej.: MPMG – Chitré – MPMG"></label><label class="hp-full">Observaciones (opcional)<textarea name="note" maxlength="1000"></textarea></label></div><p class="hp-notice">Horario: '+esc(range(slot))+' · La aeronave y las horas están reservadas. Indica un estudiante o cliente; si no existe, completa sus datos para crear el expediente.</p>',f=>save('claim-open-slot',{id:slot.id,flight:{...f,aircraft:slot.aircraft,start:slot.start,end:slot.end}}));
   const form=d.querySelector('form'),update=()=>{
