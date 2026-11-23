@@ -127,11 +127,53 @@ function aircraftOrder(state,type){
 function assignmentMinutes(q){const start=minutes(q?.start),end=minutes(q?.end);return Number.isFinite(start)&&Number.isFinite(end)&&end>start?end-start:0;}
 function aircraftLoad(assignments,id){const flights=assignments.filter(q=>q.aircraft===id);return {count:flights.length,minutes:flights.reduce((total,q)=>total+assignmentMinutes(q),0)};}
 function compareAircraftLoad(assignments,a,b){const left=aircraftLoad(assignments,a.id),right=aircraftLoad(assignments,b.id);return left.count-right.count||left.minutes-right.minutes;}
-function compareAircraftPriority(state,type,assignments,a,b){
+function forecastInspectionDate(state,aircraft,assignments){
+ const plan=aircraft?.inspectionPlan;if(!plan||!Array.isArray(plan.weekdayHours))return null;
+ const assignedHours=aircraftLoad(assignments,aircraft.id).minutes/60,target=Date.parse(state.date+'T12:00:00Z');if(!Number.isFinite(target))return null;
+ const dates=[];
+ for(const limit of [50,100]){
+  let remaining=Number(plan['remaining'+limit])-assignedHours;if(!Number.isFinite(remaining))continue;
+  if(remaining<=0){dates.push(state.date);continue;}
+  let projected=0,due=null;
+  for(let offset=1;offset<=366;offset++){
+   const day=new Date(target+offset*86400000);projected+=Number(plan.weekdayHours[day.getUTCDay()])||0;
+   if(projected+1e-7>=remaining){due=day.toISOString().slice(0,10);break;}
+  }
+  if(due)dates.push(due);
+ }
+ return dates.length?dates.sort()[0]:null;
+}
+function inspectionStaggeringBias(state,type,assignments){
+ const rows=aircraftOrder(state,type).filter(a=>a.status==='operativo').map(a=>({id:a.id,date:forecastInspectionDate(state,a,assignments)})).filter(row=>row.date);
+ if(rows.length<2)return new Map();
+ const parent=rows.map((_,index)=>index),root=index=>{while(parent[index]!==index){parent[index]=parent[parent[index]];index=parent[index];}return index;};
+ for(let i=0;i<rows.length;i++)for(let j=i+1;j<rows.length;j++){
+  const difference=Math.abs(Date.parse(rows[i].date+'T12:00:00Z')-Date.parse(rows[j].date+'T12:00:00Z'))/86400000;
+  if(difference<=7){const left=root(i),right=root(j);if(left!==right)parent[right]=left;}
+ }
+ const groups=new Map();rows.forEach((row,index)=>{const key=root(index);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);});
+ const bias=new Map();
+ for(const group of groups.values()){
+  if(group.length<2)continue;
+  const weekdayRank=date=>{const weekday=new Date(date+'T12:00:00Z').getUTCDay();return weekday>=1&&weekday<=4?0:1;};
+  const leader=[...group].sort((a,b)=>weekdayRank(a.date)-weekdayRank(b.date)||a.date.localeCompare(b.date)||a.id.localeCompare(b.id))[0];
+  for(const row of group)bias.set(row.id,row.id===leader.id?-90:90);
+ }
+ return bias;
+}
+function compareAircraftFairLoad(state,type,assignments,a,b,bias=inspectionStaggeringBias(state,type,assignments)){
+ const left=aircraftLoad(assignments,a.id),right=aircraftLoad(assignments,b.id);if(left.count!==right.count)return left.count-right.count;
+ return left.minutes+(bias.get(a.id)||0)-right.minutes-(bias.get(b.id)||0);
+}
+function compareAircraftPriority(state,type,assignments,a,b,bias=inspectionStaggeringBias(state,type,assignments)){
  if((a.status==='operativo')!==(b.status==='operativo'))return a.status==='operativo'?-1:1;
  const order=aircraftOrder(state,type),rank=id=>{const value=order.findIndex(row=>row.id===id);return value<0?Number.MAX_SAFE_INTEGER:value;};
- if(state.prioritySettings?.aircraftMode==='priority')return rank(a.id)-rank(b.id);
- return compareAircraftLoad(assignments,a,b)||rank(a.id)-rank(b.id);
+ const left=aircraftLoad(assignments,a.id),right=aircraftLoad(assignments,b.id);if(left.count!==right.count)return left.count-right.count;
+ if(state.prioritySettings?.aircraftMode==='priority'){
+  const inspectionOrder=(bias.get(a.id)||0)-(bias.get(b.id)||0);
+  return inspectionOrder||rank(a.id)-rank(b.id);
+ }
+ return compareAircraftFairLoad(state,type,assignments,a,b)||rank(a.id)-rank(b.id);
 }
 function pilotHoursPeriod(state){return state.prioritySettings?.hourPeriod==='month'?'Month':'Honorarios';}
 function pilotAssignedLoad(state,pilotId,assignments){
@@ -147,7 +189,7 @@ function comparePilotPriority(state,aircraft,assignments,left,right){
  const order=state.prioritySettings?.pilotOrder||[],globalRank=id=>{const value=order.indexOf(id);return value<0?Number.MAX_SAFE_INTEGER:value;},aircraftRank=id=>{const value=aircraft.pilots.indexOf(id);return value<0?Number.MAX_SAFE_INTEGER:value;};
  return globalRank(left.request.pilot)-globalRank(right.request.pilot)||aircraftRank(left.request.pilot)-aircraftRank(right.request.pilot)||left.request.created-right.request.created||left.request.id.localeCompare(right.request.id);
 }
-function priorityAssignment(state,q,a,requests,assignments){
+function priorityAssignment(state,q,a,requests,assignments,sharedInspectionBias){
  const competing=requests.some(other=>{
   if(other.id===q.id||other.aircraft!==q.aircraft||other.pilot===q.pilot||!overlaps(other,q))return false;
   const assigned=assignments.find(f=>f.id===other.id);
@@ -155,13 +197,14 @@ function priorityAssignment(state,q,a,requests,assignments){
  });
  const requested=state.aircraft.find(other=>other.id===q.aircraft);
  const fallback=!requested||!compatible(state,q,requested)||!fitRequest(state,q,requested,assignments)||assignments.some(f=>f.aircraft===q.aircraft&&overlaps(f,q));
- if(q.aircraft===a.id)return {allowed:true,competing,idle:false,fallback};
+ const inspectionBias=sharedInspectionBias||inspectionStaggeringBias(state,typeOf(q),assignments),inspection=inspectionBias.has(a.id)&&(!requested||inspectionBias.get(a.id)<(inspectionBias.get(requested.id)||0))&&(!requested||aircraftLoad(assignments,a.id).count<=aircraftLoad(assignments,requested.id).count);
+ if(q.aircraft===a.id)return {allowed:true,competing,idle:false,fallback,inspection:inspectionBias.get(a.id)<0};
  const order=aircraftOrder(state,typeOf(q)).map(other=>other.id),rank=order.indexOf(a.id),requestedRank=order.indexOf(q.aircraft);
  const higher=rank>=0&&requestedRank>rank;
  const idle=higher&&Number.isFinite(a.idleDays)&&a.idleDays>=PRIORITY_IDLE_DAYS;
- const manualPriority=state.prioritySettings?.aircraftMode==='priority'&&higher;
- const balanced=state.prioritySettings?.aircraftMode!=='priority'&&requested&&compareAircraftLoad(assignments,a,requested)<0;
- return {allowed:fallback||competing||idle||manualPriority||balanced,competing,idle,fallback,manualPriority,balanced};
+ const manualPriority=state.prioritySettings?.aircraftMode==='priority'&&higher&&(!requested||aircraftLoad(assignments,a.id).count<=aircraftLoad(assignments,requested.id).count);
+ const balanced=state.prioritySettings?.aircraftMode!=='priority'&&requested&&compareAircraftFairLoad(state,typeOf(q),assignments,a,requested,inspectionBias)<0;
+ return {allowed:fallback||competing||idle||manualPriority||balanced||inspection,competing,idle,fallback,manualPriority,balanced,inspection};
 }
 function compatible(state,q,a){
  const p=state.pilots.find(x=>x.id===q.pilot);
@@ -338,15 +381,15 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
 function allocateMonomotorType(state,type,valid,assignments,results,used){
  while(true){
   let selected=null;
-  const options=aircraftOrder(state,type).filter(a=>bookable(a,state.date)).sort((a,b)=>compareAircraftPriority(state,type,assignments,a,b));
+  const maintenanceBias=inspectionStaggeringBias(state,type,assignments),options=aircraftOrder(state,type).filter(a=>bookable(a,state.date)).sort((a,b)=>compareAircraftPriority(state,type,assignments,a,b,maintenanceBias));
   for(const a of options){
-   const candidates=valid.filter(q=>state.aircraft.find(x=>x.id===q.aircraft)?.category==='Monomotor'&&typeOf(q)===type&&!used.has(q.id)&&priorityAssignment(state,q,a,valid,assignments).allowed&&compatible(state,q,a)&&(!state.maxBlocks||assignments.filter(x=>x.pilot===q.pilot).length<state.maxBlocks)).map(q=>({request:q,fit:fitRequest(state,q,a,assignments)})).filter(x=>x.fit).sort((x,y)=>comparePilotPriority(state,a,assignments,x,y));
+   const candidates=valid.filter(q=>state.aircraft.find(x=>x.id===q.aircraft)?.category==='Monomotor'&&typeOf(q)===type&&!used.has(q.id)&&priorityAssignment(state,q,a,valid,assignments,maintenanceBias).allowed&&compatible(state,q,a)&&(!state.maxBlocks||assignments.filter(x=>x.pilot===q.pilot).length<state.maxBlocks)).map(q=>({request:q,fit:fitRequest(state,q,a,assignments)})).filter(x=>x.fit).sort((x,y)=>comparePilotPriority(state,a,assignments,x,y));
    if(candidates.length){selected={aircraft:a,candidate:candidates[0]};break;}
   }
   if(!selected)break;
-  const a=selected.aircraft,original=selected.candidate.request,q=selected.candidate.fit,touched=active(a).filter(s=>overlaps(s,q)),priority=priorityAssignment(state,original,a,valid,assignments);
+  const a=selected.aircraft,original=selected.candidate.request,q=selected.candidate.fit,touched=active(a).filter(s=>overlaps(s,q)),priority=priorityAssignment(state,original,a,valid,assignments,maintenanceBias);
   if(!touched.length){used.add(original.id);results.push({...original,status:'review',reason:'No se encontró un bloque habilitado para el horario ajustado.'});continue;}
-  const reason=flightTypes[type].label+' · '+(priority.competing?'prioridad por solicitudes coincidentes':priority.fallback?'aeronave solicitada no disponible para este tipo e intervalo':priority.manualPriority?'prioridad manual de aeronave':priority.balanced?'balance del uso de la flota':priority.idle?'prioridad de aeronave: '+a.registration+' lleva '+a.idleDays+' días sin vuelos registrados':'solicitud concedida en la aeronave solicitada')+(state.prioritySettings?.pilotMode==='hours'?' · priorización por horas acumuladas':'')+(q.aircraft!==a.id?' · redistribuido desde '+q.aircraft:'')+(q.start!==original.start||q.end!==original.end?' · horario ajustado desde '+original.start+'–'+original.end:' · horario solicitado conservado')+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
+  const reason=flightTypes[type].label+' · '+(priority.competing?'prioridad por solicitudes coincidentes':priority.fallback?'aeronave solicitada no disponible para este tipo e intervalo':priority.manualPriority?'prioridad manual de aeronave':priority.balanced?'balance del uso de la flota':priority.idle?'prioridad de aeronave: '+a.registration+' lleva '+a.idleDays+' días sin vuelos registrados':'solicitud concedida en la aeronave solicitada')+((priority.inspection||maintenanceBias.has(a.id))?' · se consideran inspecciones próximas; proyección semanal para favorecer lunes a jueves':'')+(state.prioritySettings?.pilotMode==='hours'?' · priorización por horas acumuladas':'')+(q.aircraft!==a.id?' · redistribuido desde '+q.aircraft:'')+(q.start!==original.start||q.end!==original.end?' · horario ajustado desde '+original.start+'–'+original.end:' · horario solicitado conservado')+(a.status!=='operativo'?' · operativa prevista desde '+a.release.from:'');
   used.add(original.id);assignments.push({...q,aircraft:a.id,sourceRequestId:original.id,slot:touched[0].id,coveredSlots:touched.map(s=>s.id),requestedAircraft:original.aircraft,requestedStart:original.start,requestedEnd:original.end,fixed:false,conditional:a.status!=='operativo',reason});
   results.push({...original,start:q.start,end:q.end,assignedAircraft:a.id,status:'assigned',conditional:a.status!=='operativo',reason});
  }
