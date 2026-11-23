@@ -113,7 +113,7 @@ function pilotCanRequest(a){return !!a&&(a.category==='Monomotor'||a.id==='HP880
 function canSchedule(role,a){return !!a&&(role==='director'||role==='admin'&&a.category!=='Monomotor');}
 function canChooseFlightType(state,type,role,a){
  if(!flightTypes[type])return false;
- if(role==='pilot'&&a?.id==='HP880BL'&&a.category==='Multimotor'&&['multi','ley89','conversion','charter','socio'].includes(type))return true;
+ if(role==='pilot'&&a?.id==='HP880BL'&&a.category==='Multimotor'&&['multi','ley89','conversion','charter','socio'].includes(type)&&allowedForType(state,type).includes('HP880BL'))return true;
  if(type==='charter')return role==='director'&&!!a&&a.category!=='Monomotor'&&allowedForType(state,type).includes(a.id);
  const allowed=allowedForType(state,type);
  if(role!=='pilot')return !!a&&canSchedule(role,a)&&allowed.includes(a.id);
