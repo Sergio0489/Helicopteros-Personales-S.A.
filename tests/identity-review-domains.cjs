@@ -13,7 +13,7 @@ const reviewError=/identidad|revisi[oó]n|coincidencia/i;
 const fixedNow='2026-10-30T13:00:00-05:00',fixedDate='2026-10-31';
 
 function fixtureData(){
- return {fleet:Object.fromEntries(Model.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo',mantenimiento:[]} ])),pilotos:[{id:account.recordId,authUid:user.uid,email:user.email,nombre:account.profile.name,identity:'TEST-PILOT',medico:'2099-12-31',verificaciones:[]}],itinerarios:[],school:{students:[],registry:{clients:[],entries:[]},accessConfiguration:{roles:{Piloto:{...structuredClone(reportPolicy),...structuredClone(itineraryPolicy)}}}},operationalNotices:[],itinerary:{version:1,config:{},days:{},notices:[]}};
+ return {fleet:Object.fromEntries(Model.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo',mantenimiento:[]} ])),pilotos:[{id:account.recordId,authUid:user.uid,email:user.email,nombre:account.profile.name,identity:'TEST-PILOT',medico:'2099-12-31',verificaciones:[]}],itinerarios:[],school:{students:[{id:'fixture-student',name:'Estudiante de prueba',courses:[],stage:'Interesado'}],registry:{clients:[],entries:[]},accessConfiguration:{roles:{Piloto:{...structuredClone(reportPolicy),...structuredClone(itineraryPolicy)}}}},operationalNotices:[],itinerary:{version:1,config:{},days:{},notices:[]}};
 }
 function memory(data=fixtureData(),accountPatch={}){
  let store={dashboard:{payload:JSON.stringify(data),operation:'fixture-operation',revision:7,auditPending:{'fixture-history':{meta:{id:'fixture-history',reason:'Historial ficticio previo'},chunks:{'000000':[]}}}},accountRequests:{[user.uid]:{...structuredClone(account),...accountPatch}}};
@@ -34,7 +34,7 @@ function memory(data=fixtureData(),accountPatch={}){
 }
 const callReport=(h,body=reportBody,accountPatch={},userPatch={})=>Reports.handle(h.db,{user:{...user,...userPatch},account:{...h.account(),...accountPatch},actor,body:structuredClone(body)});
 const context=(patch={},director=false)=>({user:structuredClone(user),account:{...structuredClone(account),...patch},director});
-const requestBody={date:fixedDate,command:'request',actionId:'identity-gate-request-001',flight:{aircraft:'HP1907',start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'Ruta ficticia',note:'Solicitud ficticia'}};
+const requestBody={date:fixedDate,command:'request',actionId:'identity-gate-request-001',flight:{aircraft:'HP1907',start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'Ruta ficticia',note:'Solicitud ficticia',studentId:'student:fixture-student',studentName:'Estudiante de prueba'}};
 
 test('an explicitly pending pilot cannot create an aircraft report even while the stored link still says matched',async()=>{
  const h=memory(undefined,{identityReviewPending:true}),before=structuredClone(h.root);
