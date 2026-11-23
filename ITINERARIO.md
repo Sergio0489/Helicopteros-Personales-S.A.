@@ -4,15 +4,15 @@ La página utiliza los expedientes y estados existentes. No importa datos del bo
 
 ## Datos al agendar
 
-Aeronave, piloto, fecha, horas de inicio y culminación, tipo de vuelo, **Ruta o destino** y observaciones son obligatorios. Estudiante / Cliente es opcional; el nombre del socio se exige únicamente para ese tipo de vuelo. Si no hay comentarios, se puede escribir «Sin observaciones». El servidor valida los campos al crear o modificar vuelos y solicitudes; no exige completar reservas históricas que no se están editando.
+Aeronave, piloto, fecha, horas de inicio y culminación, tipo de vuelo, **Ruta o destino** y un estudiante o cliente son obligatorios. Al escribir el nombre, el formulario reutiliza el expediente coincidente; si no existe, pide nombre completo, cédula, correo y celular y crea el expediente junto con la solicitud. Las observaciones son opcionales. El servidor valida estos datos y no exige completar expedientes para vuelos históricos que no se están editando.
 
 Ruta o destino es una referencia de planificación. Se conserva al aprobar, publicar, modificar o reubicar el vuelo, y no crea entradas, horas ni cargos en la bitácora real.
 
 ## Reglas
 
-- Los pilotos con cargo confirmado, correo verificado, expediente vinculado y permiso de edición de **Solicitudes de vuelos** pueden solicitar solo para mañana, de 12:01 a 20:00 de Panamá. La identidad del piloto se determina en el servidor.
-- Monomotores y HP880BL están disponibles para solicitudes. Pueden coincidir solicitudes pendientes de distintos pilotos; los vuelos confirmados bloquean los cruces de aeronave y piloto.
-- El cierre de las 20:15 distribuye únicamente monomotores por tipo de vuelo, orden de aeronaves y prioridad de pilotos. Los cruces de HP880BL quedan para revisión manual; nunca se reasigna un multimotor o helicóptero automáticamente.
+- Los pilotos con cargo confirmado, correo verificado, expediente vinculado y permiso de edición de **Solicitudes de vuelos** pueden solicitar solo para mañana, de 6:00 a. m. a 8:00 p. m. de Panamá. La identidad del piloto se determina en el servidor.
+- Monomotores y HP880BL están disponibles para solicitudes. Si un estudiante o cliente coincide en horas con otra solicitud, se muestra una advertencia y se permite guardar; al organizar el horario se intenta mover uno de los vuelos a la hora libre más cercana. Un mismo estudiante no se publica en dos vuelos simultáneos.
+- A las 8:00 p. m. se envía solo a Dirección un borrador del día siguiente, en una cuadrícula de tres columnas agrupada por aeronave. A las 8:15 p. m. se publica el horario. Al organizarlo, el sistema procura conservar las horas solicitadas por cada piloto y solo las ajusta cuando hay conflictos o no cabe en el horario permitido; HP880BL conserva su aeronave y tipo de vuelo.
 - Las aprobaciones previas del director conservan matrícula, piloto y horas. El director puede agendar todas las aeronaves, cualquier hora o fecha futura; debe confirmar las aeronaves no operativas. Administrativo puede agendar multimotores y helicópteros según sus permisos, sin chárter.
 - Nocturnos se habilita por fecha. Se publican solo con dos aeronaves distintas elegibles; los demás quedan retenidos, visibles en el itinerario pero ausentes de Horario del día.
 - Al guardar un cambio de operativo a mantenimiento/grounded, el servidor reubica vuelos futuros de monomotores ya publicados cuando puede. Respeta horas, restricciones, piloto y estudiante; los casos sin solución y vuelos iniciados quedan señalados para revisión. El piloto puede cancelar su vuelo reubicado antes de su inicio.
@@ -36,7 +36,7 @@ Antes del cierre, revisar el estado real en `fleet` y las previsiones en `itiner
 
 En la primera apertura por un director se inicializa `itinerary.version=1`. Si Piloto ya tiene acceso al itinerario, se habilita únicamente el cuadro de sus propias solicitudes; no se amplía la edición de vuelos confirmados ni otros cuadros. El director puede retirar ese permiso desde Roles y permisos.
 
-Los avisos son **internos en la app**, mediante «Avisos de vuelos». No se envían WhatsApp, SMS ni correos. La publicación avisa a todos; modificaciones manuales incluyen piloto/estudiante anteriores y nuevos y mecánicos; reubicaciones avisan a todos. Los destinatarios sin acceso al detalle reciben solo el aviso general. La consulta conserva los últimos 500 avisos y muestra hasta 100 al usuario. El historial de cambios conserva el detalle administrativo.
+Los avisos operativos permanecen en «Avisos de vuelos». El sistema envía por correo el borrador de las 8:00 p. m. solo al Director y el horario publicado o actualizado a sus destinatarios configurados. El borrador tiene una etiqueta visible y muestra advertencias si el estudiante aún tiene vuelos propuestos que se cruzan. La publicación avisa a todos; modificaciones manuales incluyen piloto/estudiante anteriores y nuevos y mecánicos; reubicaciones avisan a todos. Los destinatarios sin acceso al detalle reciben solo el aviso general. La consulta conserva los últimos 500 avisos y muestra hasta 100 al usuario. El historial de cambios conserva el detalle administrativo.
 
 Las alertas de aeronaves no operativas aparecen al director desde el día anterior y durante el día del vuelo, y se recalculan al abrir/actualizar la app. Se consulta como máximo cada 90 segundos mientras la página está visible; no se mantiene un listener completo de la base de datos.
 
