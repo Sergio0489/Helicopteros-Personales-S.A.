@@ -23,7 +23,7 @@ function personNameKey(value){return String(value||'').normalize('NFKD').replace
 function identityKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,'');}
 function resolvePerson(data,input,actor,actionId,now){
  const submitted=String(input?.studentName||'').trim().replace(/\s+/g,' '),studentId=String(input?.studentId||''),normalized=personNameKey(submitted);
- if(!normalized||submitted.length>120)error('Escribe el nombre completo del estudiante o cliente (máximo 120 caracteres).');
+ if(submitted.length>120)error('Escribe el nombre completo del estudiante o cliente (máximo 120 caracteres).');
  let person=null;
  const all=[...arr(data.school?.students).map(record=>({kind:'student',record})),...arr(data.school?.registry?.clients).map(record=>({kind:'client',record}))];
  if(studentId){
@@ -38,6 +38,7 @@ function resolvePerson(data,input,actor,actionId,now){
  }
  if(person){
   const canonicalName=String(person.record.name||'').trim();
+  if(!canonicalName||canonicalName.length>120)error('El expediente seleccionado no tiene un nombre válido.');
   if(submitted&&personNameKey(canonicalName)!==normalized)error('El nombre no coincide con el expediente seleccionado.');
   if(person.record.identity&&input.personIdentity&&identityKey(person.record.identity)!==identityKey(input.personIdentity))error('La cédula no coincide con el expediente seleccionado.');
   return {studentId:person.kind+':'+person.record.id,personName:canonicalName,socioName:input.flightType==='socio'?canonicalName:String(input.socioName||'').trim()};
@@ -398,7 +399,7 @@ function visibleNotices(data,actor,now){
 }
 function view(data,actor,d,now){
  const rights=scope(data,actor);if(!rights.view)error('No tienes permiso para consultar el itinerario.');const state=stateFor(data,d,now);
- if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;delete a.inspectionPlan;});state.pilots.forEach(p=>{delete p.periodMinutesHonorarios;delete p.periodPriorMinutesHonorarios;delete p.periodMinutesMonth;delete p.periodPriorMinutesMonth;});delete state.prioritySettings;delete state.pilotHoursRange;delete state.pilotHoursRanges;state.confirmed.forEach(q=>{if(q.pilot!==rights.pilot)delete q.delegationNumber;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot,row=own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};if(!own)delete row.delegationNumber;return row;}):[];
+ if(!actor.director){if(!rights.request&&!rights.create)state.students=[];state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;delete a.inspectionPlan;});state.pilots.forEach(p=>{delete p.periodMinutesHonorarios;delete p.periodPriorMinutesHonorarios;delete p.periodMinutesMonth;delete p.periodPriorMinutesMonth;});delete state.prioritySettings;delete state.pilotHoursRange;delete state.pilotHoursRanges;state.confirmed.forEach(q=>{if(q.pilot!==rights.pilot)delete q.delegationNumber;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot,row=own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};if(!own)delete row.delegationNumber;return row;}):[];
   if(!rights.boxes.flights&&!rights.boxes.planner)state.confirmed=[];
   state.lastResults=state.lastResults.filter(q=>q.pilot===rights.pilot);
  }
