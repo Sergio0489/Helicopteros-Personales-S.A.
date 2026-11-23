@@ -160,7 +160,7 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.deepEqual(saved[0].slots,result.state.aircraft.find(a=>a.id==='HP1907').slots);assert.equal(saved[0].release.from,'06:30');
 });
 async function assertExamDelegationValidity(page){
- const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');
+ const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');await page.locator('[name=studentName]').fill('Estudiante A');
  const field=page.locator('[name=delegationNumber]');assert.equal(await field.getAttribute('maxlength'),null,'custom validation matches the server after trimming');
  assert.equal(await form.evaluate(f=>f.elements.delegationNumber.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false,'blank value is rejected');
  await field.fill('   ');assert.equal(await form.evaluate(f=>f.checkValidity()),false,'spaces-only value is rejected');
