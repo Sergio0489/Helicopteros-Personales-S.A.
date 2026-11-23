@@ -289,13 +289,18 @@ test('nonmono priority entries never allow automatic cross-category reassignment
  assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1907');
  s.typeRules.privado=['HP1186','HP11BL'];assert.equal(assigned(H.simulate(s)).length,0);
 });
-test('Charter is director-only on multi or helicopter and immutable in automatic closure',()=>{
+test('Charter permits pilot requests on HP880BL only and remains fixed in automatic closure',()=>{
  const s=base();s.aircraft.forEach(a=>a.status='operativo');
  for(const id of ['HP1784','HP880BL','HP18BLM','HP1186','HP1805BLM','HP11BL']){
  const q=request('q1','d','charter',id);
  if(id==='HP1784')assert.match(H.directorFlightError(s,q),/Chárter/);else assert.equal(H.directorFlightError(s,q),'');
- assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');assert.notEqual(H.requestError(s,q),'');
- s.requests=[q];assert.equal(H.simulate(s).results[0].status,'review');
+ assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');
+ if(id==='HP880BL'){
+  assert.equal(H.requestError(s,q),'');s.requests=[q];const result=H.simulate(s);
+  assert.equal(result.results[0].status,'assigned');assert.equal(result.assignments[0].aircraft,'HP880BL');
+ }else{
+  assert.notEqual(H.requestError(s,q),'');s.requests=[q];assert.equal(H.simulate(s).results[0].status,'review');
+ }
  }
  s.requests=[];s.confirmed=[{...request('charter1','d','charter','HP11BL'),fixed:true}];
  assert.deepEqual(H.simulate(s).assignments,s.confirmed);
