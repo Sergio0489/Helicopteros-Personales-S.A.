@@ -111,7 +111,7 @@ test('daily window constrains monomotors but leaves HP880BL and helicopters on t
  assert.deepEqual(state.aircraft.find(a=>a.id==='HP1907').scheduleWindow,scheduleWindow);
  assert.equal(state.aircraft.find(a=>a.id==='HP880BL').scheduleWindow,null);
  assert.throws(()=>apply(d,pilot('p1'),'request',{flight:flight('p1','HP1784',{start:'16:00',end:'17:30',studentId:'student:s2',studentName:'Alumno Dos'})}),/deben quedar entre 08:00 y 16:00/);
- apply(d,director,'flight',{flight:flight('p1','HP11BL',{start:'16:30',end:'18:30',flightType:'charter'})});
+ apply(d,director,'flight',{flight:flight('p1','HP11BL',{start:'16:30',end:'18:30',flightType:'charter',studentId:'student:s2',studentName:'Alumno Dos'})});
  M.publish(d,date,now);
  const flights=d.itinerarios.filter(f=>f.fecha===date);
  const moved=flights.find(f=>f.schedule.sourceRequestId&&f.schedule.pilot==='p1');
