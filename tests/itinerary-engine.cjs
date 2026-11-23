@@ -125,13 +125,15 @@ test('pilots can shorten a block or reserve across adjacent blocks',()=>{
 });
 test('short adjacent flights share a base block without overlap',()=>{
  const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.requests=[{...request('q1','a'),end:'08:00'},{...request('q2','b'),start:'08:00'}];
- const r=H.simulate(s);assert.equal(assigned(r).length,2);assert.ok(assigned(r).every(q=>q.assignedAircraft==='HP1784'));
+ const r=H.simulate(s);assert.equal(assigned(r).length,2);assert.equal(new Set(assigned(r).map(q=>q.assignedAircraft)).size,2);
+ assert.deepEqual(assigned(r).map(q=>[q.start,q.end]),[['06:30','08:00'],['08:00','09:30']]);
 });
 test('whole long reservation blocks intersecting flight on aircraft and pilot',()=>{
  const s=base();s.requests=[{...request('q1','a'),end:'12:30'},{...request('q2','b'),start:'09:30',end:'12:30'},{...request('q3','a'),start:'10:00',end:'11:00'}];
  const r=H.simulate(s);assert.equal(r.results.find(q=>q.id==='q3').status,'review');
  assert.match(r.results.find(q=>q.id==='q3').reason,/1 hora y 30 minutos/);
- assert.notEqual(r.results.find(q=>q.id==='q2').assignedAircraft,'HP1784');
+ const q1=r.results.find(q=>q.id==='q1'),q2=r.results.find(q=>q.id==='q2');assert.equal(q2.status,'assigned');
+ assert.ok(q1.assignedAircraft!==q2.assignedAircraft||H.minutes(q1.end)<=H.minutes(q2.start)||H.minutes(q2.end)<=H.minutes(q1.start));
 });
 test('gaps, invalid intervals and disabled night cannot be booked',()=>{
  const s=base(),a=s.aircraft.find(a=>a.id==='HP1907'),q=request('q1','a');
@@ -370,7 +372,7 @@ test('night rule uses 18:30 boundary and preserves whole mixed and late director
 test('night minimum is checked after aircraft assignment, not based on requested aircraft',()=>{
  const s=base();s.aircraft.find(a=>a.id==='HP1784').idleDays=3;s.nightEnabled=true;s.aircraft.forEach(a=>a.night=true);
  s.requests=[{...request('q1','a','privado','HP1907'),start:'17:00',end:'18:30'},{...request('q2','b','privado','HP1819'),start:'18:30',end:'20:00'}];
- const r=H.simulate(s);assert.equal(r.assignments.length,2);assert.equal(new Set(r.assignments.map(q=>q.aircraft)).size,1);
+ const r=H.simulate(s);assert.equal(r.assignments.length,2);assert.equal(new Set(r.assignments.map(q=>q.aircraft)).size,2);
  assert.equal(H.nightPublication(s,r.assignments).ready,false);
 });
 

@@ -34,14 +34,53 @@ function idleDays(data,id,targetDate){
  const days=(target-Date.parse(latest+'T12:00:00Z'))/DAY_MS;
  return Number.isFinite(days)?Math.max(0,Math.floor(days)-1):null;
 }
+function itineraryPeriod(dateValue,mode){
+ const [year,month,day]=dateValue.split('-').map(Number),stamp=(offset,dayOfMonth)=>new Date(Date.UTC(year,month-1+offset,dayOfMonth)).toISOString().slice(0,10);
+ if(mode==='month')return {start:stamp(0,1),end:stamp(1,0)};
+ if(day<=10)return {start:stamp(-1,26),end:stamp(0,10)};
+ if(day<=25)return {start:stamp(0,11),end:stamp(0,25)};
+ return {start:stamp(0,26),end:stamp(1,10)};
+}
+function pilotScheduleMinutes(data,dateValue,ps,mode){
+ const period=itineraryPeriod(dateValue,mode),totals=new Map(ps.map(p=>[p.id,0])),prior=new Map(ps.map(p=>[p.id,0]));
+ const byName=new Map(ps.map(p=>[pilotNameKey(p.name),p.id]));
+ for(const flight of arr(data.itinerarios)){
+  const flightDate=iso(flight.fecha);if(!flightDate||flightDate<period.start||flightDate>dateValue)continue;
+  const rawId=flight.schedule?.pilot||flight.pilotId,pilotId=totals.has(rawId)?rawId:byName.get(pilotNameKey(flight.piloto));
+  if(!totals.has(pilotId))continue;
+  const start=E.minutes(flight.horaInicio||flight.hora||flight.schedule?.start),end=E.minutes(flight.horaFin||flight.schedule?.end);
+  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)continue;
+  const value=end-start;totals.set(pilotId,totals.get(pilotId)+value);if(flightDate<dateValue)prior.set(pilotId,prior.get(pilotId)+value);
+ }
+ return {period,totals,prior};
+}
+function inspectionPlanning(aircraft,dateValue){
+ if(!aircraft||typeof aircraft!=='object')return null;
+ const read=(field,alias)=>{const raw=aircraft[field]==null||aircraft[field]===''?aircraft[alias]:aircraft[field],value=Number(raw);return Number.isFinite(value)&&value>=0?value:null;};
+ const accumulated50=read('horas_acum_50','horas_totales'),accumulated100=read('horas_acum_100','horas_limite');
+ if(accumulated50===null||accumulated100===null)return null;
+ const sums=Array(7).fill(0),observations=Array(7).fill(0),dayHours=new Map(),logs=Array.isArray(aircraft.bitacora_horas)?aircraft.bitacora_horas:Object.values(aircraft.bitacora_horas||{});
+ for(const log of logs){const logged=iso(log?.fecha),hours=Number(log?.hv);if(!logged||!Number.isFinite(hours)||hours<=0||logged>=dateValue)continue;dayHours.set(logged,(dayHours.get(logged)||0)+hours);}
+ const target=Date.parse(dateValue+'T12:00:00Z');if(!Number.isFinite(target))return null;
+ for(let offset=1;offset<=56;offset++){
+  const stamp=new Date(target-offset*DAY_MS),key=stamp.toISOString().slice(0,10),weekday=stamp.getUTCDay();
+  sums[weekday]+=dayHours.get(key)||0;observations[weekday]++;
+ }
+ const weekdayHours=sums.map((value,index)=>observations[index]?value/observations[index]:0);
+ if(!weekdayHours.some(value=>value>0))return null;
+ return {remaining50:Math.max(0,50-accumulated50),remaining100:Math.max(0,100-accumulated100),weekdayHours};
+}
 function stateFor(data,d,now){
  date(d);const config=data.itinerary?.config||{},stored=data.itinerary?.days?.[d]||{},ps=pilots(data),scheduleWindow=stored.scheduleWindow==null?null:copy(stored.scheduleWindow);
  if(scheduleWindow!==null&&(!scheduleWindow||typeof scheduleWindow!=='object'||Array.isArray(scheduleWindow)||!E.validWindow(scheduleWindow)))error('El rango horario guardado para esta fecha no es válido.');
- const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id],scheduleWindow:scheduleWindow&&category==='Monomotor'?copy(scheduleWindow):null};});
+ const savedPriorities=config.prioritySettings||{},hourPeriod=savedPriorities.hourPeriod==='month'?'month':'honorarios',hourPeriods={honorarios:pilotScheduleMinutes(data,d,ps,'honorarios'),month:pilotScheduleMinutes(data,d,ps,'month')};
+ for(const p of ps){p.periodMinutesHonorarios=hourPeriods.honorarios.totals.get(p.id)||0;p.periodPriorMinutesHonorarios=hourPeriods.honorarios.prior.get(p.id)||0;p.periodMinutesMonth=hourPeriods.month.totals.get(p.id)||0;p.periodPriorMinutesMonth=hourPeriods.month.prior.get(p.id)||0;}
+ const pilotIds=ps.map(p=>p.id),configuredOrder=arr(savedPriorities.pilotOrder).filter(id=>pilotIds.includes(id)),prioritySettings={aircraftMode:savedPriorities.aircraftMode==='priority'?'priority':'balanced',pilotMode:savedPriorities.pilotMode==='manual'?'manual':'hours',hourPeriod,pilotOrder:[...configuredOrder,...pilotIds.filter(id=>!configuredOrder.includes(id))]};
+ const aircraft=E.fleet.map(([id,model,category,color],i)=>{const entry=Object.entries(data.fleet||{}).find(([k])=>key(k)===id),ac=config.aircraft?.[id]||{},order=config.aircraftOrder||[];return {id,registration:entry?.[0].replaceAll('_','-')||(id==='HP1186'?id:id.replace(/^HP/,'HP-')),model,category,color,status:status(entry?.[1]?.status),rank:order.includes(id)?order.indexOf(id)+1:i+1,idleDays:idleDays(data,id,d),inspectionPlan:inspectionPlanning(entry?.[1],d),pilots:arr(ac.pilots),slots:copy(stored.blocks?.[id]||ac.slots||E.slots),night:!!stored.nightEnabled,release:stored.releases?.[id],scheduleWindow:scheduleWindow&&category==='Monomotor'?copy(scheduleWindow):null};});
  const confirmed=[...arr(data.itinerarios).filter(f=>iso(f.fecha)===d).map(f=>fromFlight(f,ps)),...copy(arr(stored.held)).map(q=>({...q,publicationStatus:'held'}))];
  const defaults=E.defaultTypeRules();if(config.aircraftOrder)for(const type of ['privado','xc','maniobras'])defaults[type]=copy(config.aircraftOrder);
  const typeRules={...defaults,...copy(config.typeRules||{})};
- return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,scheduleWindow:scheduleWindow?copy(scheduleWindow):null,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
+ return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,scheduleWindow:scheduleWindow?copy(scheduleWindow):null,pilotHoursRange:hourPeriods[hourPeriod].period,pilotHoursRanges:{honorarios:hourPeriods.honorarios.period,month:hourPeriods.month.period},prioritySettings,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results))};
 }
 function scope(data,actor){
  if(identityReview.pending(actor.account))error(identityReview.message);
@@ -138,6 +177,7 @@ function apply(data,actor,body,now){
   if(typeof body.nightEnabled==='boolean')d.nightEnabled=body.nightEnabled;
   if(body.aircraftOrder){const known=state.aircraft.filter(a=>a.category==='Monomotor').map(a=>a.id);if(!Array.isArray(body.aircraftOrder)||body.aircraftOrder.length!==known.length||new Set(body.aircraftOrder).size!==known.length||body.aircraftOrder.some(id=>!known.includes(id)))error('Revisa el orden de monomotores.');c.aircraftOrder=copy(body.aircraftOrder);}
   if(body.typeRules){for(const [type,ids]of Object.entries(body.typeRules)){if(!Object.hasOwn(E.flightTypes,type))error('Tipo de vuelo no válido.');const allowed=E.typeConfigAircraft(state,type).map(a=>a.id);if(!Array.isArray(ids)||ids.length>11||new Set(ids).size!==ids.length||ids.some(id=>!allowed.includes(id)))error('Revisa las aeronaves de cada tipo.');}(c.typeRules ||= copy(state.typeRules));Object.assign(c.typeRules,copy(body.typeRules));}
+  if(body.prioritySettings){const settings=body.prioritySettings,pilotIds=state.pilots.map(p=>p.id);if(!settings||!['balanced','priority'].includes(settings.aircraftMode)||!['hours','manual'].includes(settings.pilotMode)||!['honorarios','month'].includes(settings.hourPeriod)||!Array.isArray(settings.pilotOrder)||settings.pilotOrder.length!==pilotIds.length||new Set(settings.pilotOrder).size!==pilotIds.length||settings.pilotOrder.some(id=>!pilotIds.includes(id)))error('Revisa las prioridades de aeronaves y pilotos.');c.prioritySettings={aircraftMode:settings.aircraftMode,pilotMode:settings.pilotMode,hourPeriod:settings.hourPeriod,pilotOrder:copy(settings.pilotOrder)};}
   if(body.aircraft){const id=key(body.aircraft),a=state.aircraft.find(a=>a.id===id);if(!a)error('Aeronave no válida.');c.aircraft ||= {};const ac=c.aircraft[id] ||= {};
    if(body.pilots){if(!Array.isArray(body.pilots)||new Set(body.pilots).size!==body.pilots.length||body.pilots.some(id=>!state.pilots.some(p=>p.id===id)))error('Selecciona pilotos existentes sin duplicados.');ac.pilots=copy(body.pilots);}
    if(body.slots){if(!Array.isArray(body.slots)||body.slots.length!==5||body.slots.some((s,i)=>s.id!=='b'+(i+1)))error('Se requieren los cinco bloques.');const reason=E.validateSlots(body.slots,true);if(reason)error(reason);d.blocks ||= {};d.blocks[id]=body.slots.map(({id,start,end})=>({id,start,end}));}
@@ -290,7 +330,7 @@ function visibleNotices(data,actor,now){
 }
 function view(data,actor,d,now){
  const rights=scope(data,actor);if(!rights.view)error('No tienes permiso para consultar el itinerario.');const state=stateFor(data,d,now);
- if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;});state.confirmed.forEach(q=>{if(q.pilot!==rights.pilot)delete q.delegationNumber;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot,row=own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};if(!own)delete row.delegationNumber;return row;}):[];
+ if(!actor.director){state.aircraft.forEach(a=>{a.pilots=[];delete a.idleDays;delete a.inspectionPlan;});state.pilots.forEach(p=>{delete p.periodMinutesHonorarios;delete p.periodPriorMinutesHonorarios;delete p.periodMinutesMonth;delete p.periodPriorMinutesMonth;});delete state.prioritySettings;delete state.pilotHoursRange;delete state.pilotHoursRanges;state.confirmed.forEach(q=>{if(q.pilot!==rights.pilot)delete q.delegationNumber;});state.requests=rights.boxes.requests?state.requests.map(q=>{const own=q.pilot===rights.pilot,row=own||rights.role==='admin'?q:{id:q.id,aircraft:q.aircraft,start:q.start,end:q.end,slot:q.slot,status:q.status,pilot:'',flightType:q.flightType};if(!own)delete row.delegationNumber;return row;}):[];
   if(!rights.boxes.flights&&!rights.boxes.planner)state.confirmed=[];
   state.lastResults=state.lastResults.filter(q=>q.pilot===rights.pilot);
  }

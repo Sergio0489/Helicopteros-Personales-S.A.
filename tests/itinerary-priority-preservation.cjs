@@ -15,7 +15,8 @@ test('historical aircraft priority overrides an unopposed preference only at thr
 });
 test('competition for the first-priority aircraft can use lower-ranked eligible alternatives',()=>{
  const state=base();state.requests=[request('q1','a','privado','HP1784'),request('q2','b','privado','HP1784')];
- const result=E.simulate(state);assert.equal(assigned(result).length,2);assert.deepEqual(assigned(result).map(q=>q.assignedAircraft),['HP1784','HP1784']);assert.equal(assigned(result)[1].start,'09:30');assert.equal(assigned(result)[1].end,'12:30');assert(assigned(result).every(q=>q.aircraft==='HP1784'));
+ const result=E.simulate(state);assert.equal(assigned(result).length,2);assert.deepEqual(assigned(result).map(q=>q.assignedAircraft),['HP1784','HP1819']);
+ assert(assigned(result).every(q=>q.start==='06:30'&&q.end==='09:30'));
 });
 test('accepted requests outside the type list are allocated to allowed aircraft rather than waiting without a capacity conflict',()=>{
  for(const [type,preferred,wanted,custom]of [['ifr','HP1907','HP1579'],['solo','HP1579','HP1819'],['privado','HP1784','HP1907',['HP1907']]]){
