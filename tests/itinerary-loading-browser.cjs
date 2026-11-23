@@ -112,21 +112,21 @@ test('Cancelling a schedule date change keeps the explicitly selected day',async
  await page.evaluate(()=>renderDailySchedule());
  assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-date'),selected);
 });
-test('Director sees detailed confirmed flights, requires route and allows blank observations',async t=>{
+test('Director sees detailed flights, requires a student or client, and allows blank observations',async t=>{
  const page=await app(t),result=response();Object.assign(result.state.confirmed[0],{route:'Chitré <referencia>',note:'Sin observaciones',studentId:'st1'});
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
  const details=await page.locator('[data-flight-list]').textContent();
  for(const value of ['Aeronave','Hora de inicio y fin','Ruta o destino','Cliente / Estudiante','Estudiante A','Chitré <referencia>'])assert.ok(details.includes(value),value);
  await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
  const form=page.locator('dialog form');
- assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','route'].sort());
+ assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name&&!el.disabled).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','route','studentName'].sort());
  assert.equal(await form.evaluate(f=>f.querySelectorAll('[data-time-field] [required]').length),6);
- assert.equal(await form.evaluate(f=>f.elements.studentId.required),false);
+ assert.equal(await form.evaluate(f=>f.elements.studentName.required),true);
  assert.equal(await form.evaluate(f=>f.checkValidity()),false);
  await page.locator('[name=route]').fill('MPMG – Chitré');
+ await page.locator('[name=studentName]').fill('Estudiante A');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
- await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false);
- await page.locator('[name=socioName]').fill('Socio de prueba');
+ await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.value),'Estudiante A');assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[data-time-field=start] [data-hour]').fill('12');
  await page.locator('[data-time-field=start] [data-minute]').fill('05');
  await page.locator('[data-time-field=start] [data-period]').selectOption('AM');
@@ -136,7 +136,7 @@ test('Director sees detailed confirmed flights, requires route and allows blank 
  await page.evaluate(result=>{window.commandResult=result;},result);
  await page.getByRole('button',{name:'Guardar',exact:true}).click();
  await page.locator('dialog').waitFor({state:'detached'});
- const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG – Chitré');assert.equal(saved[0].flight.studentId,'');assert.equal(saved[0].flight.start,'00:05');assert.equal(saved[0].flight.end,'12:45');
+ const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG – Chitré');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'00:05');assert.equal(saved[0].flight.end,'12:45');
 });
 test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canonical times',async t=>{
  const page=await app(t,390),result=response();
@@ -160,7 +160,7 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.deepEqual(saved[0].slots,result.state.aircraft.find(a=>a.id==='HP1907').slots);assert.equal(saved[0].release.from,'06:30');
 });
 async function assertExamDelegationValidity(page){
- const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');
+ const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');await page.locator('[name=studentName]').fill('Estudiante A');
  const field=page.locator('[name=delegationNumber]');assert.equal(await field.getAttribute('maxlength'),null,'custom validation matches the server after trimming');
  assert.equal(await form.evaluate(f=>f.elements.delegationNumber.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false,'blank value is rejected');
  await field.fill('   ');assert.equal(await form.evaluate(f=>f.checkValidity()),false,'spaces-only value is rejected');

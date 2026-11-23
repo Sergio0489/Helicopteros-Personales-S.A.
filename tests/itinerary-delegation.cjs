@@ -4,10 +4,10 @@ const now='2026-10-30T13:00:00-05:00',date='2026-10-31';
 const policy={itinerario:{actions:{view:true,edit:true},areas:{Calendario:true,'Programación de vuelos':true,'Solicitudes de vuelos':true},boxes:{planner:{view:true},flights:{view:true,edit:false},create:{view:true,edit:true},requests:{view:true,edit:true}}}};
 const director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:now},director:true};
 const pilot=id=>({user:{uid:id,email:id+'@example.test',emailVerified:true},account:{role:'Piloto',assignedAt:now},director:false});
-function fixture(){return {fleet:Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo'}])),pilotos:[{id:'p1',nombre:'Piloto Uno',email:'p1@example.test',medico:'2027-12-31'},{id:'p2',nombre:'Piloto Dos',email:'p2@example.test',medico:'2027-12-31'}],itinerarios:[],school:{students:[],registry:{clients:[]},accessConfiguration:{roles:{Piloto:structuredClone(policy),Administrativo:structuredClone(policy)}}},itinerary:{version:1,config:{},days:{},notices:[]}};}
+function fixture(){return {fleet:Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo'}])),pilotos:[{id:'p1',nombre:'Piloto Uno',email:'p1@example.test',medico:'2027-12-31'},{id:'p2',nombre:'Piloto Dos',email:'p2@example.test',medico:'2027-12-31'}],itinerarios:[],school:{students:[{id:'fixture-student',name:'Estudiante Delegación'}],registry:{clients:[]},accessConfiguration:{roles:{Piloto:structuredClone(policy),Administrativo:structuredClone(policy)}}},itinerary:{version:1,config:{},days:{},notices:[]}};}
 let sequence=0;
 function apply(d,actor,command,fields={},at=now){return M.apply(d,actor,{date,command,actionId:'delegation-test-'+String(++sequence).padStart(4,'0'),revision:M.day(d,date).revision,configurationRevision:d.itinerary.config.revision||0,...fields},at);}
-const flight=(pilotId='p1',aircraft='HP1907',extra={})=>({pilot:pilotId,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG – Chitré',note:'',...extra});
+const flight=(pilotId='p1',aircraft='HP1907',extra={})=>({pilot:pilotId,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG – Chitré',note:'',studentId:'student:fixture-student',studentName:'Estudiante Delegación',...extra});
 
 test('the shared server rule accepts letters, digits, signs and internal spaces up to 30 trimmed characters',()=>{
  const state=M.stateFor(fixture(),date,now);

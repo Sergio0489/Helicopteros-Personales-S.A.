@@ -17,7 +17,7 @@ exports.emailPublishedItinerary=onValueCreated({
  if(!publication||publication.id!==id)throw Error('Evento de publicación del horario no válido.');
  const [accounts,cfg]=await Promise.all([db.ref('accountRequests').get().then(snapshot=>snapshot.val()||{}),Promise.resolve(mail.smtpConfiguration(config.value()))]);
  const recipients=await itineraryEmail.recipients(publication,accounts,getAuth(),DIRECTOR_UID);
- if(!recipients.length){logger.error('El horario publicado no tiene destinatarios con correo válido.',{publicationId:id});await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();return;}
+ if(!recipients.length){logger.error('El horario publicado no tiene destinatarios con correo válido.',{publicationId:id});if(publication.draft===true)throw Error('El borrador está pendiente: no se pudo verificar el correo de Dirección.');await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();return;}
  const transport=require('nodemailer').createTransport(cfg.transport);
  try{
   await itineraryEmail.deliver({db,event,from:cfg.from,recipients,send:message=>transport.sendMail(message),report:(code,deliveryId)=>logger.error('Aviso de horario pendiente de revisión.',{code,deliveryId})});

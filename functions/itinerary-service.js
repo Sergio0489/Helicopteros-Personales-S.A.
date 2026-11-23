@@ -28,7 +28,7 @@ async function transaction(db,actor,reason,update){
 async function handle(db,context,body){
  if(identityReview.pending(context.account))throw Error(identityReview.message);
  const actor={uid:context.user.uid,name:context.account?.profile?.name||context.user.displayName||context.user.email,role:context.director?'Director':context.account?.role};
- let root;
+ let root,outcome;
  if(body.action==='itinerary-calendar'){
   root=(await db.ref('dashboard').get()).val();
   return M.calendar(JSON.parse(root?.payload||'{}'),context,body.year,new Date().toISOString());
@@ -42,11 +42,11 @@ async function handle(db,context,body){
   else root=(await db.ref('dashboard').get()).val();
  }else if(body.action==='itinerary-command'){
   if(JSON.stringify(body).length>75000)throw Error('La solicitud es demasiado grande.');
-  root=(await transaction(db,actor,'Itinerario: '+body.command,data=>{if(!data.itinerary?.version)throw Error('El director debe abrir primero el nuevo itinerario.');return M.apply(data,context,body,new Date().toISOString());})).root;
+  const committed=await transaction(db,actor,'Itinerario: '+body.command,data=>{if(!data.itinerary?.version)throw Error('El director debe abrir primero el nuevo itinerario.');return M.apply(data,context,body,new Date().toISOString());});root=committed.root;outcome=committed.outcome;
  }else throw Error('Operación no válida.');
  const now=new Date().toISOString(),data=JSON.parse(root?.payload||'{}');
  const selected=body.date||M.E.panamaClock(now).tomorrow;
- return {...M.view(data,context,selected,now),...(context.director?{calendar:M.calendar(data,context,selected.slice(0,4),now)}:{}),operation:root.operation};
+ return {...M.view(data,context,selected,now),...(context.director?{calendar:M.calendar(data,context,selected.slice(0,4),now)}:{}),operation:root.operation,...(outcome?.actionWarning?{actionWarning:outcome.actionWarning}:{})};
 }
 async function scheduled(db,now=new Date().toISOString()){
  const clock=M.E.panamaClock(now);
@@ -56,10 +56,19 @@ async function scheduled(db,now=new Date().toISOString()){
   return M.publish(data,clock.tomorrow,now)?{emailPublication:M.publicationEmail(data,clock.tomorrow)}:false;
  });
 }
+async function scheduledDraft(db,now=new Date().toISOString()){
+ const clock=M.E.panamaClock(now),date=clock.tomorrow,id='draft-'+date;
+ return transaction(db,null,'Borrador del horario enviado a Dirección',data=>{
+  if(!data.itinerary?.version)return false;
+  const d=M.day(data,date);if(d.published||d.draftEmail?.id===id)return false;
+  const emailPublication=M.previewPublicationEmail(data,date,now);if(!emailPublication)return false;
+  d.draftEmail={id,createdAt:now};return {emailPublication};
+ });
+}
 async function flushModified(db,now=new Date().toISOString()){
  return transaction(db,null,'Envío de horario modificado tras diez minutos',data=>{
   const emailPublication=M.flushModifiedEmail(data,now);
   return emailPublication?{emailPublication}:false;
  });
 }
-module.exports={handle,transaction,scheduled,flushModified,enable};
+module.exports={handle,transaction,scheduled,scheduledDraft,flushModified,enable};
