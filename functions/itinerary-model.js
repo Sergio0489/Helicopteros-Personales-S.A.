@@ -13,6 +13,7 @@ const iso=v=>V.iso(v),eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0,24);
 const DAY_MS=86400000;
 const status=v=>v==='aog'?'grounded':['operativo','mantenimiento','grounded'].includes(v)?v:'sin registrar';
+function registrationLabel(data,value){const id=key(value),stored=Object.keys(data.fleet||{}).find(candidate=>key(candidate)===id);if(stored)return stored.replaceAll('_','-');return id==='HP1186'||!/^HP\d{4}$/.test(id)?id:id.replace(/^HP/,'HP-');}
 const error=s=>{throw Error(s);};
 function date(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value)error('Selecciona una fecha válida.');return value;}
 function setup(data){return data.itinerary ||= {version:1,config:{},days:{},notices:[]};}
@@ -182,7 +183,7 @@ function cleanFlight(input,id,now){
 }
 function checkExpected(d,body){if(body.revision!==d.revision)error('El horario cambió. Actualiza y revisa antes de volver a guardar.');}
 function publicationEmail(data,dateValue){
- const scheduled=arr(data.itinerarios).filter(f=>iso(f.fecha)===dateValue).map(f=>({aircraft:f.aeronave||'',model:E.fleet.find(x=>x[0]===key(f.aeronave))?.[1]||'',pilot:f.piloto||'',student:f.estudiante||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',type:f.tipo||f.schedule?.flightType||'Privado',route:f.ruta||'',notes:f.observaciones||''})).sort((a,b)=>E.fleet.findIndex(x=>x[0]===key(a.aircraft))-E.fleet.findIndex(x=>x[0]===key(b.aircraft))||a.start.localeCompare(b.start));
+ const scheduled=arr(data.itinerarios).filter(f=>iso(f.fecha)===dateValue).map(f=>{const entry=Object.entries(data.fleet||{}).find(([id])=>key(id)===key(f.aeronave));return {aircraft:f.aeronave||'',model:E.fleet.find(x=>x[0]===key(f.aeronave))?.[1]||'',aircraftStatus:status(entry?.[1]?.status),relocationFrom:f.schedule?.relocation?.from?registrationLabel(data,f.schedule.relocation.from):'',pilot:f.piloto||'',student:f.estudiante||'',start:f.horaInicio||f.hora||'',end:f.horaFin||'',type:f.tipo||f.schedule?.flightType||'Privado',route:f.ruta||'',notes:f.observaciones||''};}).sort((a,b)=>E.fleet.findIndex(x=>x[0]===key(a.aircraft))-E.fleet.findIndex(x=>x[0]===key(b.aircraft))||a.start.localeCompare(b.start));
  const mechanicRecipients=arr(data.school?.personnel).filter(p=>['mecanico','mecanica','mechanic','mechanics'].includes(String(p.position||p.role||p.cargo||'').normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').trim())).map(p=>p.email||'').filter(Boolean);
  return {id:'publication-'+dateValue,date:dateValue,publishedAt:data.itinerary?.days?.[dateValue]?.publishedAt||'',pilotRecipients:arr(data.pilotos).map(p=>p.email||'').filter(Boolean),mechanicRecipients,flights:scheduled};
 }
@@ -402,39 +403,47 @@ function protect(before,after,migration={}){
   after.itinerary=itinerary;
  }else{delete after.itinerary;after.itinerarios=remapFlights(after.itinerarios,migration).flights;}
 }
-function reconcile(before,data,now){
- let changed=false;
- const today=E.panamaClock(now).date;
- // Keep operational alerts available even to users who do not have itinerary access.
- data.operationalNotices ||= [];
+function reconcile(before,data,now,emailEvents=[]){
+ let changed=false;const today=E.panamaClock(now).date;data.operationalNotices ||= [];
  for(const [registration,aircraft]of Object.entries(data.fleet||{})){
-  const previous=before.fleet?.[registration]?.status||'';
-  const previousStatus=previous==='aog'?'grounded':previous,status=aircraft?.status==='aog'?'grounded':aircraft?.status;
-  if(previousStatus===status||!['mantenimiento','grounded'].includes(status))continue;
-  const id='aircraft-status:'+hash([registration,previousStatus,status,now]);
-  if(data.operationalNotices.some(n=>n.id===id))continue;
-  data.operationalNotices.push({id,kind:'aircraft-status',aircraft:registration.replaceAll('_','-'),status,previous:previousStatus,createdAt:now,recipients:[{kind:'group',id:'all'}],message:'La aeronave '+registration.replaceAll('_','-')+' cambió a '+(status==='grounded'?'GROUNDED':'MANTENIMIENTO')+'.'});
-  data.operationalNotices=data.operationalNotices.slice(-500);changed=true;
+  const previous=before.fleet?.[registration]?.status||'',previousStatus=previous==='aog'?'grounded':previous,status=aircraft?.status==='aog'?'grounded':aircraft?.status;
+  if(previousStatus===status)continue;
+  const restoring=status==='operativo'&&['mantenimiento','grounded'].includes(previousStatus),entering=['mantenimiento','grounded'].includes(status);
+  if(!restoring&&!entering)continue;
+  const aircraftName=registrationLabel(data,registration),id='aircraft-status:'+hash([registration,previousStatus,status,now]);
+  if(!data.operationalNotices.some(n=>n.id===id)){
+   const statusLabel=status==='operativo'?'OPERATIVA':status==='grounded'?'GROUNDED':'MANTENIMIENTO';
+   data.operationalNotices.push({id,kind:'aircraft-status',aircraft:aircraftName,status,previous:previousStatus,createdAt:now,recipients:[{kind:'group',id:'all'}],message:'La aeronave '+aircraftName+' '+(restoring?'restableció sus operaciones.':'cambió a '+statusLabel+'.')});
+   data.operationalNotices=data.operationalNotices.slice(-500);changed=true;
+  }
+  const eventDate=E.panamaClock(now).date;
+  const mechanicRecipients=arr(data.school?.personnel).filter(p=>['mecanico','mecanica','mechanic','mechanics'].includes(String(p.position||p.role||p.cargo||'').normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').trim())).map(p=>p.email||'').filter(Boolean);
+  emailEvents.push({id:'aircraft-status-'+eventDate+'-'+hash([registration,previousStatus,status,now]),date:eventDate,notificationType:'aircraft-status',notificationRoles:['Director','Piloto','Mecánico'],pilotRecipients:arr(data.pilotos).map(p=>p.email||'').filter(Boolean),mechanicRecipients,aircraftStatus:{aircraft:aircraftName,status,previous:previousStatus,restoring},flights:[]});
  }
  if(!data.itinerary?.version)return changed;
- // A forecast belongs to the restriction under which it was entered. A new
- // non-operational status requires a fresh forecast, including unpublished days.
- for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today)){
+ for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today).sort()){
   const state=stateFor(data,dt,now),old=stateFor(before,dt,now),stored=day(data,dt);let invalidated=false;
-  for(const ac of state.aircraft){
-   const previous=old.aircraft.find(a=>a.id===ac.id)?.status;
-   if(ac.status===previous||ac.status==='operativo'||!stored.releases?.[ac.id]?.enabled)continue;
-   stored.releases[ac.id]={...stored.releases[ac.id],enabled:false};invalidated=true;
-  }
+  for(const ac of state.aircraft){const previous=old.aircraft.find(a=>a.id===ac.id)?.status;if(ac.status===previous||ac.status==='operativo'||!stored.releases?.[ac.id]?.enabled)continue;stored.releases[ac.id]={...stored.releases[ac.id],enabled:false};invalidated=true;}
   if(invalidated){if(!stored.published)stored.revision++;changed=true;}
+  const statusChanged=state.aircraft.some(ac=>old.aircraft.find(a=>a.id===ac.id)?.status!==ac.status);
+  if(statusChanged&&stored.draftPlan&&!stored.published){recalculateDraftPlan(data,stored,dt,now);stored.revision++;changed=true;}
  }
- for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today&&data.itinerary.days[d].published)){
-  const state=stateFor(data,dt,now),old=stateFor(before,dt,now);let scheduleChanged=false;
+ for(const dt of Object.keys(data.itinerary.days||{}).filter(d=>d>=today&&data.itinerary.days[d].published).sort()){
+  const state=stateFor(data,dt,now),old=stateFor(before,dt,now);let scheduleChanged=false;const changedAircraft=[];
   for(const ac of state.aircraft){const previous=old.aircraft.find(a=>a.id===ac.id)?.status;if(previous===ac.status)continue;
-   const result=E.reallocatePublished(state,ac.id,previous,now);if(!result.changes.length)continue;state.confirmed=result.flights;scheduleChanged=true;
+   const result=ac.status==='operativo'?E.restorePublished(state,ac.id,previous,now):E.reallocatePublished(state,ac.id,previous,now);if(!result.changes.length)continue;
+   state.confirmed=result.flights;scheduleChanged=true;changedAircraft.push(ac.id);
    for(const c of result.changes)notice(data,{kind:c.kind,date:dt,before:{...c.before,date:dt},after:{...c.after,date:dt},reason:c.reason,recipients:[{kind:'group',id:'all'}]},now,'status:'+hash([dt,c.before.id,now,c.after]));changed=true;
   }
-  if(!eq(old.aircraft.map(a=>a.status),state.aircraft.map(a=>a.status))){storeFlights(data,state);day(data,dt).revision++;changed=true;if(scheduleChanged)queueModifiedEmail(data,dt,now);}
+  if(!eq(old.aircraft.map(a=>a.status),state.aircraft.map(a=>a.status))){
+   storeFlights(data,state);day(data,dt).revision++;changed=true;
+   if(scheduleChanged){
+    const email=publicationEmail(data,dt);email.id='modified-'+dt+'-'+hash(['aircraft-status',dt,now,JSON.stringify(state.confirmed.map(q=>[q.id,q.aircraft,q.start,q.end]))]);email.action='updated';email.updatedAt=now;email.notificationRoles=['Director','Piloto','Mecánico'];email.maintenanceChange=true;
+    const statusEmail=emailEvents.find(event=>event.notificationType==='aircraft-status'&&changedAircraft.some(id=>key(id)===key(event.aircraftStatus?.aircraft)));
+    if(statusEmail){statusEmail.followups||=[];statusEmail.followups.push(email);}else emailEvents.push(email);
+    delete day(data,dt).modifiedEmail;
+   }
+  }
  }
  return changed;
 }

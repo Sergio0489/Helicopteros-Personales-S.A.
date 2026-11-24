@@ -25,15 +25,23 @@ exports.emailPublishedItinerary=onValueCreated({
  if(!recipients.length){
   await saveDeliveryStatus(db,id,publication,recipients);
   logger.error('El horario publicado no tiene destinatarios con correo válido.',{publicationId:id});
-  if(publication.draft===true)throw Error('El borrador está pendiente: no se pudo verificar el correo de Dirección.');
+  if(publication.draft===true||publication.notificationType==='aircraft-status')throw Error('El aviso de horario está pendiente: no se pudieron verificar sus destinatarios.');
   await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();return;
  }
  const transport=require('nodemailer').createTransport(cfg.transport);let deliveryError=null;
  try{
-  await itineraryEmail.deliver({db,event,from:cfg.from,recipients,send:message=>transport.sendMail(message),report:(code,deliveryId,diagnostics)=>logger.error('Aviso de horario pendiente de revisión.',{code,deliveryId,...diagnostics})});
+  try{await itineraryEmail.deliver({db,event,from:cfg.from,recipients,send:message=>transport.sendMail(message),report:(code,deliveryId,diagnostics)=>logger.error('Aviso de horario pendiente de revisión.',{code,deliveryId,...diagnostics})});}catch(error){deliveryError=error;}
+  await saveDeliveryStatus(db,id,publication,recipients);
+  for(const followup of deliveryError?[]:publication.followups||[]){
+   const followupRecipients=await itineraryEmail.recipients(followup,accounts,getAuth(),DIRECTOR_UID);
+   if(!followupRecipients.length){await saveDeliveryStatus(db,followup.id,followup,followupRecipients);deliveryError=Error('El horario actualizado está pendiente: no se pudieron verificar sus destinatarios.');break;}
+   const followupEvent={data:{val:()=>followup},params:{publicationId:followup.id}};
+   try{await itineraryEmail.deliver({db,event:followupEvent,from:cfg.from,recipients:followupRecipients,send:message=>transport.sendMail(message),report:(code,deliveryId,diagnostics)=>logger.error('Horario actualizado pendiente de revisión.',{code,deliveryId,...diagnostics})});}catch(error){deliveryError=error;}
+   await saveDeliveryStatus(db,followup.id,followup,followupRecipients);
+   if(deliveryError)break;
+  }
  }catch(error){deliveryError=error;}
  finally{transport.close();}
- await saveDeliveryStatus(db,id,publication,recipients);
  if(deliveryError)throw deliveryError;
  await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();
 });
