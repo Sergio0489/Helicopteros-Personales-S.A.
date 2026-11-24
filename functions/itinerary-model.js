@@ -139,12 +139,12 @@ function stateFor(data,d,now){
 function scope(data,actor){
  if(identityReview.pending(actor.account))error(identityReview.message);
  if(!actor.user?.emailVerified||actor.user.disabled||actor.account?.mergedInto)error('Verifica el correo e inicia sesión con una cuenta activa.');
- if(actor.director)return {role:'director',view:true,request:false,create:true,edit:true,settings:true};
+ const linked=arr(data.pilotos).map((p,i)=>({...p,id:String(p.id||'legacy-pilot-'+i)})).filter(p=>p.authUid===actor.user.uid||!p.authUid&&String(p.email||'').trim().toLowerCase()===actor.user.email.toLowerCase());
+ const pilot=linked.length===1?linked[0].id:null;
+ if(actor.director)return {role:'director',view:true,request:false,create:true,edit:true,settings:true,pilot};
  const p=policyFor(data,actor.account),box=id=>permissions(p,'itinerario',id);
  const view=['planner','calendar','flights','create','requests'].some(id=>box(id).view);
  const role=actor.account?.role==='Piloto'?'pilot':actor.account?.role==='Administrativo'?'admin':'reader';
- const linked=arr(data.pilotos).map((p,i)=>({...p,id:String(p.id||'legacy-pilot-'+i)})).filter(p=>p.authUid===actor.user.uid||!p.authUid&&String(p.email||'').trim().toLowerCase()===actor.user.email.toLowerCase());
- const pilot=linked.length===1?linked[0].id:null;
  // Requesting one's own flight never grants the pilot general itinerary editing.
  return {role,view,request:view&&role==='pilot'&&box('requests').edit&&!!pilot,pilot,create:view&&role==='admin'&&box('create').edit,edit:false,settings:false,boxes:{planner:box('planner').view,flights:box('flights').view,requests:box('requests').view}};
 }
