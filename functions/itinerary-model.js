@@ -210,7 +210,7 @@ function relocateFixedFlights(state,now){
   for(const aircraft of options){
    const candidate={...copy(original),aircraft:aircraft.id,operationalHold:false};
    const reason=E.directorFlightError(state,candidate,original.id,'director');
-   if(!reason){replacement=candidate;break;}
+   if(!reason&&E.covers(aircraft,candidate,state.date)){replacement=candidate;break;}
   }
   if(!replacement)continue;
   const from=original.relocation?.from||original.aircraft,reason='Reubicado automáticamente desde '+from+': la aeronave no estaba operativa al cierre de las 8:00 p. m.';

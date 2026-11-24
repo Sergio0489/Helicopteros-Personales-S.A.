@@ -130,6 +130,17 @@ test('a preconfirmed flight stays held when no allowed operative aircraft can ta
  assert.equal(M.day(data,date).held.length,0);assert.ok(emails.some(email=>email.notificationType==='aircraft-status'&&email.followups?.some(followup=>followup.action==='updated')));
 });
 
+test('automatic relocation must fit the replacement aircraft enabled blocks exactly',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ M.apply(data,director,{date,command:'flight',actionId:'restricted-block-flight-0001',revision:M.day(data,date).revision,flight:{...request('HP1907'),pilot:'p1',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ data.itinerary.config.typeRules={...E.defaultTypeRules(),privado:['HP1784']};
+ M.day(data,date).blocks={HP1784:[{id:'b3',start:'12:30',end:'15:30'}]};data.fleet.HP_1907.status='grounded';M.createDraftPlan(data,date,atCutoff);
+ const plan=M.day(data,date).draftPlan,held=plan.assignments.find(q=>q.aircraft==='HP1907');
+ assert.equal(held.operationalHold,true);assert.equal(held.start,'06:30');assert.equal(held.end,'09:30');
+ assert.ok(!plan.assignments.some(q=>q.aircraft==='HP1784'&&!q.operationalHold),'the available block starts too late for this exact flight interval');
+ assert.ok(plan.warnings.some(message=>/no pudieron reubicarse automáticamente/.test(message)));
+});
+
 test('overlapping fixed flights competing for one replacement cannot be assigned together',()=>{
  const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
  data.pilotos.push({id:'p2',nombre:'Piloto Dos',email:'piloto2@example.test',medico:'2027-12-31'});
