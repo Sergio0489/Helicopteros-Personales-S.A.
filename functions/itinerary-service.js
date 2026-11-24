@@ -46,7 +46,8 @@ async function handle(db,context,body){
  }else throw Error('Operación no válida.');
  const now=new Date().toISOString(),data=JSON.parse(root?.payload||'{}');
  const selected=body.date||M.E.panamaClock(now).tomorrow;
- return {...M.view(data,context,selected,now),...(context.director?{calendar:M.calendar(data,context,selected.slice(0,4),now)}:{}),operation:root.operation,...(outcome?.actionWarning?{actionWarning:outcome.actionWarning}:{})};
+ const emailStatus=context.director?Object.values(root?.itineraryEmailStatus||{}).filter(row=>row?.date===selected).sort((a,b)=>String(a.updatedAt||'').localeCompare(String(b.updatedAt||''))).slice(-4):[];
+ return {...M.view(data,context,selected,now),...(context.director?{calendar:M.calendar(data,context,selected.slice(0,4),now),emailStatus}:{}),operation:root.operation,...(outcome?.actionWarning?{actionWarning:outcome.actionWarning}:{})};
 }
 async function scheduled(db,now=new Date().toISOString()){
  const clock=M.E.panamaClock(now);
@@ -60,8 +61,10 @@ async function scheduledDraft(db,now=new Date().toISOString()){
  const clock=M.E.panamaClock(now),date=clock.tomorrow,id='draft-'+date;
  return transaction(db,null,'Borrador del horario enviado a Dirección',data=>{
   if(!data.itinerary?.version)return false;
-  const d=M.day(data,date);if(d.published||d.draftEmail?.id===id)return false;
-  const emailPublication=M.previewPublicationEmail(data,date,now);if(!emailPublication)return false;
+  const d=M.day(data,date);if(d.published||d.draftPlan)return false;
+  const alreadyNotified=d.draftEmail?.id===id;
+  const emailPublication=M.createDraftPlan(data,date,now);if(!emailPublication)return false;
+  if(alreadyNotified)return true;
   d.draftEmail={id,createdAt:now};return {emailPublication};
  });
 }
