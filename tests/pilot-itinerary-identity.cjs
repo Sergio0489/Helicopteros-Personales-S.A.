@@ -4,7 +4,7 @@ const M=require('../functions/itinerary-model');
 const date='2030-06-15',editDate='2030-06-16',now='2030-06-15T12:05:00-05:00';
 const pilotPolicy={itinerario:{actions:{view:true,edit:true},areas:{Calendario:true,'Programación de vuelos':true,'Solicitudes de vuelos':true},boxes:{planner:{view:true},flights:{view:true,edit:false},create:{view:true,edit:true},requests:{view:true,edit:true}}}};
 function fleet(){return Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo',serial:'FICTICIO'}]));}
-function flightRequest(id,pilot,aircraft,start,end,created){return {id,pilot,aircraft,start,end,slot:'b1',flightType:'privado',route:'MPMG - MPCL',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio',created,status:'pending'};}
+function flightRequest(id,pilot,aircraft,start,end,created){return {id,pilot,aircraft,start,end,slot:'b1',flightType:'privado',route:'MPMG - MPCE - MPMG',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio',created,status:'pending'};}
 function fixture(){
  const pilots=[
   {authUid:'pilot-ana',email:'ana@example.test',nombre:'Ana Ficticia',medico:'2035-12-31'},
