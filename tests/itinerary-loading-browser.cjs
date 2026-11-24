@@ -158,7 +158,7 @@ test('Director can select every pilot while a pilot request stays linked to its 
  await pilotPage.locator('[data-slot]').first().click();
  const requestForm=pilotPage.locator('dialog form');
  assert.equal(await requestForm.locator('select[name=pilot]').count(),0,'Pilot cannot choose another pilot');
- assert.match(await requestForm.textContent(),/Piloto: Piloto B/);
+ assert.match(await requestForm.textContent(),/· Piloto B/);
  await pilotPage.locator('[name=routePart1]').fill('MPMG');await pilotPage.locator('[name=routePart2]').fill('MPDA');await pilotPage.locator('[name=routePart3]').fill('MPMG');
  await pilotPage.locator('[name=existingStudentId]').selectOption('st1');
  await pilotPage.evaluate(result=>{window.commandResult=result;},pilotResult);await pilotPage.getByRole('button',{name:'Guardar',exact:true}).click();
