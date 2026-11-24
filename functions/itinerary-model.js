@@ -188,18 +188,51 @@ function publicationEmail(data,dateValue){
  const mechanicRecipients=arr(data.school?.personnel).filter(p=>['mecanico','mecanica','mechanic','mechanics'].includes(String(p.position||p.role||p.cargo||'').normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').trim())).map(p=>p.email||'').filter(Boolean);
  return {id:'publication-'+dateValue,date:dateValue,publishedAt:data.itinerary?.days?.[dateValue]?.publishedAt||'',pilotRecipients:arr(data.pilotos).map(p=>p.email||'').filter(Boolean),mechanicRecipients,flights:scheduled};
 }
+function relocateFixedFlights(state,now){
+ const displaced=[];
+ for(const q of state.confirmed){
+  const a=state.aircraft.find(a=>a.id===q.aircraft);
+  if(!E.assignmentEligible(a,state)){
+   q.operationalHold=true;q.publicationStatus='held';q.validationHold='No se publica: '+q.aircraft+' no estaba operativa a las 8:00 p. m. o ahora no está operativa.';q.relocationPending=true;displaced.push(copy(q));
+  }else if(q.operationalHold){delete q.operationalHold;delete q.validationHold;delete q.relocationPending;if(q.publicationStatus==='held')delete q.publicationStatus;}
+ }
+ // Move flights with fewer eligible alternatives first so flexible flights do
+ // not consume the only aircraft that can take a constrained flight.
+ displaced.sort((a,b)=>{
+  const alternatives=q=>E.allowedForType(state,E.typeOf(q)).filter(id=>id!==q.aircraft&&E.assignmentEligible(state.aircraft.find(a=>a.id===id),state)&&E.compatible(state,q,state.aircraft.find(a=>a.id===id))).length;
+  return alternatives(a)-alternatives(b)||E.minutes(a.start)-E.minutes(b.start)||String(a.id).localeCompare(String(b.id));
+ });
+ let relocated=0;
+ for(const original of displaced){
+  const options=E.allowedForType(state,E.typeOf(original)).map(id=>state.aircraft.find(a=>a.id===id)).filter(a=>a&&a.id!==original.aircraft&&E.assignmentEligible(a,state)&&E.compatible(state,original,a));
+  let replacement=null;
+  for(const aircraft of options){
+   const candidate={...copy(original),aircraft:aircraft.id,operationalHold:false};
+   const reason=E.directorFlightError(state,candidate,original.id,'director');
+   if(!reason){replacement=candidate;break;}
+  }
+  if(!replacement)continue;
+  const from=original.relocation?.from||original.aircraft,reason='Reubicado automáticamente desde '+from+': la aeronave no estaba operativa al cierre de las 8:00 p. m.';
+  replacement.fixed=true;replacement.conditional=false;replacement.reason=reason;replacement.relocation={from,to:replacement.aircraft,at:now,reason};
+  replacement.relocationHistory=[...(replacement.relocationHistory||[]),{from,to:replacement.aircraft,at:now,reason}];
+  delete replacement.operationalHold;delete replacement.validationHold;delete replacement.relocationPending;delete replacement.publicationStatus;
+  const index=state.confirmed.findIndex(q=>q.id===original.id);if(index>=0)state.confirmed[index]=replacement;
+  relocated++;
+ }
+ return {held:state.confirmed.filter(q=>q.operationalHold),relocated};
+}
 function calculatedDraftPlan(data,dateValue,now,baseAssignments=[],removedFlightIds=[],baseFlightIds=null,operationalAircraftIds=null,operationalSnapshotAt=null){
  const state=stateFor(data,dateValue,now),warnings=[],baseline=Array.isArray(baseFlightIds)?copy(baseFlightIds):state.confirmed.filter(q=>q.fixed).map(q=>q.id),removed=new Set(arr(removedFlightIds));
  const cutoffAircraft=Array.isArray(operationalAircraftIds)?copy(operationalAircraftIds):state.aircraft.filter(a=>a.status==='operativo').map(a=>a.id),snapshotAt=operationalSnapshotAt||now;state.assignmentAircraftIds=cutoffAircraft;
  state.confirmed=state.confirmed.filter(q=>!removed.has(q.id));
  for(const q of baseAssignments)if(q?.fixed){const index=state.confirmed.findIndex(current=>current.id===q.id);if(index>=0)state.confirmed[index]=copy(q);else state.confirmed.push(copy(q));}
  state.pilots.forEach(p=>{try{for(const q of [...state.requests,...state.confirmed].filter(q=>q.pilot===p.id))assertPilot(data,q,dateValue,now);}catch{p.valid=false;}});
- const cutoffHeld=[];
- for(const q of state.confirmed){const a=state.aircraft.find(a=>a.id===q.aircraft);if(!E.assignmentEligible(a,state)){q.operationalHold=true;q.publicationStatus='held';q.validationHold='No se publica: '+q.aircraft+' no estaba operativa a las 8:00 p. m. o ahora no está operativa.';q.relocationPending=true;cutoffHeld.push(q);}else if(q.operationalHold){delete q.operationalHold;delete q.validationHold;delete q.relocationPending;if(q.publicationStatus==='held')delete q.publicationStatus;}}
+ const {held:cutoffHeld,relocated}=relocateFixedFlights(state,now);
  const result=E.simulate(state);result.assignments.push(...cutoffHeld.map(copy));
  const outside=result.assignments.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue));});
  if(outside)warnings.push('Al menos un vuelo quedaría fuera del horario permitido o de la disponibilidad prevista; corrígelo antes de publicar.');
- if(cutoffHeld.length)warnings.push(cutoffHeld.length+' vuelo(s) previamente agendado(s) en aeronaves no operativas quedarán sin publicar. Dirección puede reubicarlos solo en aeronaves operativas.');
+ if(relocated)warnings.push(relocated+' vuelo(s) previamente agendado(s) se reubicaron automáticamente a aeronaves operativas compatibles, conservando piloto y horario. Dirección puede revisar o editar esos cambios en el borrador.');
+ if(cutoffHeld.length)warnings.push(cutoffHeld.length+' vuelo(s) previamente agendado(s) no encontraron una aeronave operativa compatible y quedarán sin publicar. Dirección debe revisarlos o reubicarlos manualmente antes de las 8:15 p. m.');
  const unresolved=result.results.filter(row=>['review','waiting'].includes(row.status));
  if(unresolved.length){const labels=unresolved.map(row=>(state.pilots.find(p=>p.id===row.pilot)?.name||'Piloto')+' · '+(row.aircraft||'sin aeronave')+' · '+row.start+'–'+row.end);warnings.push(unresolved.length+' solicitud(es) aún no tienen asignación confirmada: '+labels.join('; ')+'. Dirección debe resolverlas o eliminarlas antes de publicar.');}
  const unusual=result.assignments.filter(q=>!q.operationalHold&&E.operatingHoursWarning(q));if(unusual.length)warnings.push('Alerta: '+unusual.map(q=>(state.pilots.find(p=>p.id===q.pilot)?.name||'Piloto')+' · '+q.aircraft+' · '+q.start+'–'+q.end).join('; ')+'. El horario habitual es 6:30 a. m.–6:30 p. m.; confirma que cada vuelo nocturno esté habilitado.');
