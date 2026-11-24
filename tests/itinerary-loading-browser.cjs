@@ -212,6 +212,7 @@ test('Director config shows independent Multi and ATP aircraft lists and pilot c
  const expected=[['multi','Multi Estudiante'],['multiLey89','Multi Ley 89'],['multiConversion','Multi Conversión'],['atp','ATP']];
  for(const [id,label] of expected){const row=configured.find(item=>item.id===id);assert.ok(row,'missing settings list '+id);assert.equal(row.label,label);assert.equal(row.aircraft.find(item=>item.id==='HP880BL')?.checked,true);assert.ok(row.aircraft.every(item=>directorData.state.aircraft.find(a=>a.id===item.id)?.category==='Multimotor'));}
  assert.ok(configured.some(item=>item.id==='ley89'&&item.label==='Ley 89'));assert.ok(configured.some(item=>item.id==='conversion'&&item.label==='Conversión'));
+ await config.locator('[data-type="privado"] summary').click();
  await config.locator('[data-type="privado"] input').first().uncheck();
  await directorPage.evaluate(result=>{window.commandResult=result},directorData);
  await config.locator('[type=submit]').click();
