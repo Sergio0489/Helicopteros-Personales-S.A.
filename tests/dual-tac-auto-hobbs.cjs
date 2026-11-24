@@ -51,6 +51,24 @@ test('HP880BL recalculates if the other engine becomes the larger difference',()
  assert.match(elements.get('tac-msg-0').textContent,/TAC motor derecho/);
 });
 
+test('HP880BL shows a provisional calculation and explains when an entered engine TAC goes backwards',()=>{
+ const {elements,context}=harness();
+ elements.get('tac-left-anterior-0').value='5552.83';elements.get('tac-left-actual-0').value='5563.82';
+ elements.get('tac-right-anterior-0').value='5662.41';elements.get('tac-right-actual-0').value='5573.37';
+ elements.get('tac-hobbs-anterior-0').value='1845.10';
+ vm.runInContext('updateTAC(0)',context);
+ assert.equal(elements.get('tac-hobbs-actual-0').value,'1856.09');
+ assert.equal(elements.get('horas_diarias-0').value,'10.99');
+ assert.match(elements.get('tac-msg-0').textContent,/TAC motor derecho.*5573\.37.*5662\.41/);
+ assert.match(elements.get('tac-msg-0').textContent,/Cálculo provisional con TAC motor izquierdo \(10\.99 h\)/);
+ assert.match(dashboard,/if\(dualInputs\.any&&!dualInputs\.complete\).*return false;/s,'saving stays blocked until every engine TAC is valid');
+ elements.get('tac-right-actual-0').value='5673.37';
+ vm.runInContext('updateTAC(0)',context);
+ assert.equal(elements.get('tac-hobbs-actual-0').value,'1856.09');
+ assert.match(elements.get('tac-msg-0').textContent,/Diferencia izquierda: 10\.99 h · diferencia derecha: 10\.96 h/);
+ assert.doesNotMatch(elements.get('tac-msg-0').textContent,/provisional|menor que el anterior/);
+});
+
 test('an incomplete or out-of-range HP880BL reading cannot leave a stale Hobbs value',()=>{
  const {elements,context}=harness();
  elements.get('tac-left-anterior-0').value='500.00';elements.get('tac-left-actual-0').value='501.00';

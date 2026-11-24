@@ -1469,7 +1469,7 @@ function dualTACInputValues(idx){
   const delta=tacDifference(previous.value,current.value);if(current.value!==''||previous.value!=='')any=true;
   current.setCustomValidity(current.value!==''&&Number.isNaN(delta)?meter.label+': el TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.':'');
   if(current.value===''||previous.value===''||!Number.isFinite(delta))complete=false;
-  readings[meter.key]={previous:previous.value,current:current.value,delta};
+  readings[meter.key]={previous:previous.value,current:current.value,delta,label:meter.label};
  }
  return {readings,any,complete};
 }
@@ -1478,13 +1478,16 @@ function updateTAC(idx){
  if(isDualTAC(reg)){
   let values=dualTACInputValues(idx);
   const leftInput=values.readings.left,rightInput=values.readings.right;
-  const motorsComplete=[leftInput,rightInput].every(r=>r&&r.previous!==''&&r.current!==''&&Number.isFinite(r.delta));
+  const motorInputs=[leftInput,rightInput],motorsEntered=motorInputs.every(r=>r&&r.previous!==''&&r.current!=='');
+  const enteredMotors=motorInputs.filter(r=>r&&r.previous!==''&&r.current!==''),invalidMotors=enteredMotors.filter(r=>!Number.isFinite(r.delta)||r.delta<0);
+  const validMotors=enteredMotors.filter(r=>Number.isFinite(r.delta)&&r.delta>=0),winner=validMotors.reduce((best,r)=>!best||r.delta>best.delta?r:best,null);
+  const motorsComplete=motorsEntered&&invalidMotors.length===0,delta=motorsEntered&&validMotors.length?Math.max(...validMotors.map(r=>r.delta)):null;
   const hobbsPrevious=document.getElementById('tac-hobbs-anterior-'+idx),hobbsCurrent=document.getElementById('tac-hobbs-actual-'+idx);
   if(hobbsCurrent){
    hobbsCurrent.readOnly=true;
    const hobbsBase=tacCents(hobbsPrevious?.value||'');
-   if(motorsComplete&&Number.isFinite(hobbsBase)){
-    const hoursCents=Math.round(Math.max(leftInput.delta,rightInput.delta)*100);
+   if(motorsEntered&&Number.isFinite(delta)&&Number.isFinite(hobbsBase)){
+    const hoursCents=Math.round(delta*100);
     hobbsCurrent.dataset.autoCalculated='true';
     if(hobbsBase+hoursCents>9999999){hobbsCurrent.value='';hobbsCurrent.dataset.autoError='El Hobbs calculado supera el máximo de 99,999.99. Revisa el TAC anterior.';}
     else{hobbsCurrent.value=((hobbsBase+hoursCents)/100).toFixed(2);delete hobbsCurrent.dataset.autoError;}
@@ -1493,12 +1496,16 @@ function updateTAC(idx){
    }
   }
   values=dualTACInputValues(idx);
-  const left=values.readings.left?.delta,right=values.readings.right?.delta,winner=left>=right?'left':'right';
-  const delta=motorsComplete?Math.max(left,right):null;
   for(const id of ['horas_diarias-','horas-venc-dia-']){const el=document.getElementById(id+idx);if(!el)continue;if(values.any&&!el.readOnly)el.dataset.manualHours=el.value;el.value=Number.isFinite(delta)?delta.toFixed(2):'';el.readOnly=true;}
   const autoError=document.getElementById('tac-hobbs-actual-'+idx)?.dataset.autoError;
-  msg.textContent=autoError||(motorsComplete?(values.complete?'TAC izquierdo: '+left.toFixed(2)+' h · TAC derecho: '+right.toFixed(2)+' h · Hobbs actual: '+values.readings.hobbs.current+' · HV del día: '+delta.toFixed(2)+' h (TAC '+(winner==='left'?'motor izquierdo':'motor derecho')+').':'HV del día: '+delta.toFixed(2)+' h. Completa el TAC anterior de Hobbs para calcular su lectura actual.'):(values.any?'Completa TAC anterior y actual de los dos motores; se usará la mayor diferencia para Hobbs y HV.':'Ingresa TAC anterior y actual de los dos motores para calcular Hobbs y las horas del día.'));
-  msg.style.color=autoError||values.any&&!values.complete?'var(--danger)':'var(--muted)';return;
+  const motorWarnings=invalidMotors.map(r=>{const previous=tacCents(r.previous),current=tacCents(r.current);return Number.isFinite(previous)&&Number.isFinite(current)&&current<previous?r.label+': el TAC actual ('+r.current+') es menor que el anterior ('+r.previous+').':r.label+': el TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.';});
+  if(autoError)msg.textContent=autoError;
+  else if(motorWarnings.length)msg.textContent=motorWarnings.join(' ')+(Number.isFinite(delta)?' Cálculo provisional con '+winner.label+' ('+delta.toFixed(2)+' h); corrige las lecturas antes de guardar.':' Corrige las lecturas antes de guardar.');
+  else if(!motorsEntered)msg.textContent=values.any?'Completa TAC anterior y actual de los dos motores para calcular Hobbs y las horas del día.':'Ingresa TAC anterior y actual de los dos motores para calcular Hobbs y las horas del día.';
+  else if(!Number.isFinite(tacCents(hobbsPrevious?.value||'')))msg.textContent='El TAC anterior de Hobbs debe ser válido para calcular su lectura actual. Las horas del día son provisionales hasta completar Hobbs.';
+  else if(values.complete)msg.textContent='Diferencia izquierda: '+values.readings.left.delta.toFixed(2)+' h · diferencia derecha: '+values.readings.right.delta.toFixed(2)+' h · Hobbs actual: '+values.readings.hobbs.current+' · HV del día: '+delta.toFixed(2)+' h ('+winner.label+').';
+  else msg.textContent='Revisa los TAC para calcular correctamente Hobbs y las horas del día.';
+  msg.style.color=autoError||motorWarnings.length||!values.complete?'var(--danger)':'var(--muted)';return;
 }
   const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);
   const delta=tacDifference(previous.value,current.value);
