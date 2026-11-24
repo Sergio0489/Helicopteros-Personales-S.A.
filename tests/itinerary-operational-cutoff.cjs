@@ -7,7 +7,8 @@ const base=()=>{const s=require('./fixtures/itinerary-initial.cjs')();s.requests
 function fixture(){
  const fleet=Object.fromEntries(E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo'}]));
  const pilot={id:'p1',nombre:'Piloto Uno',email:'piloto@example.test',medico:'2027-12-31'};
- return {fleet,pilotos:[pilot],itinerarios:[],school:{students:[{id:'s1',name:'Estudiante Uno'}],registry:{clients:[]},personnel:[]},itinerary:{version:1,config:{},days:{},notices:[]}};
+ const policy={itinerario:{actions:{view:true,edit:true},areas:{Calendario:true,'Programación de vuelos':true,'Solicitudes de vuelos':true},boxes:{planner:{view:true},flights:{view:true,edit:true},create:{view:true,edit:true},requests:{view:true,edit:true}}}};
+ return {fleet,pilotos:[pilot],itinerarios:[],school:{students:[{id:'s1',name:'Estudiante Uno'},{id:'s2',name:'Estudiante Dos'}],registry:{clients:[]},personnel:[],accessConfiguration:{roles:{Piloto:policy}}},itinerary:{version:1,config:{},days:{},notices:[]}};
 }
 
 test('operational and maintenance aircraft are requestable across the fleet; grounded is excluded',()=>{
@@ -70,13 +71,55 @@ test('publication rejects a plane that was operative at 20:00 but is grounded be
  assert.equal(M.day(data,date).published,false);
 });
 
-test('a preconfirmed flight on a non-operational aircraft is held out of the 20:15 publication',()=>{
+test('20:00 draft relocates approved and Director-booked flights off maintenance and grounded aircraft, then publishes them at 20:15',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ const pending={...request('HP1907'),id:'approved-request-1',pilot:'p1',status:'pending',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',created:1};
+ M.day(data,date).requests.push(pending);
+ M.apply(data,director,{date,command:'approve',id:pending.id,actionId:'approve-flight-0001',revision:M.day(data,date).revision},beforeCutoff);
+ M.apply(data,director,{date,command:'flight',actionId:'director-flight-0001',revision:M.day(data,date).revision,flight:{...request('HP1815'),start:'09:30',end:'12:30',pilot:'p1',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ const original=structuredClone(data.itinerarios.filter(f=>f.fecha===date));
+ data.fleet.HP_1907.status='grounded';data.fleet.HP_1815.status='mantenimiento';
+ const draftEmail=M.createDraftPlan(data,date,atCutoff),plan=M.day(data,date).draftPlan;
+ assert.ok(draftEmail?.draft);assert.deepEqual(data.itinerarios.filter(f=>f.fecha===date),original,'draft creation leaves the public schedule untouched');
+ const directorOfficial=original.find(f=>f.id!=='approved-'+pending.id),approved=plan.assignments.find(q=>q.sourceRequestId===pending.id),directorBooked=plan.assignments.find(q=>q.id===directorOfficial?.id);
+ assert.ok(approved);assert.ok(directorBooked);
+ for(const moved of [approved,directorBooked]){
+  assert.notEqual(moved.aircraft,'HP1907');assert.notEqual(moved.aircraft,'HP1815');
+  assert.equal(moved.pilot,'p1');assert.equal(moved.studentId,'student:s1');
+  assert.equal(moved.start,moved.id===approved.id?'06:30':'09:30');
+  assert.equal(moved.end,moved.id===approved.id?'09:30':'12:30');
+  assert.equal(moved.operationalHold,undefined);assert.equal(moved.relocation.from,moved.id===approved.id?'HP1907':'HP1815');
+ }
+ assert.equal(approved.id,'approved-'+pending.id);assert.equal(directorBooked.id,directorOfficial?.id);
+ assert.equal(approved.aircraft,directorBooked.aircraft,'the same aircraft may take both flights when they are consecutive and conflict-free');
+ assert.ok(plan.warnings.some(message=>/se reubicaron automáticamente/.test(message)));
+ assert.deepEqual(draftEmail.pilotRecipients,[]);assert.deepEqual(draftEmail.mechanicRecipients,[]);
+ M.apply(data,director,{date,command:'flight',id:directorBooked.id,originalDate:date,actionId:'edit-relocated-flight-0001',revision:M.day(data,date).revision,originalRevision:M.day(data,date).revision,flight:{...directorBooked,note:'Ajuste ficticio de Dirección'}},'2026-11-24T20:05:00-05:00');
+ const edited=M.day(data,date).draftPlan.assignments.find(q=>q.id===directorBooked.id);
+ assert.equal(edited.note,'Ajuste ficticio de Dirección');assert.equal(edited.aircraft,directorBooked.aircraft);assert.equal(edited.relocation.from,'HP1815');
+ const pilotActor={user:{uid:'pilot-user',email:'piloto@example.test',emailVerified:true},account:{role:'Piloto',assignedAt:beforeCutoff}};
+ const directorView=M.view(data,director,date,atCutoff),pilotView=M.view(data,pilotActor,date,atCutoff);
+ assert.equal(directorView.state.draftMode,true);assert.equal(directorView.state.confirmed.find(q=>q.id===approved.id).aircraft,approved.aircraft);
+ assert.equal(pilotView.state.draftMode,undefined);assert.equal(pilotView.state.confirmed.find(q=>q.id===approved.id).aircraft,'HP1907','other users still see the previously published schedule, not the private relocation');
+ assert.equal(pilotView.state.confirmed.find(q=>q.id===approved.id).relocation,undefined,'unpublished relocation details are private to Director');
+ assert.equal(M.publish(data,date,'2026-11-24T20:15:00-05:00'),true);
+ const final=data.itinerarios.filter(f=>f.fecha===date);
+ assert.equal(final.length,2);assert.deepEqual(final.map(f=>f.id).sort(),original.map(f=>f.id).sort(),'both preconfirmed flights remain present exactly once');
+ assert.ok(final.every(f=>!['HP-1907','HP-1815'].includes(f.aeronave)));
+ assert.equal(M.day(data,date).held.length,0);
+ const publicEmail=M.publicationEmail(data,date);assert.equal(publicEmail.flights.length,2);assert.ok(publicEmail.flights.every(f=>f.relocationFrom));
+ const publishedView=M.view(data,pilotActor,date,'2026-11-24T20:16:00-05:00');
+ assert.equal(publishedView.state.draftMode,undefined);assert.equal(publishedView.state.confirmed.length,2);
+ assert.ok(publishedView.state.confirmed.every(q=>!['HP1907','HP1815'].includes(q.aircraft)));
+});
+
+test('a preconfirmed flight stays held when no allowed operative aircraft can take it',()=>{
  const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
  M.apply(data,director,{date,command:'flight',actionId:'preconfirmed-flight-0001',revision:M.day(data,date).revision,flight:{...request('HP1907'),pilot:'p1',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
- data.fleet.HP_1907.status='grounded';M.createDraftPlan(data,date,atCutoff);
+ data.itinerary.config.typeRules={...E.defaultTypeRules(),privado:['HP1907']};data.fleet.HP_1907.status='grounded';M.createDraftPlan(data,date,atCutoff);
  const plan=M.day(data,date).draftPlan,held=plan.assignments.find(q=>q.aircraft==='HP1907');
  assert.equal(held.operationalHold,true);assert.equal(held.publicationStatus,'held');assert.match(held.validationHold,/no estaba operativa/i);
- assert.ok(plan.warnings.some(message=>/previamente agendado/.test(message)));
+ assert.ok(plan.warnings.some(message=>/no pudieron reubicarse automáticamente/.test(message)));
  assert.equal(M.publish(data,date,'2026-11-24T20:15:00-05:00'),true);
  assert.ok(!data.itinerarios.some(f=>M.key(f.aeronave)==='HP1907'));
  assert.ok(M.day(data,date).held.some(q=>q.operationalHold));
@@ -85,6 +128,46 @@ test('a preconfirmed flight on a non-operational aircraft is held out of the 20:
  assert.equal(M.reconcile(beforeRestore,data,'2026-11-24T20:30:00-05:00',emails),true);
  assert.ok(data.itinerarios.some(f=>M.key(f.aeronave)==='HP1907'),'the prior flight returns when the aircraft is operational again');
  assert.equal(M.day(data,date).held.length,0);assert.ok(emails.some(email=>email.notificationType==='aircraft-status'&&email.followups?.some(followup=>followup.action==='updated')));
+});
+
+test('automatic relocation must fit the replacement aircraft enabled blocks exactly',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ M.apply(data,director,{date,command:'flight',actionId:'restricted-block-flight-0001',revision:M.day(data,date).revision,flight:{...request('HP1907'),pilot:'p1',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ data.itinerary.config.typeRules={...E.defaultTypeRules(),privado:['HP1784']};
+ M.day(data,date).blocks={HP1784:[{id:'b3',start:'12:30',end:'15:30'}]};data.fleet.HP_1907.status='grounded';M.createDraftPlan(data,date,atCutoff);
+ const plan=M.day(data,date).draftPlan,held=plan.assignments.find(q=>q.aircraft==='HP1907');
+ assert.equal(held.operationalHold,true);assert.equal(held.start,'06:30');assert.equal(held.end,'09:30');
+ assert.ok(!plan.assignments.some(q=>q.aircraft==='HP1784'&&!q.operationalHold),'the available block starts too late for this exact flight interval');
+ assert.ok(plan.warnings.some(message=>/no pudieron reubicarse automáticamente/.test(message)));
+});
+
+test('overlapping fixed flights competing for one replacement cannot be assigned together',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ data.pilotos.push({id:'p2',nombre:'Piloto Dos',email:'piloto2@example.test',medico:'2027-12-31'});
+ for(const [index,aircraft,pilot,studentId,studentName] of [[1,'HP1907','p1','student:s1','Estudiante Uno'],[2,'HP1815','p2','student:s2','Estudiante Dos']]){
+  M.apply(data,director,{date,command:'flight',actionId:'competing-flight-'+index+'-0001',revision:M.day(data,date).revision,flight:{...request(aircraft),pilot,studentId,studentName,route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ }
+ data.itinerary.config.typeRules={...E.defaultTypeRules(),privado:['HP1784']};
+ data.fleet.HP_1907.status='grounded';data.fleet.HP_1815.status='mantenimiento';M.createDraftPlan(data,date,atCutoff);
+ const assignments=M.day(data,date).draftPlan.assignments,active=assignments.filter(q=>q.aircraft==='HP1784'&&!q.operationalHold),held=assignments.filter(q=>q.operationalHold);
+ assert.equal(active.length,1,'only one overlapping flight can occupy the sole eligible replacement');
+ assert.equal(held.length,1,'the other flight remains held for Director review');
+ assert.equal(active[0].start,'06:30');assert.equal(active[0].end,'09:30');
+ assert.ok(assignments.every(q=>q.id===active[0].id||q.aircraft!=='HP1784'||q.operationalHold||!E.overlaps(q,active[0])));
+ assert.equal(M.publish(data,date,'2026-11-24T20:15:00-05:00'),true);
+ assert.equal(data.itinerarios.filter(q=>q.fecha===date).length,1);
+ assert.equal(M.day(data,date).held.length,1);
+});
+
+test('Charter remains fixed for Director review when its selected aircraft is unavailable',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ M.apply(data,director,{date,command:'flight',actionId:'charter-fixed-flight-0001',revision:M.day(data,date).revision,flight:{...request('HP11BL','charter'),pilot:'p1',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ const official=data.itinerarios.find(f=>f.fecha===date);assert.ok(official);
+ data.fleet.HP_11BL.status='mantenimiento';M.createDraftPlan(data,date,atCutoff);
+ const held=M.day(data,date).draftPlan.assignments.find(q=>q.id===official.id);
+ assert.equal(held.aircraft,'HP11BL');assert.equal(held.operationalHold,true);
+ assert.match(held.validationHold,/chárter conservan su aeronave.*revisión manual de Dirección/i);
+ assert.ok(!M.day(data,date).draftPlan.assignments.some(q=>q.id===official.id&&q.aircraft==='HP880BL'));
 });
 
 test('Director cannot add an aircraft excluded by the saved cutoff; grounded selector is omitted',()=>{
