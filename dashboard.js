@@ -430,11 +430,11 @@ function buildPanel(ac, data, idx) {
       <div class="card">
         <div class="card-title">✈ Inspección de 50 / 100 horas</div>
 
-        ${isDualTAC(ac.reg)?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px">${DUAL_TAC_METERS.map(m=>`<div><div class="field-label" style="margin-bottom:5px">${m.label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-${m.key}-anterior-${idx}" aria-label="${m.label} anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.previous]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx})"></label><label class="field-label">TAC actual<input type="number" class="field-input" id="tac-${m.key}-actual-${idx}" aria-label="${m.label} actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.current]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx})"></label></div></div>`).join('')}</div>`:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        ${isDualTAC(ac.reg)?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px">${DUAL_TAC_METERS.map(m=>`<div><div class="field-label" style="margin-bottom:5px">${m.label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-${m.key}-anterior-${idx}" aria-label="${m.label} anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.previous]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx})"></label><label class="field-label">${m.key==='hobbs'?'TAC actual · automático':'TAC actual'}<input type="number" class="field-input" id="tac-${m.key}-actual-${idx}" aria-label="${m.label} actual${m.key==='hobbs'?' calculado automáticamente':''}" ${m.key==='hobbs'?'readonly title="Hobbs anterior más la mayor diferencia de los dos motores."':''} min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.current]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx})"></label></div></div>`).join('')}</div>`:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
           <label class="field-label">TAC actual<input type="number" class="field-input" id="tac-actual-${idx}" aria-label="TAC actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
         </div>`}
-        <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">Ingresa ambos TAC para calcular las horas.</div>
+        <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">${isDualTAC(ac.reg)?'Hobbs actual y HV del día se calculan con la mayor diferencia entre los dos motores.':'Ingresa ambos TAC para calcular las horas.'}</div>
         <div class="inspection-controls"><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,50)">✓ Resuelto · 50 horas</button><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,100)">✓ Resuelto · 100 horas</button></div>
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>
@@ -1465,6 +1465,7 @@ function dualTACInputValues(idx){
  for(const meter of DUAL_TAC_METERS){
   const previous=document.getElementById('tac-'+meter.key+'-anterior-'+idx),current=document.getElementById('tac-'+meter.key+'-actual-'+idx);
   if(!previous||!current)continue;
+  previous.setCustomValidity('');
   const delta=tacDifference(previous.value,current.value);if(current.value!==''||previous.value!=='')any=true;
   current.setCustomValidity(current.value!==''&&Number.isNaN(delta)?meter.label+': el TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.':'');
   if(current.value===''||previous.value===''||!Number.isFinite(delta))complete=false;
@@ -1475,12 +1476,30 @@ function dualTACInputValues(idx){
 function updateTAC(idx){
  const reg=fleet[idx]?.reg,msg=document.getElementById('tac-msg-'+idx);
  if(isDualTAC(reg)){
-  const values=dualTACInputValues(idx),left=values.readings.left?.delta,right=values.readings.right?.delta,hobbs=values.readings.hobbs?.delta,winner=left>=right?'left':'right';
-  const delta=values.complete?Math.max(left,right):null;
-  for(const id of ['horas_diarias-','horas-venc-dia-']){const el=document.getElementById(id+idx);if(!el)continue;if(values.any&&!el.readOnly)el.dataset.manualHours=el.value;el.value=values.any&&Number.isFinite(delta)?delta.toFixed(2):'';el.readOnly=true;}
-  msg.textContent=values.any?(values.complete?'TAC izquierdo: '+left.toFixed(2)+' h · TAC derecho: '+right.toFixed(2)+' h · Hobbs medido: '+hobbs.toFixed(2)+' h · Hobbs contable e inspecciones: '+delta.toFixed(2)+' h (TAC '+(winner==='left'?'motor izquierdo':'motor derecho')+').':'Completa TAC anterior y actual de los dos motores y Hobbs.'):'Ingresa anterior y actual de los dos motores y Hobbs para calcular las horas.';
-  msg.style.color=values.any&&!values.complete?'var(--danger)':'var(--muted)';return;
- }
+  let values=dualTACInputValues(idx);
+  const leftInput=values.readings.left,rightInput=values.readings.right;
+  const motorsComplete=[leftInput,rightInput].every(r=>r&&r.previous!==''&&r.current!==''&&Number.isFinite(r.delta));
+  const hobbsPrevious=document.getElementById('tac-hobbs-anterior-'+idx),hobbsCurrent=document.getElementById('tac-hobbs-actual-'+idx);
+  if(hobbsCurrent){
+   hobbsCurrent.readOnly=true;
+   const hobbsBase=tacCents(hobbsPrevious?.value||'');
+   if(motorsComplete&&Number.isFinite(hobbsBase)){
+    const hoursCents=Math.round(Math.max(leftInput.delta,rightInput.delta)*100);
+    hobbsCurrent.dataset.autoCalculated='true';
+    if(hobbsBase+hoursCents>9999999){hobbsCurrent.value='';hobbsCurrent.dataset.autoError='El Hobbs calculado supera el máximo de 99,999.99. Revisa el TAC anterior.';}
+    else{hobbsCurrent.value=((hobbsBase+hoursCents)/100).toFixed(2);delete hobbsCurrent.dataset.autoError;}
+   }else if(hobbsCurrent.dataset.autoCalculated==='true'){
+    hobbsCurrent.value='';delete hobbsCurrent.dataset.autoCalculated;delete hobbsCurrent.dataset.autoError;
+   }
+  }
+  values=dualTACInputValues(idx);
+  const left=values.readings.left?.delta,right=values.readings.right?.delta,winner=left>=right?'left':'right';
+  const delta=motorsComplete?Math.max(left,right):null;
+  for(const id of ['horas_diarias-','horas-venc-dia-']){const el=document.getElementById(id+idx);if(!el)continue;if(values.any&&!el.readOnly)el.dataset.manualHours=el.value;el.value=Number.isFinite(delta)?delta.toFixed(2):'';el.readOnly=true;}
+  const autoError=document.getElementById('tac-hobbs-actual-'+idx)?.dataset.autoError;
+  msg.textContent=autoError||(motorsComplete?(values.complete?'TAC izquierdo: '+left.toFixed(2)+' h · TAC derecho: '+right.toFixed(2)+' h · Hobbs actual: '+values.readings.hobbs.current+' · HV del día: '+delta.toFixed(2)+' h (TAC '+(winner==='left'?'motor izquierdo':'motor derecho')+').':'HV del día: '+delta.toFixed(2)+' h. Completa el TAC anterior de Hobbs para calcular su lectura actual.'):(values.any?'Completa TAC anterior y actual de los dos motores; se usará la mayor diferencia para Hobbs y HV.':'Ingresa TAC anterior y actual de los dos motores para calcular Hobbs y las horas del día.'));
+  msg.style.color=autoError||values.any&&!values.complete?'var(--danger)':'var(--muted)';return;
+}
   const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);
   const delta=tacDifference(previous.value,current.value);
   current.setCustomValidity(Number.isNaN(delta)?'El TAC actual debe ser igual o mayor al anterior, con máximo 5 dígitos y 2 decimales.':'');
@@ -1609,11 +1628,15 @@ async function applyRecordChange(kind,idx,ri,f){
  }catch(e){state[idx]=original;return e.message;}
 }
 async function savePanelInternal(idx){
-  const dual=isDualTAC(fleet[idx].reg),dualInputs=dual?dualTACInputValues(idx):null;
+  const dual=isDualTAC(fleet[idx].reg);
+  if(dual)updateTAC(idx);
+  const hobbsAutoError=dual?document.getElementById('tac-hobbs-actual-'+idx)?.dataset.autoError:'';
+  if(hobbsAutoError){alert(hobbsAutoError);return false;}
+  const dualInputs=dual?dualTACInputValues(idx):null;
   let delta=null,meterLog=null,priorRaw='',currentRaw='';
   if(dual){
-    if(!dualInputs.any&&((Number(document.getElementById('horas_diarias-'+idx)?.value)||0)>0||(Number(document.getElementById('horas-venc-dia-'+idx)?.value)||0)>0)){alert('Para registrar horas en esta aeronave, ingresa TAC anterior y actual de los dos motores y Hobbs.');return false;}
-    if(dualInputs.any&&!dualInputs.complete){const missing=DUAL_TAC_METERS.map(m=>({m,p:document.getElementById('tac-'+m.key+'-anterior-'+idx),c:document.getElementById('tac-'+m.key+'-actual-'+idx)})).find(x=>!x.p.value||!x.c.value);if(missing){if(!missing.p.value)missing.p.setCustomValidity('Ingresa el TAC anterior de '+missing.m.label+'.');else missing.c.setCustomValidity('Ingresa el TAC actual de '+missing.m.label+'.');(missing.p.value?missing.c:missing.p).reportValidity();}else document.querySelector('#panel-'+idx+' input:invalid')?.reportValidity();return false;}
+    if(!dualInputs.any&&((Number(document.getElementById('horas_diarias-'+idx)?.value)||0)>0||(Number(document.getElementById('horas-venc-dia-'+idx)?.value)||0)>0)){alert('Para registrar horas en esta aeronave, ingresa el TAC anterior y actual de ambos motores y el TAC anterior de Hobbs. El TAC actual de Hobbs se calcula automáticamente.');return false;}
+    if(dualInputs.any&&!dualInputs.complete){const missing=DUAL_TAC_METERS.map(m=>({m,p:document.getElementById('tac-'+m.key+'-anterior-'+idx),c:document.getElementById('tac-'+m.key+'-actual-'+idx)})).find(x=>!x.p.value||!x.c.value);if(missing){const needsPrevious=!missing.p.value||missing.m.key==='hobbs',field=needsPrevious?missing.p:missing.c;field.setCustomValidity(needsPrevious?'Ingresa un TAC anterior válido de '+missing.m.label+'.':'Ingresa el TAC actual de '+missing.m.label+'.');field.reportValidity();}else document.querySelector('#panel-'+idx+' input:invalid')?.reportValidity();return false;}
     if(dualInputs.any){const winner=dualInputs.readings.left.delta>=dualInputs.readings.right.delta?'left':'right';delta=Math.max(dualInputs.readings.left.delta,dualInputs.readings.right.delta);meterLog={};for(const meter of DUAL_TAC_METERS){const reading=dualInputs.readings[meter.key],stem=meter.key==='left'?'tacLeft':meter.key==='right'?'tacRight':'hobbs';meterLog[stem+'Previous100']=tacCents(reading.previous);meterLog[stem+'Current100']=tacCents(reading.current);meterLog[stem+'Hours100']=meter.key==='hobbs'?Math.round(delta*100):Math.round(reading.delta*100);if(meter.key==='hobbs')meterLog.hobbsMeasuredHours100=Math.round(reading.delta*100);}meterLog.hobbsAccountingSource=winner;}
   }else{
     const previous=document.getElementById('tac-anterior-'+idx),current=document.getElementById('tac-actual-'+idx);
