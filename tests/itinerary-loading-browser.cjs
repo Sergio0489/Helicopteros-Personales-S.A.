@@ -127,8 +127,8 @@ test('Director sees detailed flights, requires a student or client, and allows b
  await page.locator('[name=studentName]').fill('Estudiante A');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.value),'Estudiante A');assert.equal(await form.evaluate(f=>f.checkValidity()),true);
- await page.locator('[data-time-field=start] [data-hour]').fill('12');
- await page.locator('[data-time-field=start] [data-minute]').fill('05');
+ await page.locator('[data-time-field=start] [data-hour]').fill('6');
+ await page.locator('[data-time-field=start] [data-minute]').fill('35');
  await page.locator('[data-time-field=start] [data-period]').selectOption('AM');
  await page.locator('[data-time-field=end] [data-hour]').fill('12');
  await page.locator('[data-time-field=end] [data-minute]').fill('45');
@@ -136,7 +136,7 @@ test('Director sees detailed flights, requires a student or client, and allows b
  await page.evaluate(result=>{window.commandResult=result;},result);
  await page.getByRole('button',{name:'Guardar',exact:true}).click();
  await page.locator('dialog').waitFor({state:'detached'});
- const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG - MPDA - MPMG');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'00:05');assert.equal(saved[0].flight.end,'12:45');
+ const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG - MPDA - MPMG');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'06:35');assert.equal(saved[0].flight.end,'12:45');
 });
 test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canonical times',async t=>{
  const page=await app(t,390),result=response();
