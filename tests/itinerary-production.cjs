@@ -140,12 +140,13 @@ test('pilot Multi variants persist through request, publication and the publishe
  }
 });
 test('Director saves each Multi aircraft list independently and server enforces the selection',()=>{
- const d=fixture();apply(d,director,'settings',{typeRules:{multi:['HP880BL'],multiLey89:[],multiConversion:['HP880BL']}});
- assert.deepEqual(d.itinerary.config.typeRules.multi,['HP880BL']);assert.deepEqual(d.itinerary.config.typeRules.multiLey89,[]);assert.deepEqual(d.itinerary.config.typeRules.multiConversion,['HP880BL']);
+ const d=fixture();apply(d,director,'settings',{typeRules:{multi:['HP880BL'],multiLey89:[],multiConversion:['HP880BL'],atp:['HP880BL']}});
+ assert.deepEqual(d.itinerary.config.typeRules.multi,['HP880BL']);assert.deepEqual(d.itinerary.config.typeRules.multiLey89,[]);assert.deepEqual(d.itinerary.config.typeRules.multiConversion,['HP880BL']);assert.deepEqual(d.itinerary.config.typeRules.atp,['HP880BL']);
  assert.throws(()=>apply(d,pilot('p1'),'request',{flight:flight('p1','HP1907',{flightType:'multiLey89'})}),/habilitado/);
  apply(d,director,'settings',{typeRules:{multiLey89:['HP880BL']}});
  apply(d,pilot('p1'),'request',{flight:flight('p1','HP1907',{flightType:'multiLey89'})});
  assert.equal(M.day(d,date).requests[0].flightType,'multiLey89');assert.equal(M.day(d,date).requests[0].aircraft,'HP880BL');
+ apply(d,pilot('p2'),'request',{flight:flight('p2','HP1907',{flightType:'atp'})});assert.equal(M.day(d,date).requests.find(q=>q.flightType==='atp')?.aircraft,'HP880BL');
 });
 test('director includes helicopter and requires nonoperative warning acknowledgement',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'})}),/Confirma/);apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(d.itinerarios[0].aeronave,'HP-11BL');assert.equal(d.fleet.HP_11BL.status,'aog');});
 test('admin can create fixed multi but not mono or charter or modify',()=>{const d=fixture(),admin={...pilot('p2'),account:{role:'Administrativo',assignedAt:now}};apply(d,admin,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});assert.throws(()=>apply(d,admin,'flight',{flight:flight('p2','HP1784')}),/cargo/);assert.throws(()=>apply(d,admin,'flight',{flight:flight('p2','HP11BL',{flightType:'charter'})}),/Chárter/);assert.throws(()=>apply(d,admin,'flight',{id:d.itinerarios[0].id,flight:flight('p1','HP880BL',{flightType:'multi'})}),/director/);});
