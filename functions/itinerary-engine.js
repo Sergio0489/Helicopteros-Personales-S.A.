@@ -245,8 +245,9 @@ function typeHint(state,type,aircraftId){
  return flightTypeLabel(type,aircraftId)+': '+(allowed.join(' → ')||'sin aeronaves asignadas')+(type==='examen'?' · prioridad máxima entre solicitudes pendientes; requiere número de delegación':type==='charter'?aircraft==='HP880BL'?' · disponible para pilotos en HP880BL · agenda fija':' · solo director · agenda fija':multiTypes.includes(type)?' · prioridad y aeronaves configurables por el director':' · prioridad por tipo; solo se redistribuyen monomotores');
 }
 function routeError(value){
- const parts=String(value||'').normalize('NFKC').toUpperCase().trim().split(/\s*[-–—]\s*/);
- return parts.length!==3||parts.some(code=>!/^[A-Z0-9]{3,4}$/.test(code))?'Ingresa exactamente 3 códigos OACI, IATA o VOR de 3 o 4 caracteres, separados por guiones.':'';
+ const normalized=normalizeRoute(value),parts=normalized.split(' - ');
+ if(normalized.length>200)return 'La ruta no puede exceder 200 caracteres.';
+ return parts.length<3||parts.some(code=>!/^[A-Z0-9]{3,4}$/.test(code))?'Ingresa al menos 3 códigos OACI, IATA o VOR de 3 o 4 caracteres, separados por guiones.':'';
 }
 function normalizeRoute(value){return String(value||'').normalize('NFKC').toUpperCase().trim().split(/\s*[-–—]\s*/).map(code=>code.trim()).join(' - ');}
 function delegationNumberError(value){const number=String(value||'').trim();return !number||number.length>30||/[\x00-\x1F\x7F]/.test(number)?'Escribe un número de delegación válido (máximo 30 caracteres).':'';}
