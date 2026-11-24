@@ -93,16 +93,17 @@ const flightTypes={
  multi:{label:'Multi Estudiante',hint:'Vuelo de estudiante en multimotor. El director configura aeronaves y prioridad.'},
  multiLey89:{label:'Multi Ley 89',hint:'Vuelo Ley 89 en multimotor. El director configura aeronaves y prioridad.'},
  multiConversion:{label:'Multi Conversión',hint:'Vuelo de conversión en multimotor. El director configura aeronaves y prioridad.'},
+ atp:{label:'ATP',hint:'Vuelo ATP en multimotor. El director configura aeronaves y prioridad.'},
  grob:{label:'Grob',hint:'HP1930 por defecto; aeronaves y orden configurables por el director.'},
  charter:{label:'Chárter',hint:'Solo director, en multimotor o helicóptero. Agenda fija, sin reasignación automática.'},
  socio:{label:'Socio',hint:'Indica el nombre del socio. Se respetan las aeronaves y el orden configurados por el director.'}
 };
 const typeOf=q=>!q.flightType||q.flightType==='general'?'privado':q.flightType;
-const multiTypes=['multi','multiLey89','multiConversion'];
+const multiTypes=['multi','multiLey89','multiConversion','atp'];
 const soloOrder=['HP1819','HP1907','HP1784'];
 function defaultTypeRules(){
  const mono=fleet.filter(a=>a[2]==='Monomotor').map(a=>a[0]);
- return {privado:[...mono],examen:[...mono,'HP880BL'],solo:[...soloOrder],xc:[...mono],ley89:[...mono,'HP880BL'],conversion:[...mono,'HP880BL'],maniobras:[...mono],ifr:['HP1579','HP1815'],multi:['HP880BL'],multiLey89:['HP880BL'],multiConversion:['HP880BL'],grob:['HP1930'],charter:fleet.filter(a=>a[2]!=='Monomotor').map(a=>a[0]),socio:fleet.map(a=>a[0])};
+ return {privado:[...mono],examen:[...mono,'HP880BL'],solo:[...soloOrder],xc:[...mono],ley89:[...mono,'HP880BL'],conversion:[...mono,'HP880BL'],maniobras:[...mono],ifr:['HP1579','HP1815'],multi:['HP880BL'],multiLey89:['HP880BL'],multiConversion:['HP880BL'],atp:['HP880BL'],grob:['HP1930'],charter:fleet.filter(a=>a[2]!=='Monomotor').map(a=>a[0]),socio:fleet.map(a=>a[0])};
 }
 function typeConfigAircraft(state,type){
  if(!flightTypes[type])return [];
