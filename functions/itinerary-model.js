@@ -193,17 +193,18 @@ function relocateFixedFlights(state,now){
  for(const q of state.confirmed){
   const a=state.aircraft.find(a=>a.id===q.aircraft);
   if(!E.assignmentEligible(a,state)){
-   q.operationalHold=true;q.publicationStatus='held';q.validationHold='No se publica: '+q.aircraft+' no estaba operativa a las 8:00 p. m. o ahora no está operativa.';q.relocationPending=true;displaced.push(copy(q));
+   q.operationalHold=true;q.publicationStatus='held';q.validationHold=E.typeOf(q)==='charter'?'No se publica automáticamente: los vuelos chárter conservan su aeronave y requieren revisión manual de Dirección.':'No se publica: '+q.aircraft+' no estaba operativa a las 8:00 p. m. o ahora no está operativa.';q.relocationPending=true;displaced.push(copy(q));
   }else if(q.operationalHold){delete q.operationalHold;delete q.validationHold;delete q.relocationPending;if(q.publicationStatus==='held')delete q.publicationStatus;}
  }
  // Move flights with fewer eligible alternatives first so flexible flights do
  // not consume the only aircraft that can take a constrained flight.
  displaced.sort((a,b)=>{
-  const alternatives=q=>E.allowedForType(state,E.typeOf(q)).filter(id=>id!==q.aircraft&&E.assignmentEligible(state.aircraft.find(a=>a.id===id),state)&&E.compatible(state,q,state.aircraft.find(a=>a.id===id))).length;
+  const alternatives=q=>E.typeOf(q)==='charter'?0:E.allowedForType(state,E.typeOf(q)).filter(id=>id!==q.aircraft&&E.assignmentEligible(state.aircraft.find(a=>a.id===id),state)&&E.compatible(state,q,state.aircraft.find(a=>a.id===id))).length;
   return alternatives(a)-alternatives(b)||E.minutes(a.start)-E.minutes(b.start)||String(a.id).localeCompare(String(b.id));
  });
  let relocated=0;
  for(const original of displaced){
+  if(E.typeOf(original)==='charter')continue;
   const options=E.allowedForType(state,E.typeOf(original)).map(id=>state.aircraft.find(a=>a.id===id)).filter(a=>a&&a.id!==original.aircraft&&E.assignmentEligible(a,state)&&E.compatible(state,original,a));
   let replacement=null;
   for(const aircraft of options){
@@ -232,7 +233,7 @@ function calculatedDraftPlan(data,dateValue,now,baseAssignments=[],removedFlight
  const outside=result.assignments.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue));});
  if(outside)warnings.push('Al menos un vuelo quedaría fuera del horario permitido o de la disponibilidad prevista; corrígelo antes de publicar.');
  if(relocated)warnings.push(relocated+' vuelo(s) previamente agendado(s) se reubicaron automáticamente a aeronaves operativas compatibles, conservando piloto y horario. Dirección puede revisar o editar esos cambios en el borrador.');
- if(cutoffHeld.length)warnings.push(cutoffHeld.length+' vuelo(s) previamente agendado(s) no encontraron una aeronave operativa compatible y quedarán sin publicar. Dirección debe revisarlos o reubicarlos manualmente antes de las 8:15 p. m.');
+ if(cutoffHeld.length)warnings.push(cutoffHeld.length+' vuelo(s) previamente agendado(s) no pudieron reubicarse automáticamente en una aeronave operativa compatible y libre; quedarán sin publicar hasta que Dirección los revise o reubique antes de las 8:15 p. m.');
  const unresolved=result.results.filter(row=>['review','waiting'].includes(row.status));
  if(unresolved.length){const labels=unresolved.map(row=>(state.pilots.find(p=>p.id===row.pilot)?.name||'Piloto')+' · '+(row.aircraft||'sin aeronave')+' · '+row.start+'–'+row.end);warnings.push(unresolved.length+' solicitud(es) aún no tienen asignación confirmada: '+labels.join('; ')+'. Dirección debe resolverlas o eliminarlas antes de publicar.');}
  const unusual=result.assignments.filter(q=>!q.operationalHold&&E.operatingHoursWarning(q));if(unusual.length)warnings.push('Alerta: '+unusual.map(q=>(state.pilots.find(p=>p.id===q.pilot)?.name||'Piloto')+' · '+q.aircraft+' · '+q.start+'–'+q.end).join('; ')+'. El horario habitual es 6:30 a. m.–6:30 p. m.; confirma que cada vuelo nocturno esté habilitado.');

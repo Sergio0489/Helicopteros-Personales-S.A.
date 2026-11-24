@@ -119,7 +119,7 @@ test('a preconfirmed flight stays held when no allowed operative aircraft can ta
  data.itinerary.config.typeRules={...E.defaultTypeRules(),privado:['HP1907']};data.fleet.HP_1907.status='grounded';M.createDraftPlan(data,date,atCutoff);
  const plan=M.day(data,date).draftPlan,held=plan.assignments.find(q=>q.aircraft==='HP1907');
  assert.equal(held.operationalHold,true);assert.equal(held.publicationStatus,'held');assert.match(held.validationHold,/no estaba operativa/i);
- assert.ok(plan.warnings.some(message=>/no encontraron una aeronave operativa compatible/.test(message)));
+ assert.ok(plan.warnings.some(message=>/no pudieron reubicarse automáticamente/.test(message)));
  assert.equal(M.publish(data,date,'2026-11-24T20:15:00-05:00'),true);
  assert.ok(!data.itinerarios.some(f=>M.key(f.aeronave)==='HP1907'));
  assert.ok(M.day(data,date).held.some(q=>q.operationalHold));
@@ -146,6 +146,17 @@ test('overlapping fixed flights competing for one replacement cannot be assigned
  assert.equal(M.publish(data,date,'2026-11-24T20:15:00-05:00'),true);
  assert.equal(data.itinerarios.filter(q=>q.fecha===date).length,1);
  assert.equal(M.day(data,date).held.length,1);
+});
+
+test('Charter remains fixed for Director review when its selected aircraft is unavailable',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ M.apply(data,director,{date,command:'flight',actionId:'charter-fixed-flight-0001',revision:M.day(data,date).revision,flight:{...request('HP11BL','charter'),pilot:'p1',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ const official=data.itinerarios.find(f=>f.fecha===date);assert.ok(official);
+ data.fleet.HP_11BL.status='mantenimiento';M.createDraftPlan(data,date,atCutoff);
+ const held=M.day(data,date).draftPlan.assignments.find(q=>q.id===official.id);
+ assert.equal(held.aircraft,'HP11BL');assert.equal(held.operationalHold,true);
+ assert.match(held.validationHold,/chárter conservan su aeronave.*revisión manual de Dirección/i);
+ assert.ok(!M.day(data,date).draftPlan.assignments.some(q=>q.id===official.id&&q.aircraft==='HP880BL'));
 });
 
 test('Director cannot add an aircraft excluded by the saved cutoff; grounded selector is omitted',()=>{
