@@ -20,6 +20,8 @@ function minutes(t){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))return NaN;return Nu
 function overlaps(a,b){return minutes(a.start)<minutes(b.end)&&minutes(b.start)<minutes(a.end);}
 function active(a){return a.slots.filter(s=>s.id!=='b5'||a.night);}
 function validWindow(q){return !!q&&typeof q==='object'&&Number.isFinite(minutes(q.start))&&Number.isFinite(minutes(q.end))&&minutes(q.start)<minutes(q.end);}
+function operatingHoursWarning(q){if(!validWindow(q))return '';return minutes(q.start)<minutes('06:30')||minutes(q.end)>minutes('18:30')?'Alerta: este horario está fuera del horario habitual de 6:30 a. m. a 6:30 p. m.; confirma la habilitación nocturna. El límite máximo es 8:00 p. m.':'';}
+function operatingHoursError(q){if(!validWindow(q))return '';return minutes(q.start)<minutes('06:30')||minutes(q.end)>minutes('20:00')?'No se puede asignar antes de las 6:30 a. m. ni después de las 8:00 p. m. (no se permiten vuelos hasta las 11:59 p. m.).':'';}
 function coversWindow(windows,q){
  if(!validWindow(q))return false;
  let cursor=minutes(q.start),end=minutes(q.end);
@@ -30,16 +32,22 @@ function coversWindow(windows,q){
  }
  return false;
 }
-function availabilityStart(a,date){
- if(a.status==='operativo')return '00:00';
- return a.release?.enabled&&a.release.date===date&&Number.isFinite(minutes(a.release.from))?a.release.from:null;
+function availabilityBounds(a,date){
+ if(a.release?.enabled&&a.release.date===date){
+  const start=minutes(a.release.from),configuredEnd=minutes(a.release.until),legacyEnd=active(a).reduce((end,s)=>Math.max(end,minutes(s.end)),0),end=Number.isFinite(configuredEnd)?configuredEnd:legacyEnd;
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end)return null;
+  return {start,end};
+ }
+ return a.status==='operativo'?{start:0,end:1440}:null;
 }
-function bookable(a,date){return availabilityStart(a,date)!==null;}
+function availabilityStart(a,date){const bounds=availabilityBounds(a,date);return bounds?timeLabel(bounds.start):null;}
+function availabilityEnd(a,date){const bounds=availabilityBounds(a,date);return bounds?timeLabel(bounds.end):null;}
+function bookable(a,date){return availabilityBounds(a,date)!==null;}
 function bookingSlots(a,date){
- const from=availabilityStart(a,date);if(from===null)return [];
+ const bounds=availabilityBounds(a,date);if(!bounds)return [];
  const window=a.category==='Monomotor'&&validWindow(a.scheduleWindow)?a.scheduleWindow:null;
  return active(a).map(s=>{
-  const start=Math.max(minutes(s.start),minutes(from),window?minutes(window.start):0),end=Math.min(minutes(s.end),window?minutes(window.end):1440);
+  const start=Math.max(minutes(s.start),bounds.start,window?minutes(window.start):0),end=Math.min(minutes(s.end),bounds.end,window?minutes(window.end):1440);
   return {...s,start:timeLabel(start),end:timeLabel(end)};
  }).filter(validWindow);
 }
@@ -50,7 +58,7 @@ function scheduleWindowError(a,q){
  if(!validWindow(q))return '';
  return minutes(q.start)<minutes(window.start)||minutes(q.end)>minutes(window.end)?'Los vuelos de esta fecha deben quedar entre '+timeLabel(minutes(window.start))+' y '+timeLabel(minutes(window.end))+'.':'';
 }
-function directorWindowAvailable(a,q,date){const from=availabilityStart(a,date);return from!==null&&validWindow(q)&&minutes(q.start)>=minutes(from)&&!scheduleWindowError(a,q);}
+function directorWindowAvailable(a,q,date){const bounds=availabilityBounds(a,date);return bounds!==null&&validWindow(q)&&minutes(q.start)>=bounds.start&&minutes(q.end)<=bounds.end&&!scheduleWindowError(a,q);}
 function flightAvailable(a,q,date){return q.createdByRole==='director'?directorWindowAvailable(a,q,date):covers(a,q,date);}
 // Business scheduling rule: any flight extending past 18:30 on this date is nocturnal.
 // Count assigned, available aircraft, never pending requests or repeated flights on one tail.
@@ -283,16 +291,19 @@ function directorFlightError(state,q,excludeId,role='director'){
  if(!p||!p.valid||!p.categories.includes(a.category))return 'El piloto no está habilitado para esta aeronave.';
  if(!canChooseFlightType(state,typeOf(q),role,a))return typeOf(q)==='charter'?'Chárter solo está disponible para director en multimotor o helicóptero.':'La aeronave no corresponde al tipo de vuelo seleccionado.';
  if(!validWindow(q))return 'La hora final debe ser posterior a la inicial, dentro del mismo día.';
+ const hoursError=operatingHoursError(q);if(hoursError)return hoursError;
+ if(minutes(q.end)>minutes('18:30')&&!state.nightEnabled)return 'Dirección debe habilitar el bloque nocturno de 6:30 p. m. a 8:00 p. m. antes de asignar este vuelo.';
  if(state.confirmed.some(x=>x.id!==excludeId&&(x.aircraft===q.aircraft||x.pilot===q.pilot)&&overlaps(x,q)))return 'El horario se cruza con otro vuelo de la aeronave o del piloto.';
  if(sameStudentConflict(state.confirmed,q,excludeId))return 'El estudiante ya tiene otro vuelo en ese horario.';
  if(minutes(q.end)-minutes(q.start)<MIN_ASSIGNMENT_MINUTES)return 'El vuelo debe durar al menos 1 hora y 30 minutos.';
  const dayWindowError=scheduleWindowError(a,q);if(dayWindowError)return dayWindowError;
- if(role!=='director'&&!covers(a,q,state.date))return 'El intervalo completo debe estar habilitado. Revisa horarios base, previsión y bloque nocturno.';
+ if((role!=='director'||a?.release?.enabled&&a.release.date===state.date)&&!covers(a,q,state.date))return 'El intervalo completo debe estar habilitado. Revisa horarios base, previsión y bloque nocturno.';
  return '';
 }
-function requestError(state,q){
+function requestError(state,q,options={}){
  q=normalizeRequest(state,q);
- const gate=reservationGate(state);if(gate)return gate;
+ const clock=panamaClock(state.now),mayEditClosed=options.allowClosedEdit===true&&state.date===clock.tomorrow&&!state.published;
+ const gate=reservationGate(state);if(gate&&!mayEditClosed)return gate;
  const a=state.aircraft.find(x=>x.id===q.aircraft),p=state.pilots.find(x=>x.id===q.pilot),s=a&&active(a).find(x=>x.id===q.slot),type=typeOf(q);
  if(!pilotCanRequest(a))return 'Los pilotos solo pueden solicitar monomotores y HP880BL. Las demás aeronaves las agenda un director o administrativo.';
  if(!a||!bookable(a,state.date))return 'La aeronave debe estar operativa o habilitada por un director para esta fecha.';
@@ -304,6 +315,7 @@ function requestError(state,q){
  if(!allowedForType(state,type).length&&!(a.id==='HP880BL'&&[...multiTypes,'ley89','conversion','charter','socio'].includes(type)))return 'El director debe asignar una aeronave a este tipo de vuelo.';
  if(!s)return 'Este bloque no está habilitado.';
  const timing=timeError(a,q);if(timing)return timing;
+ const hoursError=operatingHoursError(q);if(hoursError)return hoursError;
  if(minutes(q.end)-minutes(q.start)<MIN_ASSIGNMENT_MINUTES)return 'El vuelo debe durar al menos 1 hora y 30 minutos.';
  const dayWindowError=scheduleWindowError(a,q);if(dayWindowError)return dayWindowError;
  if(!covers(a,q,state.date))return 'El horario comienza antes de la habilitación del director o queda fuera de los horarios disponibles.';
@@ -318,19 +330,24 @@ function requestError(state,q){
 function competingRequests(state,request){
  return state.requests.filter(q=>q.id!==request.id&&q.status!=='approved'&&q.status!=='cancelled'&&!state.cancelled.includes(q.id)&&!state.confirmed.some(f=>f.sourceRequestId===q.id)&&q.aircraft===request.aircraft&&q.pilot!==request.pilot&&overlaps(q,request));
 }
-function studentKey(q){
- if(q?.studentId)return 'id:'+String(q.studentId);
+function studentNameKey(q){
  const name=String(q?.studentName||q?.estudiante||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');
  return name?'name:'+name:'';
 }
+function sameStudent(a,b){
+ const aId=String(a?.studentId||'').trim(),bId=String(b?.studentId||'').trim();
+ if(aId&&bId)return aId===bId;
+ const aName=studentNameKey(a),bName=studentNameKey(b);
+ return !!aName&&aName===bName;
+}
 function studentConflicts(state,request){
- const key=studentKey(request);if(!key)return [];
- const confirmed=(state.confirmed||[]).filter(f=>f.id!==request.id&&studentKey(f)===key&&overlaps(f,request));
- const pending=(state.requests||[]).filter(q=>q.id!==request.id&&q.status!=='approved'&&q.status!=='cancelled'&&!state.cancelled?.includes(q.id)&&!state.confirmed?.some(f=>f.sourceRequestId===q.id)&&studentKey(q)===key&&overlaps(q,request));
+ if(!studentNameKey(request)&&!request?.studentId)return [];
+ const confirmed=(state.confirmed||[]).filter(f=>f.id!==request.id&&sameStudent(f,request)&&overlaps(f,request));
+ const pending=(state.requests||[]).filter(q=>q.id!==request.id&&q.status!=='approved'&&q.status!=='cancelled'&&!state.cancelled?.includes(q.id)&&!state.confirmed?.some(f=>f.sourceRequestId===q.id)&&sameStudent(q,request)&&overlaps(q,request));
  return [...confirmed,...pending];
 }
 function sameStudentConflict(assignments,q,excludeId){
- const key=studentKey(q);return !!key&&assignments.some(x=>x.id!==excludeId&&studentKey(x)===key&&overlaps(x,q));
+ return !!(studentNameKey(q)||q?.studentId)&&assignments.some(x=>x.id!==excludeId&&sameStudent(x,q)&&overlaps(x,q));
 }
 function timeLabel(value){return String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0');}
 function fitDeviation(request,fit){
@@ -345,7 +362,7 @@ function fitRequest(state,request,aircraft,assignments){
   const start=minutes(row.start),end=minutes(row.end),last=windows.at(-1);
   if(last&&start<=last.end)last.end=Math.max(last.end,end);else windows.push({start,end});
  }
- const conflicts=assignments.filter(f=>f.id!==request.id&&(f.aircraft===aircraft.id||f.pilot===request.pilot||studentKey(f)&&studentKey(f)===studentKey(request))&&validWindow(f)).map(f=>({start:minutes(f.start),end:minutes(f.end)}));
+ const conflicts=assignments.filter(f=>f.id!==request.id&&(f.aircraft===aircraft.id||f.pilot===request.pilot||sameStudent(f,request))&&validWindow(f)).map(f=>({start:minutes(f.start),end:minutes(f.end)}));
  let best=null,bestCost=Infinity;
  for(const segment of windows){
   const latestMinimum=segment.end-MIN_ASSIGNMENT_MINUTES,latestFull=segment.end-requestedDuration;
@@ -457,7 +474,7 @@ function simulate(state){
  for(const original of protectedRequests){
   const a=state.aircraft.find(a=>a.id===original.aircraft);let q=original,reason='';
   if(a){const fitted=fitRequest(state,q,a,assignments);if(fitted)q=fitted;else reason='No se encontró un espacio compatible dentro del horario permitido para esta fecha.';}
-  const conflict=assignments.find(x=>(x.aircraft===q.aircraft||x.pilot===q.pilot||studentKey(x)&&studentKey(x)===studentKey(q))&&overlaps(x,q));used.add(original.id);
+  const conflict=assignments.find(x=>(x.aircraft===q.aircraft||x.pilot===q.pilot||sameStudent(x,q))&&overlaps(x,q));used.add(original.id);
   if(!reason&&(!bookable(a,state.date)||!covers(a,q,state.date)))reason='HP880BL no está disponible para todo el intervalo. Revisión manual; no se reasigna.';
   else if(!reason&&conflict?.flightType==='examen'&&!conflict.fixed&&typeOf(q)!=='examen')reason='El examen de vuelo tiene prioridad sobre esta solicitud.';
   else if(!reason&&conflict)reason='Cruce con otra solicitud del piloto o del estudiante; se requiere revisión manual.';
@@ -483,7 +500,7 @@ function simulate(state){
  }
  return {assignments,results:results.sort((a,b)=>a.created-b.created)};
 }
-const api={slots,fleet,minutes,overlaps,active,validWindow,coversWindow,availabilityStart,bookable,bookingSlots,covers,scheduleWindowError,directorWindowAvailable,flightAvailable,isNightFlight,nightPublication,sourceSnapshot,timeError,validateSlots,requestError,reservationGate,panamaClock,operationalAlerts,competingRequests,studentConflicts,sameStudentConflict,prepareApproval,publishedChange,publicationNotice,canCancelRelocated,reallocatePublished,directorFlightError,pilotCanRequest,canSchedule,allowedForType,defaultTypeRules,normalizeRequest,typeHint,flightTypeLabel,typeConfigAircraft,canChooseFlightType,routeError,normalizeRoute,delegationNumberError,flightDataError,simulate,fitRequest,fitDeviation,MIN_ASSIGNMENT_MINUTES,flightTypes,typeOf,aircraftOrder,compatible};
+const api={slots,fleet,minutes,overlaps,active,validWindow,coversWindow,availabilityBounds,availabilityStart,availabilityEnd,bookable,bookingSlots,covers,scheduleWindowError,operatingHoursWarning,operatingHoursError,directorWindowAvailable,flightAvailable,isNightFlight,nightPublication,sourceSnapshot,timeError,validateSlots,requestError,reservationGate,panamaClock,operationalAlerts,competingRequests,studentConflicts,sameStudentConflict,prepareApproval,publishedChange,publicationNotice,canCancelRelocated,reallocatePublished,directorFlightError,pilotCanRequest,canSchedule,allowedForType,defaultTypeRules,normalizeRequest,typeHint,flightTypeLabel,typeConfigAircraft,canChooseFlightType,routeError,normalizeRoute,delegationNumberError,flightDataError,simulate,fitRequest,fitDeviation,MIN_ASSIGNMENT_MINUTES,flightTypes,typeOf,aircraftOrder,compatible};
 if(typeof module==='object'&&module.exports)module.exports=api;else root.HPItinerary=api;
 })(typeof globalThis==='object'?globalThis:this);
 

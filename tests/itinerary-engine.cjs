@@ -339,22 +339,31 @@ test('Socio on HP880BL stays fixed even if ordered below monomotors',()=>{
 });
 
 
-test('director may schedule any time on every aircraft without blocks or night checkbox',()=>{
+test('director schedules respect the daily 6:30am–8pm limits and require enabled night hours',()=>{
  const s=base();s.typeRules.privado=s.aircraft.map(a=>a.id);s.aircraft.forEach(a=>{a.status='operativo';a.night=false;});
- for(const a of s.aircraft)for(const [start,end] of [['00:00','01:30'],['05:00','07:00'],['18:30','20:00'],['21:15','23:59']]){
- const q={...request('q1','d','privado',a.id),start,end,createdByRole:'director'};
- assert.equal(H.directorFlightError(s,q,undefined,'director'),'');assert.equal(H.flightAvailable(a,q,s.date),true);
- assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');assert.notEqual(H.requestError(s,q),'');
+ for(const a of s.aircraft){
+  const daytime={...request('q1','d','privado',a.id),start:'06:30',end:'08:00',createdByRole:'director'};
+  assert.equal(H.directorFlightError(s,daytime,undefined,'director'),'');
+  for(const [start,end] of [['00:00','01:30'],['05:00','07:00'],['21:15','23:59']]){
+   const q={...request('q1','d','privado',a.id),start,end,createdByRole:'director'};
+   assert.match(H.directorFlightError(s,q,undefined,'director'),/6:30 a\. m\.|8:00 p\. m\./);
+  }
+  const night={...request('q1','d','privado',a.id),start:'18:30',end:'20:00',createdByRole:'director'};
+  assert.match(H.directorFlightError(s,night,undefined,'director'),/habilitar el bloque nocturno/);
+  assert.notEqual(H.directorFlightError(s,night,undefined,'admin'),'');assert.notEqual(H.requestError(s,night),'');
  }
- const q={...request('q1','a','privado','HP1784'),start:'21:00',end:'22:00'};s.confirmed=[{...q,id:'taken'}];
+ s.nightEnabled=true;const a=s.aircraft[0];a.night=true;const enabled={...request('q1','d','privado',a.id),start:'18:30',end:'20:00',createdByRole:'director'};
+ assert.equal(H.directorFlightError(s,enabled,undefined,'director'),'');assert.match(H.operatingHoursWarning(enabled),/6:30 a\. m\./);
+ const q={...request('q1','a','privado','HP1784'),start:'12:00',end:'14:00'};s.confirmed=[{...q,id:'taken'}];
  assert.match(H.directorFlightError(s,{...q,pilot:'b'}),/cruza/);
 });
-test('director may plan before forecast availability but operational eligibility stays false',()=>{
- const s=base(),a=s.aircraft.find(a=>a.id==='HP1930');a.release={enabled:true,date:s.date,from:'21:00'};
- const q={...request('q1','a','grob','HP1930'),start:'20:59',end:'23:00',createdByRole:'director'};
- assert.equal(H.directorFlightError(s,q),'');assert.equal(H.flightAvailable(a,q,s.date),false);q.start='21:00';assert.equal(H.directorFlightError(s,q),'');
- assert.equal(H.flightAvailable(a,q,s.date),true);s.confirmed=[{...q,fixed:true}];assert.deepEqual(H.simulate(s).assignments,s.confirmed);
- a.release.enabled=false;assert.equal(H.flightAvailable(a,q,s.date),false);
+test('director schedule respects both ends of an active forecast even when aircraft is operational',()=>{
+ const s=base(),a=s.aircraft.find(a=>a.id==='HP1930');a.release={enabled:true,date:s.date,from:'12:30',until:'16:00'};
+ const q={...request('q1','a','grob','HP1930'),start:'12:30',end:'14:00',createdByRole:'director'};
+ assert.equal(H.directorFlightError(s,q),'');assert.equal(H.flightAvailable(a,q,s.date),true);
+ assert.notEqual(H.directorFlightError(s,{...q,start:'11:00',end:'13:00'}),'');
+ assert.notEqual(H.directorFlightError(s,{...q,start:'15:00',end:'16:30'}),'');
+ s.confirmed=[{...q,fixed:true}];assert.deepEqual(H.simulate(s).assignments,s.confirmed);
 });
 
 

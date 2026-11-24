@@ -21,7 +21,7 @@ const esc=escapeRecord,uid=()=>crypto.randomUUID(),today=()=>panamaISO();
 const money=c=>new Intl.NumberFormat('es-PA',{style:'currency',currency:'USD'}).format((Number(c)||0)/100);
 const list=x=>Array.isArray(x)?x:[];
 const schoolRequest=(action,payload)=>window.ROLE_VIEW?window.schoolRequest(action,payload):window.AccountRegistration.api(action,payload);
-let selected=null,view='students',query='',stageFilter='',busy=false,activeDialog=null;
+let selected=null,view='students',query='',stageFilter='',busy=false,activeDialog=null,directoryUsers=[],directoryUsersLoaded=false,directoryUsersLoading=false,directoryUsersError=false;
 function manualStage(stage){return ['Culminado','Carrera culminada','Retirado'].includes(stage);}
 function automaticStage(student,stage,enrolledDate,explicit=false){
  if(window.ROLE_VIEW){if(!explicit||manualStage(stage)||stage==='En formación')return stage||'';return enrolledDate&&validDate(enrolledDate)?'Matriculado':stage||'Interesado';}
@@ -468,13 +468,47 @@ function addClient(){
  });
 }
 function comparePersonNames(a,b){const x=String(a.name||'').trim(),y=String(b.name||'').trim();return (!x)-(!y)||x.localeCompare(y,'es',{sensitivity:'base',numeric:true});}
-function clientsHtml(){const clients=[...list(data().registry?.clients)].sort(comparePersonNames);return '<div class="school-actions">'+button('+ Agregar cliente','new-client')+'</div><div class="school-rate-grid">'+clients.map(c=>{const st=statementData(clientStatement(c));return '<section class="card"><h3>'+esc(c.name)+'</h3><p>Saldo: '+statementBalance(st.servicesBalance)+'</p>'+equipmentHoursHtml(clientStatement(c))+'<div class="school-actions">'+button('Estado de cuenta','client-statement','data-client="'+esc(c.id)+'"')+button('Registrar pago','client-payment','data-client="'+esc(c.id)+'"')+'</div></section>';}).join('')+'</div>'+(!clients.length?'<div class="card">Todavía no hay clientes. Usa Agregar cliente o guarda un registro de chárter con un nombre nuevo.</div>':'');}
+function representedDirectoryDossiers(school){
+ if(view==='students')return list(school.students).filter(record=>(!record.directoryKind||record.directoryKind==='student')&&(!stageFilter||record.stage===stageFilter)&&[record.name,record.identity,record.email,record.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(record=>({kind:'student',record}));
+ if(view==='clients')return list(school.registry?.clients).map(record=>({kind:'client',record}));
+ return [];
+}
+async function loadDirectoryUsers(){
+ if(window.ROLE_VIEW||directoryUsersLoaded||directoryUsersLoading||!['students','clients'].includes(view))return;
+ directoryUsersLoading=true;
+ try{let token='';do{const page=await schoolRequest('directory-users',token?{pageToken:token}:{});directoryUsers.push(...list(page.users));token=page.nextPageToken||'';}while(token);directoryUsersLoaded=true;}
+ catch{directoryUsersError=true;directoryUsersLoaded=true;}
+ finally{directoryUsersLoading=false;if(panel?.isConnected)render();}
+}
+function systemUsers(school){
+ if(window.ROLE_VIEW)return [];
+ const represented=representedDirectoryDossiers(school);
+ const sameEmail=(a,b)=>String(a||'').trim().toLowerCase()&&String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+ const isRepresented=user=>represented.some(({kind,record})=>user.uid&&record.authUid===user.uid||user.recordKind===kind&&user.recordId&&String(record.id)===String(user.recordId)||sameEmail(user.email,record.email));
+ const rows=directoryUsers.filter(user=>!isRepresented(user)).map(user=>({...user,name:user.name||user.email||'Usuario sin nombre'})),addDossierUser=user=>{if(user.name&&!isRepresented(user))rows.push(user);};
+ for(const pilot of list(previewData.pilotos))addDossierUser({uid:pilot.authUid||'',recordKind:'pilot',recordId:String(pilot.id||''),name:pilot.nombre||pilot.name||'',email:pilot.email||'',role:'Piloto'});
+ for(const person of list(school.personnel))addDossierUser({uid:person.authUid||'',recordKind:'personnel',recordId:String(person.id||''),name:person.name||person.nombre||'',email:person.email||'',role:person.position||person.role||'Personal'});
+ const seen=new Set(),unique=rows.filter(user=>{
+  const email=String(user.email||'').trim().toLowerCase(),key=user.uid?'uid:'+user.uid:email?'email:'+email:user.recordKind+':'+user.recordId;
+  if(!user.name||seen.has(key))return false;seen.add(key);return true;
+ });
+ return unique.sort(comparePersonNames);
+}
+function systemUsersHtml(school,search=''){
+ if(window.ROLE_VIEW)return '';
+ if(!directoryUsersLoaded)return '<section class="card school-system-users"><h3>Usuarios del sistema</h3><p class="school-muted">Cargando pilotos y demás usuarios…</p></section>';
+ if(directoryUsersError)return '<section class="card school-system-users"><h3>Usuarios del sistema</h3><p class="school-muted" role="status">No se pudo cargar la lista de usuarios. Actualiza la página e inténtalo de nuevo.</p></section>';
+ const term=String(search||'').trim().toLocaleLowerCase('es'),rows=systemUsers(school).filter(user=>[user.name,user.email,user.role].join(' ').toLocaleLowerCase('es').includes(term));
+ return '<section class="card school-system-users" aria-label="Usuarios del sistema"><h3>Usuarios del sistema · '+rows.length+'</h3><p class="school-muted">Incluye pilotos, personal y demás cuentas, que pueden registrarse como estudiantes o clientes.</p><div>'+rows.map(user=>'<div class="school-row school-ledger-entry"><div><b>'+esc(user.name)+'</b><small class="school-muted">'+esc(user.role)+(user.disabled?' · Cuenta deshabilitada':'')+'</small></div></div>').join('')+'</div>'+(rows.length?'':'<p class="school-muted">No hay usuarios adicionales para mostrar.</p>')+'</section>';
+}
+function clientsHtml(){const school=data(),clients=[...list(school.registry?.clients)].sort(comparePersonNames);return '<div class="school-actions">'+button('+ Agregar cliente','new-client')+'</div><div class="school-rate-grid">'+clients.map(c=>{const st=statementData(clientStatement(c));return '<section class="card"><h3>'+esc(c.name)+'</h3><p>Saldo: '+statementBalance(st.servicesBalance)+'</p>'+equipmentHoursHtml(clientStatement(c))+'<div class="school-actions">'+button('Estado de cuenta','client-statement','data-client="'+esc(c.id)+'"')+button('Registrar pago','client-payment','data-client="'+esc(c.id)+'"')+'</div></section>';}).join('')+'</div>'+(!clients.length?'<div class="card">Todavía no hay clientes. Usa Agregar cliente o guarda un registro de chárter con un nombre nuevo.</div>':'')+systemUsersHtml(school);}
 const panel=document.createElement('div');panel.id='panel-estudiantes';panel.className='aircraft-panel';contentEl.appendChild(panel);
 const tab=document.createElement('div');tab.className='aircraft-tab';tab.innerHTML='<div class="tab-reg" style="font-size:10px">🎓 ESTUDIANTES / CLIENTES</div>';itinerariosTab.insertAdjacentElement('afterend',tab);
 tab.addEventListener('click',()=>{document.querySelectorAll('.aircraft-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.aircraft-panel').forEach(p=>p.classList.remove('active'));tab.classList.add('active');panel.classList.add('active');render();});
 function render(){
  const school=data();
  if(window.ROLE_VIEW?.ownStatement){const s=school.students[0]|| (school.registry?.clients?.[0]?clientStatement(school.registry.clients[0]):null);panel.innerHTML='<div class="aircraft-reg" style="font-size:20px;margin-bottom:16px">MI ESTADO DE CUENTA</div><section class="card" style="padding:18px" data-permission-page="estudiantes" data-permission-box="account" data-box-name="Estado de cuenta y abonos">'+(s?'<div class="school-actions"><button type="button" class="record-btn" data-own-statement-print>Imprimir / guardar PDF</button></div>'+statementHtml(s)+ownNoShowsHtml(s):'<p>No hay un expediente vinculado a tu correo verificado. Solicita al Director revisar el correo del expediente.</p>')+'</section>';const print=panel.querySelector('[data-own-statement-print]');if(print)print.onclick=()=>printSchoolHtml(statementHtml(s),'school-statement-print');return;}
+ if(['students','clients'].includes(view))loadDirectoryUsers();
  panel.innerHTML='<div class="school-header"><div><div class="aircraft-reg" style="font-size:20px">ESTUDIANTES / CLIENTES</div><p class="school-muted">HP Flight School · Seguimiento académico y financiero</p></div>'+'<div class="school-actions">'+button('Imprimir formulario en blanco','blank-registration')+button('+ Nuevo estudiante','new-student')+'</div></div><div class="school-nav">'+[['students','Estudiantes'],['clients','Clientes'],['rates','Tarifas de aeronaves'],['course-rates','Tarifas de servicios'],['intakes','Próximos cursos y correos']].map(([key,label])=>'<button class="record-btn" data-action="view" data-view="'+key+'" aria-pressed="'+(view===key)+'">'+label+'</button>').join('')+'</div><div id="school-content"></div>';
  const body=panel.querySelector('#school-content');
  if(view==='clients'){body.innerHTML=clientsHtml();return;}
@@ -487,8 +521,8 @@ function render(){
 }
 function renderDirectory(){
  const element=panel.querySelector('#school-student-list');if(!element)return;
- const students=data().students.filter(s=>(!s.directoryKind||s.directoryKind==='student')&&(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
- element.innerHTML='<p class="school-muted">'+students.length+' estudiantes / clientes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('');
+ const school=data(),students=school.students.filter(s=>(!s.directoryKind||s.directoryKind==='student')&&(!stageFilter||s.stage===stageFilter)&&[s.name,s.identity,s.email,s.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort(comparePersonNames);
+ element.innerHTML='<p class="school-muted">'+students.length+' estudiantes</p>'+students.map(s=>'<button class="school-student-button" data-action="select" data-student="'+esc(s.id)+'" aria-pressed="'+(selected===s.id)+'"><b>'+esc(s.name)+'</b><span>'+esc(s.stage)+' · '+esc(s.funding)+'</span></button>').join('')+systemUsersHtml(school,query);
 }
 function renderIntakes(body,school){
  const rows=noticeRows(school);

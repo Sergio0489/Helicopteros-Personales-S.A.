@@ -19,7 +19,10 @@ async function recipients(publication,accounts,auth,directorUid){
   return [...found].sort();
  }
  for(const value of publication.pilotRecipients||[])add(value);
- const eligible=Object.entries(accounts||{}).filter(([uid,account])=>!account?.mergedInto&&(uid===directorUid||!!account?.assignedAt&&['Director','Gerente','Administrativo','Piloto','Contabilidad'].includes(account.role)));
+ for(const value of publication.mechanicRecipients||[])add(value);
+ const roleKey=value=>String(value||'').normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').trim();
+ const eligibleRoles=new Set(['director','gerente','administrativo','piloto','contabilidad','mecanico','mecanica','mechanic','mechanics']);
+ const eligible=Object.entries(accounts||{}).filter(([uid,account])=>!account?.mergedInto&&(uid===directorUid||!!account?.assignedAt&&eligibleRoles.has(roleKey(account.role))));
  const userIds=new Set(eligible.map(([uid])=>uid));if(directorUid)userIds.add(directorUid);
  const users=await Promise.all([...userIds].map(async uid=>{try{return await auth.getUser(uid);}catch{return null;}}));
  for(const user of users)if(user&&!user.disabled&&user.emailVerified)add(user.email);
@@ -34,7 +37,7 @@ function message(publication,from,to){
  const displayTime=value=>{const m=String(value||'').match(/^(\d{2}):(\d{2})$/);if(!m)return 'Hora por definir';const hour=Number(m[1]),suffix=hour<12?'AM':'PM';return (hour%12||12)+':'+m[2]+' '+suffix;};
  const rows=[...grouped].map(([aircraft,items])=>aircraft+' · '+items.length+' vuelo'+(items.length===1?'':'s')+'\n'+items.map(f=>displayTime(f.start)+(f.end?' → '+displayTime(f.end):'')+' · '+(f.type||'Vuelo')+' · Piloto: '+(f.pilot||'Sin asignar')+(f.student?' · Estudiante/Cliente: '+f.student:'')+(f.route?' · Ruta: '+f.route:'')).join('\n')).join('\n\n');
  const warnings=(publication.draftWarnings||[]).map(value=>clean(value,300)).filter(Boolean),intro=title+'\n\n'+(draft?'Este borrador se envía únicamente a Dirección para revisión. Publicación automática prevista a las 8:15 p. m., hora de Panamá.\n\n':publication.practice?'Ejercicio temporal de reunión. No es un horario oficial y no reserva vuelos.\n\n':'')+(warnings.length?'Advertencias del borrador:\n- '+warnings.join('\n- ')+'\n\n':'')+(rows||'No hay vuelos programados para este día.')+'\n\nConsulta el horario en la app: '+APP_URL;
- const aircraftCards=[...grouped].map(([aircraft,items])=>'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;border:1px solid #dce5ef;border-radius:10px;background:#e7edf5;overflow:hidden"><tr><td colspan="2" style="padding:12px 14px;background:#153b67;color:#fff"><strong style="font-size:16px">'+escape(aircraft)+'</strong>'+(items[0].model?'<br><small>'+escape(items[0].model)+'</small>':'')+'<span style="float:right">'+items.length+' vuelo'+(items.length===1?'':'s')+'</span></td></tr>'+items.map(f=>'<tr><td colspan="2" style="padding:10px 14px;border-top:1px solid #d5dfea"><strong style="color:#153b67">'+escape(displayTime(f.start)+(f.end?' → '+displayTime(f.end):''))+'</strong><br><span style="font-size:12px;color:#52657a">'+escape(f.type||'Vuelo')+'</span><br><strong>Piloto:</strong> '+escape(f.pilot||'Sin asignar')+(f.student?'<br><strong>Estudiante / Cliente:</strong> '+escape(f.student):'')+(f.route?'<br><strong>Ruta:</strong> '+escape(f.route):'')+'</td></tr>').join('')+'</table>').join('');
+ const aircraftCards=[...grouped].map(([aircraft,items])=>'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;border:1px solid #dce5ef;border-radius:10px;background:#e7edf5;overflow:hidden"><tr><td colspan="2" style="padding:12px 14px;background:#153b67;color:#fff"><strong style="font-size:16px">'+escape(aircraft)+'</strong>'+(items[0].model?'<br><small>'+escape(items[0].model)+'</small>':'')+'<span style="float:right">'+items.length+' vuelo'+(items.length===1?'':'s')+'</span></td></tr>'+items.map(f=>'<tr><td colspan="2" style="padding:10px 14px;border-top:1px solid #d5dfea"><strong style="color:#153b67">'+escape(displayTime(f.start)+(f.end?' → '+displayTime(f.end):''))+'</strong><br><span style="font-size:12px;color:#52657a">'+escape(f.type||'Vuelo')+'</span><br><strong>Piloto:</strong> '+escape(f.pilot||'Sin asignar')+(f.student?'<br><strong>Estudiante / Cliente:</strong> '+escape(f.student):'')+(f.route?'<br><strong>Ruta:</strong> '+escape(f.route):'')+'</td></tr>').join('')+'</table>');
  const columns=[];for(let i=0;i<aircraftCards.length;i+=3){const cells=aircraftCards.slice(i,i+3).map(card=>'<td class="hp-aircraft-cell" width="33.33%" valign="top" style="width:33.33%;padding:0 6px">'+card+'</td>');while(cells.length<3)cells.push('<td class="hp-aircraft-cell" width="33.33%" style="width:33.33%;padding:0 6px"></td>');columns.push('<tr class="hp-aircraft-row">'+cells.join('')+'</tr>');}
  const cards=aircraftCards.length?'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%">'+columns.join('')+'</table>':'<p>No hay vuelos programados para este día.</p>';
  const domain=String(from).split('@')[1]||'localhost',deliveryKey=hash(publication.id+'|'+address(to)).slice(0,24);
@@ -42,6 +45,11 @@ function message(publication,from,to){
  const warningHtml=warnings.length?'<section style="padding:12px;margin:0 0 16px;background:#fff3cd;border:1px solid #edcf6e"><strong>Revisar antes de publicar:</strong><ul>'+warnings.map(value=>'<li>'+escape(value)+'</li>').join('')+'</ul></section>':'';
  const html='<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:700px){.hp-aircraft-row{display:block!important}.hp-aircraft-cell{display:block!important;width:100%!important;max-width:100%!important;padding:0!important}}</style></head><body style="font-family:Arial,sans-serif;color:#172b4d;margin:0;padding:20px;background:#f3f6fa"><main style="max-width:1400px;margin:auto">'+banner+'<h1 style="font-size:22px;margin:0 0 8px">'+escape(title)+'</h1><div style="color:#52657a;margin-bottom:16px">'+escape(dateLabel)+' · Hora de Panamá</div>'+warningHtml+cards+'<p><a href="'+APP_URL+'">Abrir horario en la app</a></p></main></body></html>';
  return {from:{name:'Helicópteros Personales'+(publication.practice?' · SIMULACIÓN':''),address:from},to,subject:title,messageId:'<hp-itinerary-'+deliveryKey+'@'+domain+'>',text:intro,html,disableFileAccess:true,disableUrlAccess:true};
+}
+function deliverySummary(id,publication,recipients,receipts,updatedAt=new Date().toISOString()){
+ const rows=Object.values(receipts||{}),count=status=>rows.filter(row=>row?.status===status).length,codeCounts={};
+ for(const row of rows)if(typeof row?.code==='string')codeCounts[row.code]=(codeCounts[row.code]||0)+1;
+ return {id,date:publication?.date||'',kind:publication?.draft===true?'draft':'publication',recipientCount:Array.isArray(recipients)?recipients.length:0,sentCount:count('sent'),reviewCount:count('review'),failedCount:count('failed'),pendingCount:count('sending')+count('retry'),codeCounts,updatedAt};
 }
 async function deliver({db,event,from,recipients:targets,send,report=()=>{},now=()=>Date.now()}){
  const publication=event.data?.val(),id=event.params?.publicationId;
@@ -70,11 +78,16 @@ async function deliver({db,event,from,recipients:targets,send,report=()=>{},now=
   let outcome;
   try{
    const result=await send(message(publication,from,to));
-   if(!result?.accepted?.some(value=>address(typeof value==='string'?value:value?.address)===to))throw Object.assign(Error('SMTP no confirmó la recepción.'),{responseCode:result?.rejectedErrors?.[0]?.responseCode});
+   const accepted=Array.isArray(result?.accepted)&&result.accepted.some(value=>address(typeof value==='string'?value:value?.address)===to);
+   if(!accepted){
+    const errors=Array.isArray(result?.rejectedErrors)?result.rejectedErrors:[],first=errors[0]||{},responseCode=Number(first.responseCode)||undefined,command=String(first.command||result?.command||'').slice(0,32);
+    const diagnostics={acceptedCount:Array.isArray(result?.accepted)?result.accepted.length:0,rejectedCount:Array.isArray(result?.rejected)?result.rejected.length:0,rejectedErrorCount:errors.length,responseCode:responseCode||null,command:command||''};
+    throw Object.assign(Error('SMTP no confirmó la recepción.'),{responseCode,command,diagnostics});
+   }
    outcome={status:'sent',acceptedAt:now(),code:'smtp-accepted'};
   }catch(error){
    const classification=failure(error),canRetry=classification.retry&&state.attempts<8;
-   retry ||= canRetry;outcome={status:canRetry?'retry':classification.review?'review':'failed',code:canRetry?classification.code:classification.retry?'retry-limit':classification.code};report(outcome.code,id);
+   retry ||= canRetry;outcome={status:canRetry?'retry':classification.review?'review':'failed',code:canRetry?classification.code:classification.retry?'retry-limit':classification.code};report(outcome.code,id,error?.diagnostics||{responseCode:Number(error?.responseCode)||null,command:String(error?.command||'').slice(0,32)});
   }
   const finishedAt=now(),finalized=await ref.transaction(old=>{
    if(old===null)return {...state,...outcome,updatedAt:finishedAt};
@@ -87,4 +100,4 @@ async function deliver({db,event,from,recipients:targets,send,report=()=>{},now=
  if(retry)throw Error('Entrega del horario pendiente de reintento.');
 }
 
-module.exports={recipients,message,deliver};
+module.exports={recipients,message,deliver,deliverySummary};

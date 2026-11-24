@@ -9,6 +9,11 @@ const itineraryEmail=require('./itinerary-email');
 const DIRECTOR_UID=require('./role-ids').DIRECTOR_UID;
 const config=defineSecret('HP_PROSPECT_EMAIL_CONFIG');
 
+async function saveDeliveryStatus(db,id,publication,recipients){
+ const snapshot=await db.ref('itineraryEmailDeliveries/'+id).get(),summary=itineraryEmail.deliverySummary(id,publication,recipients,snapshot.val()||{});
+ if(!recipients.length){summary.reviewCount=1;summary.code='recipients-empty';}
+ await db.ref('dashboard/itineraryEmailStatus/'+id).set(summary);
+}
 exports.emailPublishedItinerary=onValueCreated({
  ref:'/dashboard/itineraryEmailOutbox/{publicationId}',instance:'helicopteros-personales-default-rtdb',
  region:'us-central1',minInstances:0,maxInstances:2,concurrency:4,timeoutSeconds:120,retry:true,secrets:[config]
@@ -17,10 +22,18 @@ exports.emailPublishedItinerary=onValueCreated({
  if(!publication||publication.id!==id)throw Error('Evento de publicación del horario no válido.');
  const [accounts,cfg]=await Promise.all([db.ref('accountRequests').get().then(snapshot=>snapshot.val()||{}),Promise.resolve(mail.smtpConfiguration(config.value()))]);
  const recipients=await itineraryEmail.recipients(publication,accounts,getAuth(),DIRECTOR_UID);
- if(!recipients.length){logger.error('El horario publicado no tiene destinatarios con correo válido.',{publicationId:id});if(publication.draft===true)throw Error('El borrador está pendiente: no se pudo verificar el correo de Dirección.');await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();return;}
- const transport=require('nodemailer').createTransport(cfg.transport);
+ if(!recipients.length){
+  await saveDeliveryStatus(db,id,publication,recipients);
+  logger.error('El horario publicado no tiene destinatarios con correo válido.',{publicationId:id});
+  if(publication.draft===true)throw Error('El borrador está pendiente: no se pudo verificar el correo de Dirección.');
+  await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();return;
+ }
+ const transport=require('nodemailer').createTransport(cfg.transport);let deliveryError=null;
  try{
-  await itineraryEmail.deliver({db,event,from:cfg.from,recipients,send:message=>transport.sendMail(message),report:(code,deliveryId)=>logger.error('Aviso de horario pendiente de revisión.',{code,deliveryId})});
- }finally{transport.close();}
+  await itineraryEmail.deliver({db,event,from:cfg.from,recipients,send:message=>transport.sendMail(message),report:(code,deliveryId,diagnostics)=>logger.error('Aviso de horario pendiente de revisión.',{code,deliveryId,...diagnostics})});
+ }catch(error){deliveryError=error;}
+ finally{transport.close();}
+ await saveDeliveryStatus(db,id,publication,recipients);
+ if(deliveryError)throw deliveryError;
  await db.ref('dashboard/itineraryEmailOutbox/'+id).remove();
 });

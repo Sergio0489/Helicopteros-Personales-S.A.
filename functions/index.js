@@ -204,6 +204,11 @@ exports.accountRegistration=onRequest({region:'us-central1',cors:['https://sergi
   if(!result.committed||failure){res.status(409).json({error:failure||'No se pudo guardar. Actualiza la página.'});return;}
   res.json({ok:true,operation,writes});return;
  }
+ if(action==='directory-users'){
+  if(!isDirector){res.status(403).json({error:'Solo el Director puede consultar todos los usuarios.'});return;}
+  const [snapshot,userPage]=await Promise.all([db.ref('accountRequests').get(),getAuth().listUsers(100,typeof req.body.pageToken==='string'?req.body.pageToken:undefined)]);
+  res.json(require('./directory-users').page(userPage.users,snapshot.val()||{},userPage.pageToken,DIRECTOR));return;
+ }
  if(action==='list'||action==='users'||action==='assign'){
   if(!isDirector){res.status(403).json({error:'Solo el Director puede asignar cargos.'});return;}
   if(action==='users'){
