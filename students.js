@@ -468,6 +468,11 @@ function addClient(){
  });
 }
 function comparePersonNames(a,b){const x=String(a.name||'').trim(),y=String(b.name||'').trim();return (!x)-(!y)||x.localeCompare(y,'es',{sensitivity:'base',numeric:true});}
+function representedDirectoryDossiers(school){
+ if(view==='students')return list(school.students).filter(record=>(!record.directoryKind||record.directoryKind==='student')&&(!stageFilter||record.stage===stageFilter)&&[record.name,record.identity,record.email,record.phone].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(record=>({kind:'student',record}));
+ if(view==='clients')return list(school.registry?.clients).map(record=>({kind:'client',record}));
+ return [];
+}
 async function loadDirectoryUsers(){
  if(window.ROLE_VIEW||directoryUsersLoaded||directoryUsersLoading||!['students','clients'].includes(view))return;
  directoryUsersLoading=true;
@@ -477,7 +482,7 @@ async function loadDirectoryUsers(){
 }
 function systemUsers(school){
  if(window.ROLE_VIEW)return [];
- const represented=[...list(school.students).map(record=>({kind:'student',record})),...list(school.registry?.clients).map(record=>({kind:'client',record}))];
+ const represented=representedDirectoryDossiers(school);
  const sameEmail=(a,b)=>String(a||'').trim().toLowerCase()&&String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
  const isRepresented=user=>represented.some(({kind,record})=>user.uid&&record.authUid===user.uid||user.recordKind===kind&&user.recordId&&String(record.id)===String(user.recordId)||sameEmail(user.email,record.email));
  const rows=directoryUsers.filter(user=>!isRepresented(user)).map(user=>({...user,name:user.name||user.email||'Usuario sin nombre'})),addDossierUser=user=>{if(user.name&&!isRepresented(user))rows.push(user);};

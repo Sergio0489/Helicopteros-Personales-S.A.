@@ -86,6 +86,49 @@ test('saved 8pm draft is Director-only, editable, preserves both Carlos requests
   if(a.aircraft===b.aircraft||a.pilot===b.pilot)assert.equal(E.overlaps(a,b),false);
  }
 });
+test('draft recalculation preserves edits and removals of flights already in the published records',()=>{
+ const data=fixture();
+ apply(data,director,'flight',{flight:flight('sergio','HP880BL','09:30','12:00',{flightType:'multi'})});
+ const officialId=data.itinerarios[0].id;
+ apply(data,pilot('carlos'),'request',{flight:flight('carlos','HP1815','13:00','15:00')});
+ M.createDraftPlan(data,date,now);
+ const originalRequest=M.day(data,date).requests[0],firstView=M.view(data,director,date,now),official=firstView.state.confirmed.find(q=>q.id===officialId);
+ apply(data,director,'flight',{id:officialId,originalDate:date,originalRevision:M.day(data,date).revision,flight:{...official,start:'10:00',end:'12:30'}});
+ apply(data,pilot('carlos'),'request',{id:originalRequest.id,flight:{...originalRequest,note:'Edición ficticia'}});
+ let plan=M.day(data,date).draftPlan;
+ assert.equal(plan.assignments.find(q=>q.id===officialId)?.start,'10:00','a recalculation keeps the Director-edited time instead of restoring the official copy');
+ apply(data,director,'cancel-flight',{id:officialId,reason:'Registro ficticio retirado del borrador'});
+ apply(data,pilot('carlos'),'request',{id:originalRequest.id,flight:{...originalRequest,note:'Otra edición ficticia'}});
+ plan=M.day(data,date).draftPlan;
+ assert.ok(!plan.assignments.some(q=>q.id===officialId),'a removed official flight does not return during recalculation');
+ assert.ok(plan.removedFlightIds.includes(officialId),'the draft records the intentionally removed base flight');
+ assert.equal(M.publish(data,date,now),true);
+ assert.ok(!data.itinerarios.some(q=>q.id===officialId),'publishing keeps the Director removal');
+});
+test('settings recalculate the saved draft while preserving manual changes and respecting new time windows',()=>{
+ const data=fixture();
+ apply(data,director,'flight',{flight:flight('sergio','HP880BL','15:00','17:00',{flightType:'multi'})});
+ const officialId=data.itinerarios[0].id;
+ apply(data,pilot('carlos'),'request',{flight:flight('carlos','HP1907','06:30','09:30')});
+ M.createDraftPlan(data,date,now);
+ const official=M.day(data,date).draftPlan.assignments.find(q=>q.id===officialId);
+ apply(data,director,'flight',{id:officialId,originalDate:date,originalRevision:M.day(data,date).revision,flight:{...official,start:'16:00',end:'18:00'}});
+ apply(data,director,'settings',{scheduleWindow:{start:'12:30',end:'18:30'}});
+ const plan=M.day(data,date).draftPlan,requestId=M.day(data,date).requests[0].id,moved=plan.assignments.find(q=>q.sourceRequestId===requestId),manual=plan.assignments.find(q=>q.id===officialId);
+ assert.ok(moved,'the pending request remains assigned in the updated draft');
+ assert.ok(moved.start>='12:30'&&moved.end<='18:30','the new monomotor range is applied to the saved draft');
+ assert.equal(manual.start,'16:00');assert.equal(manual.end,'18:00','settings recalculation preserves the Director adjustment');
+ assert.equal(M.publish(data,date,now),true);
+
+ const forecast=fixture();
+ apply(forecast,pilot('carlos'),'request',{flight:flight('carlos','HP1907','06:30','09:30')});
+ M.createDraftPlan(forecast,date,now);
+ apply(forecast,director,'settings',{aircraft:'HP1907',release:{enabled:true,from:'12:30',until:'16:00'}});
+ const releasePlan=M.day(forecast,date).draftPlan,releaseRequestId=M.day(forecast,date).requests[0].id,releaseAssignment=releasePlan.assignments.find(q=>q.sourceRequestId===releaseRequestId);
+ assert.ok(releaseAssignment,'the request stays represented after a forecast change');
+ assert.ok(releaseAssignment.aircraft!=='HP1907'||releaseAssignment.start>='12:30'&&releaseAssignment.end<='16:00','the forecast end and start constrain the recalculated draft');
+ assert.equal(M.publish(forecast,date,now),true);
+});
 test('scheduled draft is persisted once and can backfill an old notification marker without resending it',async()=>{
  const data=fixture(),db=database(data),first=await S.scheduledDraft(db,'2026-10-30T20:00:00-05:00');
  const stored=JSON.parse(db.value.payload),day=M.day(stored,date);
