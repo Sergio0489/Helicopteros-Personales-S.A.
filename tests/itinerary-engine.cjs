@@ -8,15 +8,15 @@ test('HP1907 restrictions and forecast boundaries are respected with solo priori
   {release:{enabled:false,date:'2026-10-30',from:'06:30'},tail:'HP1784'},
   {release:{enabled:true,date:'2026-10-31',from:'06:30'},tail:'HP1784'},
   {release:{enabled:true,date:'2026-10-30',from:'25:00'},tail:'HP1784'},
-  {release:{enabled:true,date:'2026-10-30',from:'06:31'},tail:'HP1907'},
-  {release:{enabled:true,date:'2026-10-30',from:'06:30'},tail:'HP1907'},
-  {release:{enabled:true,date:'2026-10-30',from:'06:29'},tail:'HP1907'}
+  {release:{enabled:true,date:'2026-10-30',from:'06:31'},tail:'HP1784'},
+  {release:{enabled:true,date:'2026-10-30',from:'06:30'},tail:'HP1784'},
+  {release:{enabled:true,date:'2026-10-30',from:'06:29'},tail:'HP1784'}
  ]){
   const s=base();s.aircraft.find(a=>a.id==='HP1819').status='grounded';
   const a=s.aircraft.find(a=>a.id==='HP1907');a.status=status;a.release=structuredClone(row.release);
   s.requests=[request('q1','a','solo')];const before=structuredClone(s),r=H.simulate(s);
   assert.equal(assigned(r)[0].assignedAircraft,row.tail,JSON.stringify({status,...row}));
-  assert.equal(assigned(r)[0].conditional,row.tail==='HP1907');assert.deepEqual(s,before);
+  assert.equal(assigned(r)[0].conditional,false);assert.deepEqual(s,before);
  }
 });
 test('predetermined hours remain editable; overlaps rejected',()=>{
@@ -27,9 +27,11 @@ test('predetermined hours remain editable; overlaps rejected',()=>{
  a.slots[0].end='10:00';assert.match(H.validateSlots(a.slots,false),/superponen/);
  a.slots[0].end='09:30';a.slots[4].start='18:00';assert.equal(H.validateSlots(a.slots,false),'');assert.match(H.validateSlots(a.slots,true),/superponen/);
 });
-test('requests require operational aircraft and director-enabled night block',()=>{
+test('requests allow aircraft in maintenance but keep the grounded and night restrictions',()=>{
  const s=base(),q=request('q1','a');const a=s.aircraft.find(a=>a.id===q.aircraft);
- a.status='mantenimiento';assert.match(H.requestError(s,q),/operativa/);
+ a.status='mantenimiento';assert.equal(H.requestError(s,q),'');assert.ok(H.requestSlots(a,s.date).length);
+ a.status='grounded';assert.match(H.requestError(s,q),/GROUNDED/);
+ a.status='operativo';
  a.status='operativo';Object.assign(q,{slot:'b5',start:'18:30',end:'20:00'});
  assert.match(H.requestError(s,q),/habilitado/);a.night=true;assert.equal(H.requestError(s,q),'');
 });
@@ -84,7 +86,7 @@ test('HP880BL stays fixed within its requested aircraft category',()=>{
 });
 test('only operative compatible aircraft and valid pilots assigned at cutoff',()=>{
  const s=base();s.requests=[request('q1','a')];s.aircraft.find(a=>a.id==='HP1907').status='grounded';s.aircraft[0].status='grounded';
- const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP1819');
+ const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP1819');assert.ok(r.assignments.every(q=>s.aircraft.find(a=>a.id===q.aircraft)?.status==='operativo'));
  s.pilots.find(p=>p.id==='a').valid=false;assert.equal(H.simulate(s).results[0].status,'review');
 });
 test('destination pilot priority then oldest request decides tied candidates',()=>{
@@ -113,7 +115,7 @@ test('confirmed flights, pilot conflicts, cancellations and max blocks remain pr
 });
 test('invalid flight types and unsupported category requests rejected',()=>{
  const s=base();assert.match(H.requestError(s,{...request('q1','a'),flightType:'unknown'}),/tipo de vuelo/);
- assert.match(H.requestError(s,request('q1','a','ifr','HP1186')),/monomotor/);
+ assert.match(H.requestError(s,request('q1','a','ifr','HP1186')),/director no ha habilitado/);
 });
 
 test('pilots can shorten a block or reserve across adjacent blocks',()=>{
@@ -153,7 +155,7 @@ test('forecast is date specific, preserves maintenance state, and rejects early 
  assert.equal(H.bookable(a,'2026-10-31'),false);assert.equal(a.status,'mantenimiento');
  const q={...request('q1','a','general','HP1930','b2'),start:'10:59',end:'12:30'};
  assert.match(H.requestError(s,q),/habilitación/);q.start='11:00';assert.equal(H.requestError(s,q),'');
- a.rank=0;s.typeRules.privado=['HP1930','HP1784'];s.requests=[q];const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP1930');assert.equal(assigned(r)[0].conditional,true);
+ a.rank=0;s.typeRules.privado=['HP1930','HP1784'];s.requests=[q];const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP1784');assert.equal(assigned(r)[0].conditional,false);
  assert.equal(a.status,'mantenimiento');
  a.status='operativo';assert.equal(assigned(H.simulate(s))[0].conditional,false);
 });
@@ -180,12 +182,13 @@ test('published schedule stops pilot edits while director can edit any date or t
  assert.match(H.directorFlightError(s,{...q,start:'07:00',end:'10:00'},'edit-me'),/cruza/);
 });
 
-test('pilot selection is exactly all monomotors plus HP880BL',()=>{
- const s=base();assert.deepEqual(s.aircraft.filter(H.pilotCanRequest).map(a=>a.id),['HP1784','HP1819','HP1930','HP1815','HP1579','HP1907','HP880BL']);
- for(const id of ['HP18BLM','HP1186','HP1805BLM','HP11BL']){
-  const a=s.aircraft.find(a=>a.id===id);a.status='operativo';
-  const q=request('q1','d','general',id);assert.match(H.requestError(s,q),/director o administrativo/);
-  s.requests=[q];assert.equal(assigned(H.simulate(s)).length,0);assert.equal(H.simulate(s).results[0].status,'review');
+test('pilot selection supports the whole fleet by status and type permission',()=>{
+ const s=base();assert.deepEqual(s.aircraft.filter(H.pilotCanRequest).map(a=>a.id),H.fleet.map(a=>a[0]));
+ for(const [id,,category] of H.fleet){
+  const a=s.aircraft.find(a=>a.id===id),type=category==='Monomotor'?'privado':id==='HP880BL'?'multi':'socio';
+  a.status='operativo';assert.equal(H.requestError(s,{...request('q1','d',type,id),socioName:type==='socio'?'Socio ficticio':''}),'',id);
+  a.status='mantenimiento';assert.equal(H.requestError(s,{...request('q1','d',type,id),socioName:type==='socio'?'Socio ficticio':''}),'',id);
+  a.status='grounded';assert.match(H.requestError(s,{...request('q1','d',type,id),socioName:type==='socio'?'Socio ficticio':''}),/GROUNDED/);
  }
 });
 test('administrative may manually schedule only multi and helicopters; director any aircraft',()=>{
@@ -264,12 +267,13 @@ test('Multi types and ATP are independently enabled and preserved',()=>{
  const s=base();s.typeRules.multiLey89=['HP1186'];
  assert.deepEqual(H.allowedForType(s,'multiLey89'),['HP1186']);
  assert.equal(H.canChooseFlightType(s,'multiLey89','pilot',s.aircraft.find(a=>a.id==='HP1907')),false);
- assert.notEqual(H.requestError(s,request('q1','a','multiLey89','HP1907')),'');
+ const selected=s.aircraft.find(a=>a.id==='HP1186');assert.equal(H.canChooseFlightType(s,'multiLey89','pilot',selected),true);
+ assert.equal(H.requestError(s,request('q1','a','multiLey89','HP1186')),'');
 });
 test('Grob always assigns HP1930 and never substitutes another plane when unavailable',()=>{
  const s=base(),q=request('q1','a','grob','HP1784');s.aircraft.find(a=>a.id==='HP1930').status='operativo';
  assert.equal(H.requestError(s,q),'');s.requests=[q];assert.equal(assigned(H.simulate(s))[0].assignedAircraft,'HP1930');
- s.aircraft.find(a=>a.id==='HP1930').status='mantenimiento';assert.notEqual(H.requestError(s,q),'');assert.equal(assigned(H.simulate(s)).length,0);
+ s.aircraft.find(a=>a.id==='HP1930').status='mantenimiento';assert.equal(H.requestError(s,q),'');assert.equal(assigned(H.simulate(s)).length,0);
 });
 test('director can change Multi and Grob lists without expanding pilot permissions',()=>{
  const s=base();s.typeRules.multi=['HP1186'];s.typeRules.grob=['HP1907'];
@@ -415,9 +419,9 @@ test('director plans every aircraft regardless of status without broadening othe
  for(const a of s.aircraft)for(const status of ['mantenimiento','grounded','sin registrar']){
   a.status=status;a.release=null;
   const q={...request('q1','d','privado',a.id),createdByRole:'director',fixed:true};
-  assert.equal(H.directorFlightError(s,q,undefined,'director'),'');
+  if(status==='grounded')assert.match(H.directorFlightError(s,q,undefined,'director'),/GROUNDED/);else assert.equal(H.directorFlightError(s,q,undefined,'director'),'');
   assert.notEqual(H.directorFlightError(s,q,undefined,'admin'),'');
-  assert.notEqual(H.requestError(s,q),'');
+  if(status==='mantenimiento')assert.equal(H.requestError(s,q),'');else assert.notEqual(H.requestError(s,q),'');
   assert.equal(a.status,status);assert.equal(a.release,null);
   assert.equal(H.flightAvailable(a,q,s.date),false);
   s.confirmed=[q];assert.deepEqual(H.simulate(s).assignments,[q]);s.confirmed=[];

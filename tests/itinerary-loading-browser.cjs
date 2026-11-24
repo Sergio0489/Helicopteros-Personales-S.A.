@@ -203,6 +203,30 @@ test('Exam delegation browser validation matches the server in pilot requests an
  const claimPage=await app(t);await claimPage.evaluate(result=>resolveRead(result),slotResult);await claimPage.locator('[data-date]').waitFor();
  await claimPage.locator('[data-claim-slot="open-exam-test"]').click();await assertExamDelegationValidity(claimPage);
 });
+test('Pilot can request every operative or maintenance aircraft, sees the maintenance warning, and never sees grounded options',async t=>{
+ const result=response();result.rights={role:'pilot',request:true,pilot:'d',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};
+ result.state.aircraft=result.state.aircraft.map(a=>({...a,status:'operativo'}));
+ result.state.aircraft.find(a=>a.id==='HP880BL').status='mantenimiento';result.state.aircraft.find(a=>a.id==='HP1186').status='mantenimiento';result.state.aircraft.find(a=>a.id==='HP1805BLM').status='grounded';
+ const page=await app(t,390);await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ assert.equal(await page.locator('.hp-aircraft').count(),10,'grounded aircraft are removed from the pilot scheduling choices');
+ for(const id of result.state.aircraft.filter(a=>a.status==='operativo'||a.status==='mantenimiento').map(a=>a.id))assert.equal(await page.locator(`.hp-aircraft[aria-label^="${id}"]`).count(),1,id+' remains visible');
+ assert.equal(await page.locator('[data-slot="HP1186:b1"]').isEnabled(),true,'maintenance aircraft can be selected');
+ assert.match(await page.locator('[data-slot="HP1186:b1"]').textContent(),/alerta/);
+ assert.equal(await page.locator('[data-slot="HP1805BLM:b1"]').count(),0,'grounded aircraft do not appear as a choice');
+ await page.locator('[data-slot="HP880BL:b1"]').click();
+ const form=page.locator('dialog form');await form.waitFor();await form.locator('[name=flightType]').selectOption('multiLey89');
+ assert.equal(await form.locator('[name=flightType] option[value="multiLey89"]').isDisabled(),false);
+ assert.match(await form.locator('[data-flight-warning]').textContent(),/MANTENIMIENTO.*Puedes enviar la solicitud/);
+ assert.equal(await form.locator('[type=submit]').isEnabled(),true,'maintenance warning does not block the request');
+});
+test('grounded aircraft are omitted from the Director scheduling selector too',async t=>{
+ const result=response();result.state.aircraft=result.state.aircraft.map(a=>({...a,status:'operativo'}));result.state.aircraft.find(a=>a.id==='HP1805BLM').status='grounded';
+ const page=await app(t);await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();const form=page.locator('dialog form');await form.waitFor();
+ await form.locator('[name=flightType]').selectOption('socio');
+ const options=await form.locator('[name=aircraft] option').evaluateAll(rows=>rows.map(row=>row.value));
+ assert.equal(options.includes('HP1805BLM'),false);
+});
 test('Director window editor saves exact AM/PM range and labels it for monomotors',async t=>{
  const page=await app(t,390),result=response(),scheduleWindow={start:'08:00',end:'16:00'};
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();

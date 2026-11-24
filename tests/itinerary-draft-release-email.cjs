@@ -211,8 +211,19 @@ test('new itinerary dossiers require complete contact data and reject a duplicat
  const testPhone='6'+'1'.repeat(7),data=fixture(),newPerson={studentId:'',studentName:'Persona Nueva',newPersonKind:'student',personIdentity:'TEST-ID-ONE',personEmail:'nueva@example.test',personPhone:testPhone};
  apply(data,pilot('carlos'),'request',{flight:flight('carlos','HP1784','06:30','09:30',newPerson)});
  const created=data.school.students.find(p=>p.name==='Persona Nueva');assert.ok(created);assert.equal(created.identity,'TEST-ID-ONE');assert.equal(created.email,'nueva@example.test');assert.equal(created.phone,testPhone);
+ const international=fixture(),internationalPhone=['+1','212','555','0100'].join(' '),foreign={...newPerson,studentName:'Cliente Extranjero',newPersonKind:'client',personIdentity:'TEST-ID-FOREIGN',personEmail:'foreign@example.test',personPhone:internationalPhone};
+ apply(international,pilot('carlos'),'request',{flight:flight('carlos','HP1784','06:30','09:30',foreign)});
+ assert.equal(international.school.registry.clients[0].phone,internationalPhone);
+ const panamaInternational=fixture(),panamaPhone=['+507','6123','4567'].join(' '),panama={...newPerson,studentName:'Cliente Panamá',newPersonKind:'client',personIdentity:'TEST-ID-PANAMA',personEmail:'panama@example.test',personPhone:panamaPhone};
+ apply(panamaInternational,pilot('carlos'),'request',{flight:flight('carlos','HP1784','06:30','09:30',panama)});
+ assert.equal(panamaInternational.school.registry.clients[0].phone,panamaPhone);
+ for(const [index,personPhone]of ['123456','++12125550100','1-800-FLOWERS','1234567890123456'].entries()){
+  const invalid=fixture(),entry={...newPerson,studentName:'Registro inválido '+index,personIdentity:'TEST-ID-BAD-'+index,personEmail:'bad'+index+'@example.test',personPhone};
+  assert.throws(()=>apply(invalid,pilot('carlos'),'request',{flight:flight('carlos','HP1784','06:30','09:30',entry)}),/celular válido de Panamá o del extranjero/);
+ }
  const duplicateEmail=fixture(),duplicate={...newPerson,studentName:'Otra Persona',personIdentity:'TEST-ID-TWO',personEmail:'s1@example.test'};
  assert.throws(()=>apply(duplicateEmail,pilot('carlos'),'request',{flight:flight('carlos','HP1784','06:30','09:30',duplicate)}),/El correo o la cédula ya pertenece a otro expediente/);
+ const ui=fs.readFileSync(require.resolve('../itinerary-ui.js'),'utf8');assert.match(ui,/validPersonPhone/);assert.match(ui,/Acepta números de Panamá o del extranjero/);
 });
 
 test('pilots can edit and delete their own request after cutoff until publish; saved draft is recalculated and Director can delete pending requests',()=>{

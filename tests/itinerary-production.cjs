@@ -26,13 +26,14 @@ test('a new maintenance restriction invalidates older forecasts before automatic
   const snapshot=structuredClone(d);assert.equal(M.reconcile(snapshot,d,now),false);assert.deepEqual(d,snapshot);
  }
 });
-test('an unchanged restriction preserves an explicit forecast; a fresh forecast remains conditional',()=>{
- const d=fixture();d.fleet.HP_1907.status='grounded';d.fleet.HP_1819.status='grounded';
+test('a forecast does not make a grounded aircraft requestable or assignable',()=>{
+ const d=fixture();d.fleet.HP_1907.status='mantenimiento';d.fleet.HP_1819.status='grounded';
  apply(d,director,'settings',{aircraft:'HP1907',release:{enabled:true,from:'06:30'}});
  const old=structuredClone(d);assert.equal(M.reconcile(old,d,now),false);
  apply(d,pilot('p1'),'request',{flight:flight('p1','HP1907',{flightType:'solo'})});M.publish(d,date,now);
- assert.equal(d.itinerarios[0].aeronave,'HP-1907');assert.equal(d.itinerarios[0].schedule.conditional,true);
- assert.equal(d.fleet.HP_1907.status,'grounded');assert.equal(M.operational(d,now).length,1);
+ assert.equal(d.itinerarios[0].aeronave,'HP-1784');assert.equal(d.itinerarios[0].schedule.conditional,false);
+ assert.equal(d.fleet.HP_1907.status,'mantenimiento');assert.equal(M.operational(d,now).length,0,'the pending flight is kept on another operational aircraft');
+ const grounded=fixture();grounded.fleet.HP_1907.status='grounded';assert.throws(()=>apply(grounded,pilot('p2'),'request',{flight:flight('p2','HP1907',{flightType:'solo'})}),/GROUNDED/);
 });
 test('forecast invalidation covers future days, preserves history and other aircraft',()=>{
  const d=fixture(),past='2026-10-29',future='2026-11-02';
@@ -149,7 +150,7 @@ test('Director saves each Multi aircraft list independently and server enforces 
  assert.equal(M.day(d,date).requests[0].flightType,'multiLey89');assert.equal(M.day(d,date).requests[0].aircraft,'HP880BL');
  apply(d,pilot('p2'),'request',{flight:flight('p2','HP1907',{flightType:'atp'})});assert.equal(M.day(d,date).requests.find(q=>q.flightType==='atp')?.aircraft,'HP880BL');
 });
-test('director includes helicopter and requires nonoperative warning acknowledgement',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'})}),/Confirma/);apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(d.itinerarios[0].aeronave,'HP-11BL');assert.equal(d.fleet.HP_11BL.status,'aog');});
+test('maintenance may be scheduled with acknowledgement; grounded aircraft cannot be scheduled',()=>{const d=fixture();d.fleet.HP_11BL.status='mantenimiento';assert.throws(()=>apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'})}),/Confirma/);apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(d.itinerarios[0].aeronave,'HP-11BL');assert.equal(d.fleet.HP_11BL.status,'mantenimiento');const grounded=fixture();grounded.fleet.HP_11BL.status='grounded';assert.throws(()=>apply(grounded,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true}),/GROUNDED/);});
 test('admin can create fixed multi but not mono or charter or modify',()=>{const d=fixture(),admin={...pilot('p2'),account:{role:'Administrativo',assignedAt:now}};apply(d,admin,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});assert.throws(()=>apply(d,admin,'flight',{flight:flight('p2','HP1784')}),/cargo/);assert.throws(()=>apply(d,admin,'flight',{flight:flight('p2','HP11BL',{flightType:'charter'})}),/Chárter/);assert.throws(()=>apply(d,admin,'flight',{id:d.itinerarios[0].id,flight:flight('p1','HP880BL',{flightType:'multi'})}),/director/);});
 test('legacy scheduled rows and extra fields survive first save untouched',()=>{const d=fixture();d.itinerarios=[{id:1,fecha:date,horaInicio:'21:00',horaFin:'22:00',aeronave:'HP-11BL',piloto:'Unlisted historical pilot',unknownField:{keep:true}}];const original=structuredClone(d.itinerarios[0]);apply(d,director,'settings',{nightEnabled:true});assert.deepEqual(d.itinerarios[0],original);});
 test('night needs two distinct aircraft; cancellation withdraws remaining night flight',()=>{const d=fixture();apply(d,director,'settings',{nightEnabled:true});apply(d,director,'flight',{flight:flight('p1','HP1784',{start:'18:30',end:'20:00'})});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).held.length,1);apply(d,director,'flight',{flight:flight('p2','HP1819',{start:'18:30',end:'20:00',studentId:'student:s2',studentName:'Alumno Dos'})});assert.equal(d.itinerarios.length,2);apply(d,director,'cancel-flight',{id:d.itinerarios[0].id,reason:'Prueba del calendario'});assert.equal(d.itinerarios.length,0);assert.equal(M.day(d,date).held.length,1);});
@@ -168,7 +169,7 @@ test('moving a published flight queues the source day email even when the target
 test('repeated commands are idempotent and stale edits rejected',()=>{const d=fixture(),body={date,command:'request',actionId:'repeat-action-123',flight:flight()};M.apply(d,pilot('p1'),body,now);M.apply(d,pilot('p1'),body,now);assert.equal(M.day(d,date).requests.length,1);assert.throws(()=>M.apply(d,pilot('p1'),{...body,flight:flight('p1','HP1784')},now),/reutilizado/);assert.throws(()=>apply(d,director,'settings',{revision:0,nightEnabled:true}),/cambió/);});
 test('generic saves cannot bypass scheduler rules or overwrite requests',()=>{const old=fixture(),next=structuredClone(old);next.itinerarios.push({id:'bypass'});assert.throws(()=>M.protect(old,next),/nueva página/);const save=structuredClone(old);delete save.itinerary;M.protect(old,save);assert.deepEqual(save.itinerary,old.itinerary);});
 test('student view cannot enumerate other dossiers or flights',()=>{const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP1907',{studentId:'student:s2',studentName:'Alumno Dos'})});const student={...pilot('s1'),account:{role:'Estudiante',assignedAt:now,syncStatus:'matched',recordKind:'student',recordId:'s1'}};const v=M.view(d,student,date,now);assert.equal(v.state.confirmed.length,0);assert.equal(v.state.students.length,0);assert.equal(v.state.pilots.length,0);assert.equal(JSON.stringify(v).includes('secret'),false);});
-test('operational alert begins previous day and ends when operative',()=>{const d=fixture();d.fleet.HP_11BL.status='aog';apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'}),acknowledge:true});assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
+test('operational alert begins previous day and ends when operative',()=>{const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP11BL',{flightType:'charter'})});d.fleet.HP_11BL.status='aog';assert.equal(M.operational(d,now).length,1);d.fleet.HP_11BL.status='operativo';assert.equal(M.operational(d,now).length,0);});
 test('published multimotor and helicopter reviews notify the Director with accurate reasons and keep assignments',()=>{
  const d=fixture();
  apply(d,director,'flight',{flight:flight('p1','HP880BL',{flightType:'multi'})});
