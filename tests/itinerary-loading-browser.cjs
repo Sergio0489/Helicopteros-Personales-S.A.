@@ -140,7 +140,7 @@ test('Director sees detailed flights, requires a student or client, and allows b
 });
 test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canonical times',async t=>{
  const page=await app(t,390),result=response();
- Object.assign(result.state.confirmed[0],{start:'00:00',end:'12:00',route:'MPMG',note:'Sin observaciones'});
+ Object.assign(result.state.confirmed[0],{start:'00:00',end:'12:00',route:'MPMG - MPDA - MPMG',note:'Sin observaciones'});
  Object.assign(result.state.confirmed[1],{start:'13:07',end:'23:59'});
  result.alerts=[{aircraft:'HP1907',date:'2026-10-30',start:'13:07',end:'23:59',status:'mantenimiento'}];
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
@@ -149,7 +149,7 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  assert.match(await page.locator('[data-board]').textContent(),/12:30 PM – 3:30 PM/);
  await page.locator('[data-edit-flight="fixed-2"]').click();
  const startBox=await page.locator('[data-time-field=start]').boundingBox(),endBox=await page.locator('[data-time-field=end]').boundingBox();
- assert.equal(startBox.y,endBox.y,'Start and end times stay on the same row on mobile');assert(endBox.x>startBox.x);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+ assert(endBox.y>startBox.y,'End time appears below start on mobile');assert.equal(startBox.x,endBox.x);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
  assert.equal(await page.locator('[data-time-field=start] [data-hour]').inputValue(),'1');assert.equal(await page.locator('[data-time-field=start] [data-minute]').inputValue(),'07');assert.equal(await page.locator('[data-time-field=start] [data-period]').inputValue(),'PM');
  await page.locator('[data-time-field=start] [data-hour]').fill('0');assert.equal(await page.locator('dialog form').evaluate(f=>f.checkValidity()),false);
  await page.getByRole('button',{name:'Cancelar',exact:true}).click();
