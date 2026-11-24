@@ -6,7 +6,7 @@ const pilot=id=>({user:{uid:id,email:id+'@example.test',emailVerified:true},acco
 function fixture(){return {fleet:Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo',serial:'preserve'}])),pilotos:[{id:'p1',nombre:'Piloto Uno',email:'p1@example.test',medico:'2027-12-31'},{id:'p2',nombre:'Piloto Dos',email:'p2@example.test',medico:'2027-12-31'}],itinerarios:[],school:{students:[{id:'s1',name:'Alumno Uno',email:'s1@example.test',secret:'no-leak'},{id:'s2',name:'Alumno Dos',email:'s2@example.test'}],registry:{clients:[]},accessConfiguration:{roles:{Piloto:structuredClone(policy),Administrativo:structuredClone(policy),Estudiante:structuredClone(policy)}}},itinerary:{version:1,config:{},days:{},notices:[]}};}
 let sequence=0;
 function apply(d,actor,command,fields={},at=now){return M.apply(d,actor,{date,command,actionId:'test-action-'+(++sequence),revision:M.day(d,fields.date||date).revision,configurationRevision:d.itinerary.config.revision||0,...fields},at);}
-const flight=(pilot='p1',aircraft='HP1907',extra={})=>({pilot,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG – Chitré – MPMG',note:'Sin observaciones',studentId:'student:s1',studentName:'Alumno Uno',...extra});
+const flight=(pilot='p1',aircraft='HP1907',extra={})=>({pilot,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG - MPDA - MPMG',note:'Sin observaciones',studentId:'student:s1',studentName:'Alumno Uno',...extra});
 test('a new maintenance restriction invalidates older forecasts before automatic closure',()=>{
  for(const previous of ['operativo','mantenimiento']){
   const d=fixture();d.fleet.HP_1907.status=previous;
