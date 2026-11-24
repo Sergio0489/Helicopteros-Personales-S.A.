@@ -192,7 +192,7 @@ function relocateFixedFlights(state,now){
  const displaced=[];
  for(const q of state.confirmed){
   const a=state.aircraft.find(a=>a.id===q.aircraft);
-  if(!E.assignmentEligible(a,state)){
+  if(!E.assignmentEligible(a,state)&&!(q.restoredAfterCutoff===a?.id&&a?.status==='operativo')){
    q.operationalHold=true;q.publicationStatus='held';q.validationHold=E.typeOf(q)==='charter'?'No se publica automáticamente: los vuelos chárter conservan su aeronave y requieren revisión manual de Dirección.':'No se publica: '+q.aircraft+' no estaba operativa a las 8:00 p. m. o ahora no está operativa.';q.relocationPending=true;displaced.push(copy(q));
   }else if(q.operationalHold){delete q.operationalHold;delete q.validationHold;delete q.relocationPending;if(q.publicationStatus==='held')delete q.publicationStatus;}
  }
@@ -214,7 +214,7 @@ function relocateFixedFlights(state,now){
   }
   if(!replacement)continue;
   const from=original.relocation?.from||original.aircraft,reason='Reubicado automáticamente desde '+from+': la aeronave no estaba operativa al cierre de las 8:00 p. m.';
-  replacement.fixed=true;replacement.conditional=false;replacement.reason=reason;replacement.relocation={from,to:replacement.aircraft,at:now,reason};
+  replacement.fixed=true;replacement.conditional=false;replacement.reason=reason;replacement.relocation={from,to:replacement.aircraft,at:now,reason,cause:'maintenance-cutoff'};
   replacement.relocationHistory=[...(replacement.relocationHistory||[]),{from,to:replacement.aircraft,at:now,reason}];
   delete replacement.operationalHold;delete replacement.validationHold;delete replacement.relocationPending;delete replacement.publicationStatus;
   const index=state.confirmed.findIndex(q=>q.id===original.id);if(index>=0)state.confirmed[index]=replacement;
@@ -249,10 +249,29 @@ function createDraftPlan(data,dateValue,now){
  const d=day(data,dateValue);if(d.published||d.draftPlan)return null;
  const calculated=calculatedDraftPlan(data,dateValue,now);d.draftPlan=calculated.plan;return calculated.email;
 }
+function restoreCutoffRelocations(state,assignments,cutoffAircraftIds,now){
+ const cutoff=new Set(arr(cutoffAircraftIds)),next=copy(assignments),restored=[],reviewed=[];
+ for(const aircraft of state.aircraft.filter(a=>a.status==='operativo'&&!cutoff.has(a.id))){
+  const ids=new Set(next.filter(q=>q.relocation?.cause==='maintenance-cutoff'&&q.relocation.from===aircraft.id).map(q=>q.id));
+  if(!ids.size)continue;
+  const working={...state,published:true,confirmed:next.map(q=>{const flight=copy(q);if(!ids.has(q.id)){delete flight.relocation;delete flight.relocationOrigin;}return flight;})};
+  const result=E.restorePublished(working,aircraft.id,'mantenimiento',now),resultById=new Map(result.flights.map(q=>[q.id,q])),restoredIds=new Set(result.changes.filter(change=>change.kind==='restored').map(change=>change.after.id));
+  for(let index=0;index<next.length;index++){
+   const q=next[index];if(!ids.has(q.id))continue;
+   const flight=resultById.get(q.id);if(!flight)continue;
+   const change=result.changes.find(change=>change.after.id===q.id);if(change?.kind==='restored'){flight.restoredAfterCutoff=aircraft.id;restored.push(q.id);}else if(change?.kind==='review')reviewed.push(q.id);
+   next[index]=flight;
+  }
+ }
+ return {assignments:next,restored:[...new Set(restored)],reviewed:[...new Set(reviewed)]};
+}
 function recalculateDraftPlan(data,d,dateValue,now){
  if(!d.draftPlan||d.published)return;
  const current=d.draftPlan,base=arr(current.assignments).filter(q=>q.fixed),baseline=Array.isArray(current.baseFlightIds)?current.baseFlightIds:stateFor(data,dateValue,now).confirmed.filter(q=>q.fixed).map(q=>q.id),removed=Array.isArray(current.removedFlightIds)?current.removedFlightIds:baseline.filter(id=>!current.assignments.some(q=>q.id===id)),calculated=calculatedDraftPlan(data,dateValue,now,base,removed,baseline,current.operationalAircraftIds,current.operationalSnapshotAt).plan;
- d.draftPlan={...calculated,createdAt:current.createdAt||calculated.createdAt,updatedAt:now,revision:(current.revision||0)+1};
+ const restored=restoreCutoffRelocations(stateFor(data,dateValue,now),calculated.assignments,current.operationalAircraftIds,now),warnings=copy(calculated.warnings);
+ if(restored.restored.length)warnings.push(restored.restored.length+' vuelo'+(restored.restored.length===1?' volvió':'s volvieron')+' a su aeronave original al restablecerse sus operaciones antes de la publicación.');
+ if(restored.reviewed.length)warnings.push(restored.reviewed.length+' vuelo'+(restored.reviewed.length===1?' requiere':'s requieren')+' revisión: la aeronave original volvió a operar, pero no había un espacio libre compatible para restaurar ese horario.');
+ d.draftPlan={...calculated,assignments:restored.assignments,warnings,createdAt:current.createdAt||calculated.createdAt,updatedAt:now,revision:(current.revision||0)+1};
 }
 function refreshDraftPlan(data,d,dateValue,assignments,now){
  if(!d.draftPlan)return;
@@ -271,13 +290,13 @@ function publish(data,dateValue,now){
  const d=day(data,dateValue);if(d.published)return false;
  if(!d.draftPlan)d.draftPlan=calculatedDraftPlan(data,dateValue,now).plan;
  const state=stateFor(data,dateValue,now);state.confirmed=copy(d.draftPlan.assignments);state.lastResults=copy(d.draftPlan.results);
- const cutoffAircraft=arr(d.draftPlan.operationalAircraftIds),ineligible=state.confirmed.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(!cutoffAircraft.includes(q.aircraft)||a?.status!=='operativo');});
+ const cutoffAircraft=arr(d.draftPlan.operationalAircraftIds),ineligible=state.confirmed.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(!cutoffAircraft.includes(q.aircraft)&&q.restoredAfterCutoff!==q.aircraft||a?.status!=='operativo');});
  if(ineligible){const a=state.aircraft.find(a=>a.id===ineligible.aircraft),label=a?.status==='grounded'?'GROUNDED':a?.status==='mantenimiento'?'en mantenimiento':'no operativa';error('No se puede publicar: '+ineligible.aircraft+' está '+label+' o no estaba operativa al cierre de las 8:00 p. m. Retira o reasigna ese vuelo en el borrador.');}
  const outside=state.confirmed.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue));});
  if(outside)error('No se puede publicar: '+(state.pilots.find(p=>p.id===outside.pilot)?.name||'Un piloto')+' quedaría fuera de 6:30 a. m.–8:00 p. m., del horario permitido o de la disponibilidad prevista.');
  const activeAssignments=state.confirmed.filter(q=>!q.operationalHold),collisionState={...state,confirmed:activeAssignments,requests:[],cancelled:[]},studentCollision=activeAssignments.find(q=>E.studentConflicts(collisionState,q).length);
  if(studentCollision){const name=state.students.find(p=>p.id===studentCollision.studentId)?.name||'un estudiante';error('No se puede publicar: '+name+' tiene vuelos asignados que se cruzan. Corrige la programación antes de publicar.');}
- d.published=true;d.publishedAt=now;d.results=copy(d.draftPlan.results);d.revision++;state.published=true;storeFlights(data,state);notice(data,E.publicationNotice(state),now,'publication:'+dateValue);return true;
+ for(const q of state.confirmed)delete q.restoredAfterCutoff;d.draftPlan.assignments=copy(state.confirmed);d.published=true;d.publishedAt=now;d.results=copy(d.draftPlan.results);d.revision++;state.published=true;storeFlights(data,state);notice(data,E.publicationNotice(state),now,'publication:'+dateValue);return true;
 }
 function previewPublicationEmail(data,dateValue,now){
  if(day(data,dateValue).published)return null;

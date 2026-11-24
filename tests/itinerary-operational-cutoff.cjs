@@ -179,3 +179,25 @@ test('Director cannot add an aircraft excluded by the saved cutoff; grounded sel
  assert.match(ui,/function flightAircraftChoices\(state,type,role\)\{return state\.aircraft\.filter\(a=>a\.status!=='grounded'/);
  assert.match(ui,/E\.requestSelectable\(a\)/);assert.match(ui,/MANTENIMIENTO\. Puedes enviar la solicitud/);
 });
+
+test('a recovered aircraft restores its preconfirmed flights in the private draft before 20:15',()=>{
+ const data=fixture(),date='2026-11-25',beforeCutoff='2026-11-24T19:00:00-05:00',atCutoff='2026-11-24T20:00:00-05:00',director={user:{uid:'director',email:'director@example.test',emailVerified:true},account:{role:'Director',assignedAt:beforeCutoff},director:true};
+ M.day(data,date).requests.push({...request('HP1907'),id:'new-request-after-cutoff',pilot:'p1',start:'09:30',end:'12:30',status:'pending',studentId:'student:s2',studentName:'Estudiante Dos',route:'MPMG - MPCE - MPMG',created:2});
+ M.apply(data,director,{date,command:'flight',actionId:'preconfirm-recovery-0001',revision:M.day(data,date).revision,flight:{id:'fixed-flight-recovery-1',aircraft:'HP1907',pilot:'p1',start:'06:30',end:'09:30',slot:'b1',flightType:'privado',studentId:'student:s1',studentName:'Estudiante Uno',route:'MPMG - MPCE - MPMG',note:''}},beforeCutoff);
+ const original=data.itinerarios.find(f=>f.fecha===date);assert.ok(original);
+ data.fleet.HP_1907.status='mantenimiento';M.createDraftPlan(data,date,atCutoff);
+ const initialPlan=M.day(data,date).draftPlan,displaced=initialPlan.assignments.find(q=>q.id===original.id);
+ assert.ok(displaced);assert.notEqual(displaced.aircraft,'HP1907');assert.ok(!initialPlan.operationalAircraftIds.includes('HP1907'));
+ const before=structuredClone(data);data.fleet.HP_1907.status='operativo';M.reconcile(before,data,'2026-11-24T20:05:00-05:00',[]);
+ let plan=M.day(data,date).draftPlan,restored=plan.assignments.find(q=>q.id===original.id),newRequest=plan.assignments.find(q=>q.sourceRequestId==='new-request-after-cutoff');
+ assert.equal(restored.aircraft,'HP1907');assert.equal(restored.restoredAfterCutoff,'HP1907');
+ assert.ok(newRequest);assert.notEqual(newRequest.aircraft,'HP1907','new requests still respect the 20:00 aircraft cutoff');
+ assert.ok(!plan.operationalAircraftIds.includes('HP1907'),'the 20:00 cutoff remains unchanged for new assignments');
+ assert.ok(plan.warnings.some(message=>/restablecerse sus operaciones/.test(message)));
+ const beforeSecondChange=structuredClone(data);data.fleet.HP_1815.status='mantenimiento';M.reconcile(beforeSecondChange,data,'2026-11-24T20:06:00-05:00',[]);
+ plan=M.day(data,date).draftPlan;restored=plan.assignments.find(q=>q.id===original.id);newRequest=plan.assignments.find(q=>q.sourceRequestId==='new-request-after-cutoff');
+ assert.equal(restored.aircraft,'HP1907');assert.notEqual(newRequest.aircraft,'HP1907','a later draft recalculation preserves the original recovery exception without expanding the cutoff');
+ assert.equal(M.publish(data,date,'2026-11-24T20:15:00-05:00'),true);
+ const published=data.itinerarios.find(f=>f.id===original.id);
+ assert.equal(published.aeronave,'HP-1907');assert.equal(published.schedule.restoredAfterCutoff,undefined);
+});
