@@ -234,7 +234,7 @@ test('manual multi and helicopter flights are published unchanged and protect pi
 });
 
 test('flight types include separately configurable HP880BL Multi options in the specified order',()=>{
- assert.deepEqual(Object.values(H.flightTypes).map(t=>t.label),['Privado','Examen de vuelo','Vuelo solo','XC','Ley 89','Conversión','Maniobras comercial','IFR','Multi Estudiante','Multi Ley 89','Multi Conversión','Grob','Chárter','Socio']);
+ assert.deepEqual(Object.values(H.flightTypes).map(t=>t.label),['Privado','Examen de vuelo','Vuelo solo','XC','Ley 89','Conversión','Maniobras comercial','IFR','Multi Estudiante','Multi Ley 89','Multi Conversión','ATP','Grob','Chárter','Socio']);
 });
 test('director per-type assignments constrain automatic monomotor selection',()=>{
  const s=base();s.typeRules.privado=['HP1907'];s.requests=[request('q1','a','privado','HP1784')];
@@ -248,8 +248,8 @@ test('selecting Multi pins HP880BL even when a mono block was initially selected
  assert.equal(n.aircraft,'HP880BL');assert.equal(n.preferredAircraft,'HP1784');assert.equal(n.studentId,'st1');
  s.requests=[q];const r=H.simulate(s);assert.equal(assigned(r)[0].assignedAircraft,'HP880BL');assert.equal(r.assignments[0].studentId,'st1');assert.equal(r.assignments[0].protected,true);
 });
-test('Multi Estudiante, Multi Ley 89 and Multi Conversión are independently enabled and preserved',()=>{
- const cases=[['multi','Multi Estudiante'],['multiLey89','Multi Ley 89'],['multiConversion','Multi Conversión']];
+test('Multi types and ATP are independently enabled and preserved',()=>{
+ const cases=[['multi','Multi Estudiante'],['multiLey89','Multi Ley 89'],['multiConversion','Multi Conversión'],['atp','ATP']];
  for(const [type,label] of cases){
   const s=base(),mono=s.aircraft.find(a=>a.id==='HP1907'),q={...request('q1','a',type,mono.id),studentId:'st1'};
   assert.deepEqual(H.allowedForType(s,type),['HP880BL']);
@@ -290,7 +290,7 @@ test('student optional and preserved throughout automatic aircraft reassignment'
 test('configuration offers whole fleet except Multi and Charter category restrictions',()=>{
  const s=base();for(const type of Object.keys(H.flightTypes)){
  const offered=H.typeConfigAircraft(s,type);
- if(['multi','multiLey89','multiConversion'].includes(type))assert.deepEqual(offered.map(a=>a.id),['HP880BL','HP18BLM','HP1186','HP1805BLM']);
+ if(['multi','multiLey89','multiConversion','atp'].includes(type))assert.deepEqual(offered.map(a=>a.id),['HP880BL','HP18BLM','HP1186','HP1805BLM']);
  else if(type==='charter')assert.deepEqual(offered.map(a=>a.id),['HP880BL','HP18BLM','HP1186','HP1805BLM','HP11BL']);
  else assert.deepEqual(offered,s.aircraft);
  }
