@@ -71,8 +71,8 @@ test('flight requests require an identified student or client while observations
  const scheduled=fixture();apply(scheduled,director,'flight',{flight:flight('p1','HP1907',{note:''})});assert.equal(scheduled.itinerarios.length,1);assert.equal(scheduled.itinerarios[0].observaciones,'');
  const requested=fixture();apply(requested,pilot('p1'),'request',{flight:flight('p1','HP1907',{note:''})});assert.equal(requested.itinerary.days[date].requests[0].note,'');
  assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:''})}),/Completa el campo Ruta o destino/);
- const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP1907',{route:'  Chitré  ',studentId:''})});assert.equal(d.itinerarios[0].ruta,'Chitré');assert.equal(d.itinerarios[0].personId,'s1');
- assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:''})}),/Ruta o destino/);
+ const d=fixture();apply(d,director,'flight',{flight:flight('p1','HP1907',{route:'  mpmg - mpce - mpmg  ',studentId:''})});assert.equal(d.itinerarios[0].ruta,'MPMG - MPCE - MPMG');assert.equal(d.itinerarios[0].personId,'s1');
+ assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:''})}),/Ruta o destino/);\n assert.throws(()=>apply(fixture(),pilot('p1'),'request',{flight:flight('p1','HP1907',{route:'MPMG - MPDA'})}),/exactamente 3 códigos/);
  assert.throws(()=>apply(fixture(),director,'flight',{flight:flight('p1','HP1907',{route:'a'.repeat(201)})}),/máximo 200/);
 });
 test('route survives publication and aircraft relocation without affecting actual flight records',()=>{
