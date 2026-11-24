@@ -13,5 +13,5 @@ test('Director and role frames load the repaired itinerary engine through the sa
  assert.notEqual(dashboard[1],'20261119-mobile-flight-log-2','Refresh the Director dashboard bundle');
  assert.notEqual(engine[1],'20261116-priority-2','Do not retain the corrupted engine cache key');
  assert.notEqual(native[1],'20261112-maintenance-duration-1','Do not retain the older role bundle cache key');
- assert.equal(dashboard[1],'20261123-itinerary-priorities-1','Director dashboard cache key must match the daily itinerary release');
+ assert.equal(dashboard[1],'20261123-hp880bl-multi-types-1','Director dashboard cache key must match the daily itinerary release');
 });
