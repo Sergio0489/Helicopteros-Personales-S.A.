@@ -24,6 +24,7 @@ function hasPendingNoShow(student){return arr(student?.expenses).some(e=>e?.noSh
 function students(data){return [...arr(data.school?.students).map(p=>({id:'student:'+p.id,name:p.name,kind:'student',blockedForFlights:hasPendingNoShow(p)})),...arr(data.school?.registry?.clients).map(p=>({id:'client:'+p.id,name:p.name,kind:'client',blockedForFlights:false}))].sort((a,b)=>compareSpanishNames(a.name,b.name)||a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));}
 function personNameKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');}
 function identityKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,'');}
+function validInternationalPhone(value){const raw=String(value||'').trim();return /^[+0-9().\s-]+$/.test(raw)&&/^\+?\d{7,15}$/.test(raw.replace(/[().\s-]/g,''));}
 function resolvePerson(data,input,actor,actionId,now){
  const submitted=String(input?.studentName||'').trim().replace(/\s+/g,' '),studentId=String(input?.studentId||''),normalized=personNameKey(submitted);
  if(submitted.length>120)error('Escribe el nombre completo del estudiante o cliente (máximo 120 caracteres).');
@@ -52,7 +53,7 @@ function resolvePerson(data,input,actor,actionId,now){
  const identity=String(input.personIdentity||'').trim(),email=String(input.personEmail||'').trim().toLowerCase(),phone=String(input.personPhone||'').trim();
  if(!identity||identity.length>40)error('Escribe la cédula del estudiante o cliente (máximo 40 caracteres).');
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>200)error('Escribe un correo válido (máximo 200 caracteres).');
- if(!/^[0-9+()\s.-]{7,30}$/.test(phone))error('Escribe un celular válido.');
+ if(!validInternationalPhone(phone))error('Escribe un celular válido de Panamá o del extranjero, con 7 a 15 dígitos.');
  const identityValue=identityKey(identity),records=[...arr(data.school?.students).map(record=>({kind:'student',record})),...arr(data.school?.registry?.clients).map(record=>({kind:'client',record})),...arr(data.school?.personnel).map(record=>({kind:'personnel',record})),...arr(data.pilotos).map(record=>({kind:'pilot',record}))],identityMatches=records.filter(row=>identityKey(row.record.identity)===identityValue);
  if(identityMatches.some(row=>['student','client'].includes(row.kind)))error('Ya existe un expediente de estudiante o cliente con esa cédula. Busca el nombre registrado.');
  for(const row of identityMatches){const existingName=row.record.nombre||row.record.name||'';if(personNameKey(existingName)!==normalized)error('La cédula ya pertenece a otro expediente con un nombre distinto. Dirección debe revisar la coincidencia.');const existingEmail=String(row.record.email||'').trim().toLowerCase(),existingPhone=String(row.record.celular||row.record.phone||'').trim();if(existingEmail&&existingEmail!==email||existingPhone&&existingPhone!==phone)error('Los datos de contacto no coinciden con el expediente existente. Dirección debe revisar la coincidencia.');}
@@ -135,7 +136,7 @@ function stateFor(data,d,now){
  const confirmed=[...arr(data.itinerarios).filter(f=>iso(f.fecha)===d).map(f=>fromFlight(f,ps)),...copy(arr(stored.held)).map(q=>({...q,publicationStatus:'held'}))];
  const defaults=E.defaultTypeRules();if(config.aircraftOrder)for(const type of ['privado','xc','maniobras'])defaults[type]=copy(config.aircraftOrder);
  const typeRules={...defaults,...copy(config.typeRules||{})};
- return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,scheduleWindow:scheduleWindow?copy(scheduleWindow):null,pilotHoursRange:hourPeriods[hourPeriod].period,pilotHoursRanges:{honorarios:hourPeriods.honorarios.period,month:hourPeriods.month.period},prioritySettings,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results)),draftPlan:stored.draftPlan&&!stored.published?copy(stored.draftPlan):null};
+ return {date:d,now,published:!!stored.published,nightEnabled:!!stored.nightEnabled,scheduleWindow:scheduleWindow?copy(scheduleWindow):null,pilotHoursRange:hourPeriods[hourPeriod].period,pilotHoursRanges:{honorarios:hourPeriods.honorarios.period,month:hourPeriods.month.period},prioritySettings,aircraft,pilots:ps,students:students(data),typeRules,requests:copy(arr(stored.requests)),confirmed,cancelled:copy(arr(stored.cancelled)),cancelledFlights:copy(arr(stored.cancelledFlights)),openSlots:copy(arr(stored.openSlots)),maxBlocks:0,revision:stored.revision||0,configurationRevision:config.revision||0,lastResults:copy(arr(stored.results)),assignmentAircraftIds:!stored.published&&Array.isArray(stored.draftPlan?.operationalAircraftIds)?copy(stored.draftPlan.operationalAircraftIds):null,draftPlan:stored.draftPlan&&!stored.published?copy(stored.draftPlan):null};
 }
 function scope(data,actor){
  if(identityReview.pending(actor.account))error(identityReview.message);
@@ -160,7 +161,7 @@ function toFlight(q,state,original){
  return {...original,id:q.id,fecha:state.date,aeronave:ac?.registration||q.aircraft,piloto:pilot?.name||original?.piloto||'',estudiante:person?.name||'',personId:person?parts.join(':'):'',personKind:person?kind:'',horaInicio:q.start,horaFin:q.end,tipo:E.flightTypeLabel(E.typeOf(q),q.aircraft),observaciones:q.note||'',ruta:q.route||'',schedule};
 }
 function storeFlights(data,state){
- for(const q of state.confirmed.filter(q=>!q.legacy)){try{assertPilot(data,q,state.date,state.now);delete q.validationHold;}catch(e){q.validationHold=e.message;}}
+ for(const q of state.confirmed.filter(q=>!q.legacy)){try{assertPilot(data,q,state.date,state.now);if(!q.operationalHold)delete q.validationHold;}catch(e){q.validationHold=e.message;}}
  const d=day(data,state.date),old=arr(data.itinerarios),night=E.nightPublication(state,state.confirmed.filter(q=>!q.validationHold)),held=new Set([...night.blockedIds.filter(id=>!state.confirmed.find(q=>q.id===id)?.legacy),...state.confirmed.filter(q=>q.validationHold).map(q=>q.id)]);
  d.held=state.confirmed.filter(q=>held.has(q.id));
  data.itinerarios=[...old.filter(f=>iso(f.fecha)!==state.date),...state.confirmed.filter(q=>!held.has(q.id)).map(q=>{const original=old.find(f=>legacyId(f)===q.id);return q.legacy&&original&&eq(fromFlight(original,state.pilots),q)?original:toFlight(q,state,original);})];
@@ -187,23 +188,28 @@ function publicationEmail(data,dateValue){
  const mechanicRecipients=arr(data.school?.personnel).filter(p=>['mecanico','mecanica','mechanic','mechanics'].includes(String(p.position||p.role||p.cargo||'').normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').trim())).map(p=>p.email||'').filter(Boolean);
  return {id:'publication-'+dateValue,date:dateValue,publishedAt:data.itinerary?.days?.[dateValue]?.publishedAt||'',pilotRecipients:arr(data.pilotos).map(p=>p.email||'').filter(Boolean),mechanicRecipients,flights:scheduled};
 }
-function calculatedDraftPlan(data,dateValue,now,baseAssignments=[],removedFlightIds=[],baseFlightIds=null){
+function calculatedDraftPlan(data,dateValue,now,baseAssignments=[],removedFlightIds=[],baseFlightIds=null,operationalAircraftIds=null,operationalSnapshotAt=null){
  const state=stateFor(data,dateValue,now),warnings=[],baseline=Array.isArray(baseFlightIds)?copy(baseFlightIds):state.confirmed.filter(q=>q.fixed).map(q=>q.id),removed=new Set(arr(removedFlightIds));
+ const cutoffAircraft=Array.isArray(operationalAircraftIds)?copy(operationalAircraftIds):state.aircraft.filter(a=>a.status==='operativo').map(a=>a.id),snapshotAt=operationalSnapshotAt||now;state.assignmentAircraftIds=cutoffAircraft;
  state.confirmed=state.confirmed.filter(q=>!removed.has(q.id));
  for(const q of baseAssignments)if(q?.fixed){const index=state.confirmed.findIndex(current=>current.id===q.id);if(index>=0)state.confirmed[index]=copy(q);else state.confirmed.push(copy(q));}
  state.pilots.forEach(p=>{try{for(const q of [...state.requests,...state.confirmed].filter(q=>q.pilot===p.id))assertPilot(data,q,dateValue,now);}catch{p.valid=false;}});
- const result=E.simulate(state),outside=result.assignments.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue);});
+ const cutoffHeld=[];
+ for(const q of state.confirmed){const a=state.aircraft.find(a=>a.id===q.aircraft);if(!E.assignmentEligible(a,state)){q.operationalHold=true;q.publicationStatus='held';q.validationHold='No se publica: '+q.aircraft+' no estaba operativa a las 8:00 p. m. o ahora no está operativa.';q.relocationPending=true;cutoffHeld.push(q);}else if(q.operationalHold){delete q.operationalHold;delete q.validationHold;delete q.relocationPending;if(q.publicationStatus==='held')delete q.publicationStatus;}}
+ const result=E.simulate(state);result.assignments.push(...cutoffHeld.map(copy));
+ const outside=result.assignments.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue));});
  if(outside)warnings.push('Al menos un vuelo quedaría fuera del horario permitido o de la disponibilidad prevista; corrígelo antes de publicar.');
+ if(cutoffHeld.length)warnings.push(cutoffHeld.length+' vuelo(s) previamente agendado(s) en aeronaves no operativas quedarán sin publicar. Dirección puede reubicarlos solo en aeronaves operativas.');
  const unresolved=result.results.filter(row=>['review','waiting'].includes(row.status));
  if(unresolved.length){const labels=unresolved.map(row=>(state.pilots.find(p=>p.id===row.pilot)?.name||'Piloto')+' · '+(row.aircraft||'sin aeronave')+' · '+row.start+'–'+row.end);warnings.push(unresolved.length+' solicitud(es) aún no tienen asignación confirmada: '+labels.join('; ')+'. Dirección debe resolverlas o eliminarlas antes de publicar.');}
- const unusual=result.assignments.filter(q=>E.operatingHoursWarning(q));if(unusual.length)warnings.push('Alerta: '+unusual.map(q=>(state.pilots.find(p=>p.id===q.pilot)?.name||'Piloto')+' · '+q.aircraft+' · '+q.start+'–'+q.end).join('; ')+'. El horario habitual es 6:30 a. m.–6:30 p. m.; confirma que cada vuelo nocturno esté habilitado.');
- const collisionState={...state,confirmed:result.assignments,requests:[],cancelled:[]},studentCollision=result.assignments.find(q=>E.studentConflicts(collisionState,q).length);
+ const unusual=result.assignments.filter(q=>!q.operationalHold&&E.operatingHoursWarning(q));if(unusual.length)warnings.push('Alerta: '+unusual.map(q=>(state.pilots.find(p=>p.id===q.pilot)?.name||'Piloto')+' · '+q.aircraft+' · '+q.start+'–'+q.end).join('; ')+'. El horario habitual es 6:30 a. m.–6:30 p. m.; confirma que cada vuelo nocturno esté habilitado.');
+ const activeAssignments=result.assignments.filter(q=>!q.operationalHold),collisionState={...state,confirmed:activeAssignments,requests:[],cancelled:[]},studentCollision=activeAssignments.find(q=>E.studentConflicts(collisionState,q).length);
  if(studentCollision){const name=state.students.find(p=>p.id===studentCollision.studentId)?.name||'Un estudiante';warnings.push(name+' tiene vuelos propuestos que se cruzan. Corrige el borrador antes de las 8:15 p. m.');}
  const assignments=result.assignments.map(q=>({...q,id:q.fixed?q.id:'scheduled-'+q.id,sourceRequestId:q.sourceRequestId||(!q.fixed?q.id:undefined)}));
  const savedAssignments=JSON.parse(JSON.stringify(assignments)),previewData=copy(data),previewState=stateFor(previewData,dateValue,now);
  previewState.confirmed=copy(savedAssignments);previewState.lastResults=copy(result.results);previewState.published=true;storeFlights(previewData,previewState);
  const email=publicationEmail(previewData,dateValue);email.id='draft-'+dateValue;email.action='draft';email.draft=true;email.publishedAt='';email.draftedAt=now;email.pilotRecipients=[];email.mechanicRecipients=[];email.draftWarnings=warnings;
- return {plan:{date:dateValue,createdAt:now,updatedAt:now,sourceRevision:state.revision,revision:1,assignments:savedAssignments,results:copy(result.results),warnings,baseFlightIds:baseline,removedFlightIds:[...removed]},email};
+ return {plan:{date:dateValue,createdAt:now,updatedAt:now,sourceRevision:state.revision,revision:1,assignments:savedAssignments,results:copy(result.results),warnings,baseFlightIds:baseline,removedFlightIds:[...removed],operationalAircraftIds:cutoffAircraft,operationalSnapshotAt:snapshotAt},email};
 }
 function createDraftPlan(data,dateValue,now){
  const d=day(data,dateValue);if(d.published||d.draftPlan)return null;
@@ -211,7 +217,7 @@ function createDraftPlan(data,dateValue,now){
 }
 function recalculateDraftPlan(data,d,dateValue,now){
  if(!d.draftPlan||d.published)return;
- const current=d.draftPlan,base=arr(current.assignments).filter(q=>q.fixed),baseline=Array.isArray(current.baseFlightIds)?current.baseFlightIds:stateFor(data,dateValue,now).confirmed.filter(q=>q.fixed).map(q=>q.id),removed=Array.isArray(current.removedFlightIds)?current.removedFlightIds:baseline.filter(id=>!current.assignments.some(q=>q.id===id)),calculated=calculatedDraftPlan(data,dateValue,now,base,removed,baseline).plan;
+ const current=d.draftPlan,base=arr(current.assignments).filter(q=>q.fixed),baseline=Array.isArray(current.baseFlightIds)?current.baseFlightIds:stateFor(data,dateValue,now).confirmed.filter(q=>q.fixed).map(q=>q.id),removed=Array.isArray(current.removedFlightIds)?current.removedFlightIds:baseline.filter(id=>!current.assignments.some(q=>q.id===id)),calculated=calculatedDraftPlan(data,dateValue,now,base,removed,baseline,current.operationalAircraftIds,current.operationalSnapshotAt).plan;
  d.draftPlan={...calculated,createdAt:current.createdAt||calculated.createdAt,updatedAt:now,revision:(current.revision||0)+1};
 }
 function refreshDraftPlan(data,d,dateValue,assignments,now){
@@ -231,9 +237,11 @@ function publish(data,dateValue,now){
  const d=day(data,dateValue);if(d.published)return false;
  if(!d.draftPlan)d.draftPlan=calculatedDraftPlan(data,dateValue,now).plan;
  const state=stateFor(data,dateValue,now);state.confirmed=copy(d.draftPlan.assignments);state.lastResults=copy(d.draftPlan.results);
- const outside=state.confirmed.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue);});
+ const cutoffAircraft=arr(d.draftPlan.operationalAircraftIds),ineligible=state.confirmed.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(!cutoffAircraft.includes(q.aircraft)||a?.status!=='operativo');});
+ if(ineligible){const a=state.aircraft.find(a=>a.id===ineligible.aircraft),label=a?.status==='grounded'?'GROUNDED':a?.status==='mantenimiento'?'en mantenimiento':'no operativa';error('No se puede publicar: '+ineligible.aircraft+' está '+label+' o no estaba operativa al cierre de las 8:00 p. m. Retira o reasigna ese vuelo en el borrador.');}
+ const outside=state.confirmed.find(q=>{const a=state.aircraft.find(a=>a.id===q.aircraft);return !q.operationalHold&&(E.operatingHoursError(q)||E.scheduleWindowError(a,q)||a?.release?.enabled&&a.release.date===dateValue&&!E.covers(a,q,dateValue));});
  if(outside)error('No se puede publicar: '+(state.pilots.find(p=>p.id===outside.pilot)?.name||'Un piloto')+' quedaría fuera de 6:30 a. m.–8:00 p. m., del horario permitido o de la disponibilidad prevista.');
- const collisionState={...state,confirmed:state.confirmed,requests:[],cancelled:[]},studentCollision=state.confirmed.find(q=>E.studentConflicts(collisionState,q).length);
+ const activeAssignments=state.confirmed.filter(q=>!q.operationalHold),collisionState={...state,confirmed:activeAssignments,requests:[],cancelled:[]},studentCollision=activeAssignments.find(q=>E.studentConflicts(collisionState,q).length);
  if(studentCollision){const name=state.students.find(p=>p.id===studentCollision.studentId)?.name||'un estudiante';error('No se puede publicar: '+name+' tiene vuelos asignados que se cruzan. Corrige la programación antes de publicar.');}
  d.published=true;d.publishedAt=now;d.results=copy(d.draftPlan.results);d.revision++;state.published=true;storeFlights(data,state);notice(data,E.publicationNotice(state),now,'publication:'+dateValue);return true;
 }
@@ -289,7 +297,10 @@ function apply(data,actor,body,now){
   const resolved=resolvePerson(data,body.flight,actor,body.actionId,now);state.students=students(data);
   let q=cleanFlight({...body.flight,...resolved,pilot:rights.pilot},old?.id||'request-'+body.actionId,now);q.pilot=rights.pilot;q.created=old?.created||q.created;q.createdByUid=actor.user.uid;
   q=E.normalizeRequest(state,q);const reason=E.requestError(state,q,{allowClosedEdit:!!old});if(reason)error(reason);assertPilot(data,q,dte,now);q.sourceSlots=E.sourceSnapshot(state.aircraft.find(a=>a.id===q.aircraft),q);
-  actionWarning=E.studentConflicts(state,q).length?'Este estudiante ya tiene otro vuelo o solicitud en ese horario. La solicitud se guardó; Dirección ajustará el horario al publicar.':'';
+  const requestWarnings=[];
+  if(E.studentConflicts(state,q).length)requestWarnings.push('Este estudiante ya tiene otro vuelo o solicitud en ese horario. La solicitud se guardó; Dirección ajustará el horario al publicar.');
+  if(state.aircraft.find(a=>a.id===q.aircraft)?.status==='mantenimiento')requestWarnings.push('La aeronave seleccionada está en mantenimiento. La solicitud se guardó; al preparar y publicar el horario, Dirección solo podrá asignarla a una aeronave operativa.');
+  actionWarning=requestWarnings.join(' ');
   d.requests=d.requests.filter(x=>x.id!==q.id);d.requests.push(q);if(d.draftPlan&&!d.published)recalculateDraftPlan(data,d,dte,now);
  }else if(action==='cancel-request'){
   const q=d.requests.find(q=>q.id===body.id);if(!q||q.status==='approved'||state.published)error('La solicitud ya fue aprobada o publicada.');
@@ -312,7 +323,7 @@ function apply(data,actor,body,now){
    const resolved=resolvePerson(data,body.flight,actor,body.actionId,now);state.students=students(data);
    const q={...old,...cleanFlight({...body.flight,...resolved},old?.id||'flight-'+body.actionId,now),fixed:true,createdByRole:rights.role};q.date=dte;
    assertPilot(data,q,dte,now);const reason=E.directorFlightError(state,q,oldDate===dte?old?.id:undefined,rights.role);if(reason)error(reason);
-   const a=state.aircraft.find(a=>a.id===q.aircraft);if(a.status!=='operativo'&&!body.acknowledge)error('Confirma la alerta de la aeronave no operativa.');
+   const a=state.aircraft.find(a=>a.id===q.aircraft);if(editingDraft&&E.assignmentEligible(a,state)){delete q.operationalHold;delete q.validationHold;delete q.relocationPending;delete q.publicationStatus;}if(a.status!=='operativo'&&!body.acknowledge)error('Confirma la alerta de la aeronave no operativa.');
    if(oldDate!==dte){source.confirmed=source.confirmed.filter(f=>f.id!==old.id);storeFlights(data,source);day(data,oldDate).revision++;if(source.published)queueModifiedEmail(data,oldDate,now);}
    state.confirmed=state.confirmed.filter(f=>f.id!==q.id);if(editingDraft)q.reason='Ajustado por Dirección en el borrador.';state.confirmed.push(q);
    if(editingDraft)refreshDraftPlan(data,d,dte,state.confirmed,now);else storeFlights(data,state);
