@@ -120,10 +120,17 @@ test('Director sees detailed flights, requires a student or client, and allows b
  await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
  const form=page.locator('dialog form');
  assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name&&!el.disabled).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','routePart1','routePart2','routePart3','studentName'].sort());
+ assert.equal(await form.locator('[data-route-part]').count(),3,'Route starts with three code boxes');
+ await page.locator('[data-route-toggle]').click();
+ const routeRows=await page.locator('[data-route-item]:visible button').allTextContents();
+ assert.equal(routeRows[0],'Achutupo - MPAC','National route codes are listed alphabetically by place');
+ assert.ok(routeRows.includes('Chitré - MPCE'),'Chitré is shown with its OACI code');
+ await page.locator('[data-route-toggle]').click();
  assert.equal(await form.evaluate(f=>f.querySelectorAll('[data-time-field] [required]').length),6);
  assert.equal(await form.evaluate(f=>f.elements.studentName.required),true);
  assert.equal(await form.evaluate(f=>f.checkValidity()),false);
  await page.locator('[name=routePart1]').fill('MPMG');await page.locator('[name=routePart2]').fill('MPDA');await page.locator('[name=routePart3]').fill('MPMG');
+ await page.locator('[data-route-add]').click();assert.equal(await form.locator('[data-route-part]').count(),4);await page.locator('[name=routePart4]').fill('MPCE');
  await page.locator('[name=studentName]').fill('Estudiante A');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.value),'Estudiante A');assert.equal(await form.evaluate(f=>f.checkValidity()),true);
@@ -136,7 +143,27 @@ test('Director sees detailed flights, requires a student or client, and allows b
  await page.evaluate(result=>{window.commandResult=result;},result);
  await page.getByRole('button',{name:'Guardar',exact:true}).click();
  await page.locator('dialog').waitFor({state:'detached'});
- const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG - MPDA - MPMG');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'06:35');assert.equal(saved[0].flight.end,'12:45');
+ const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG - MPDA - MPMG - MPCE');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'06:35');assert.equal(saved[0].flight.end,'12:45');
+});
+test('Director can select every pilot while a pilot request stays linked to its own account',async t=>{
+ const director=await app(t),directorResult=response();directorResult.rights={role:'director',create:true,edit:true,settings:true,pilot:'c'};
+ await director.evaluate(result=>resolveRead(result),directorResult);await director.locator('[data-date]').waitFor();await director.locator('[data-manual]').click();
+ const directorForm=director.locator('dialog form'),pilotSelect=directorForm.locator('[name=pilot]');
+ assert.equal(await pilotSelect.inputValue(),'c','Director defaults to the pilot record linked to the account');
+ assert.deepEqual(await pilotSelect.locator('option').allTextContents(),['Piloto A','Piloto B','Piloto C','Piloto D'],'Director can choose all pilots in alphabetical order');
+ await director.getByRole('button',{name:'Cancelar',exact:true}).click();
+
+ const pilotPage=await app(t),pilotResult=response();pilotResult.rights={role:'pilot',request:true,pilot:'b',boxes:{planner:true,flights:true,requests:true}};
+ await pilotPage.evaluate(result=>resolveRead(result),pilotResult);await pilotPage.locator('[data-date]').waitFor();
+ await pilotPage.locator('[data-slot]').first().click();
+ const requestForm=pilotPage.locator('dialog form');
+ assert.equal(await requestForm.locator('select[name=pilot]').count(),0,'Pilot cannot choose another pilot');
+ assert.match(await requestForm.textContent(),/Piloto: Piloto B/);
+ await pilotPage.locator('[name=routePart1]').fill('MPMG');await pilotPage.locator('[name=routePart2]').fill('MPDA');await pilotPage.locator('[name=routePart3]').fill('MPMG');
+ await pilotPage.locator('[name=existingStudentId]').selectOption('st1');
+ await pilotPage.evaluate(result=>{window.commandResult=result;},pilotResult);await pilotPage.getByRole('button',{name:'Guardar',exact:true}).click();
+ await pilotPage.locator('dialog').waitFor({state:'detached'});
+ const commands=await pilotPage.evaluate(()=>itineraryCommands);assert.equal(commands.length,1);assert.equal(commands[0].flight.pilot,'b','The request payload is bound to the signed-in pilot');
 });
 test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canonical times',async t=>{
  const page=await app(t,390),result=response();
@@ -149,7 +176,7 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  assert.match(await page.locator('[data-board]').textContent(),/12:30 PM – 3:30 PM/);
  await page.locator('[data-edit-flight="fixed-2"]').click();
  const startBox=await page.locator('[data-time-field=start]').boundingBox(),endBox=await page.locator('[data-time-field=end]').boundingBox();
- assert(endBox.y>startBox.y,'End time appears below start on mobile');assert.equal(startBox.x,endBox.x);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+ assert(Math.abs(endBox.y-startBox.y)<2,'Start and end times share a compact row on mobile');assert(endBox.x>startBox.x,'End time follows start time on mobile');assert(endBox.width<startBox.width*1.1,'Time fields do not stretch across the full row');assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
  assert.equal(await page.locator('[data-time-field=start] [data-hour]').inputValue(),'1');assert.equal(await page.locator('[data-time-field=start] [data-minute]').inputValue(),'07');assert.equal(await page.locator('[data-time-field=start] [data-period]').inputValue(),'PM');
  await page.locator('[data-time-field=start] [data-hour]').fill('0');assert.equal(await page.locator('dialog form').evaluate(f=>f.checkValidity()),false);
  await page.getByRole('button',{name:'Cancelar',exact:true}).click();
