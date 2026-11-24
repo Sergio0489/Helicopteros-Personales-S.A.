@@ -22,6 +22,109 @@
   });
  }
  const select=(name,label,rows,value,empty=false)=>'<label>'+esc(label)+'<select name="'+name+'"'+(empty?'':' required')+'>'+(empty?'<option value="">Sin seleccionar</option>':'')+rows.map(r=>'<option value="'+esc(r.id)+'" '+(String(r.id)===String(value)?'selected':'')+'>'+esc(r.name)+'</option>').join('')+'</select></label>';
+
+ const panamaRouteCodes=[
+  {code:'MPTO',name:'Tocumen',category:'Aeródromo',system:'OACI'},
+  {code:'PTY',name:'Tocumen',category:'Aeródromo',system:'IATA'},
+  {code:'MPMG',name:'Marcos A. Gelabert',category:'Aeródromo',system:'OACI'},
+  {code:'PAC',name:'Marcos A. Gelabert',category:'Aeródromo',system:'IATA'},
+  {code:'MPDA',name:'Enrique Malek · David',category:'Aeródromo',system:'OACI'},
+  {code:'MPBO',name:'José Ezequiel Hall · Bocas del Toro',category:'Aeródromo',system:'OACI'},
+  {code:'MPCH',name:'Cap. Manuel Niño · Changuinola',category:'Aeródromo',system:'OACI'},
+  {code:'MPPA',name:'Panamá Pacífico',category:'Aeródromo',system:'OACI'},
+  {code:'MPEJ',name:'Enrique Jiménez · Colón',category:'Aeródromo',system:'OACI'},
+  {code:'MPSM',name:'Cap. Scarlett Martínez · Río Hato',category:'Aeródromo',system:'OACI'},
+  {code:'MPAC',name:'Achutupo',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPAI',name:'Ailigandí',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCL',name:'Cap. Alex H. Bosquez',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCE',name:'Alonso Valderrama',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPVC',name:'Álvaro Berroa',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPAR',name:'Arenas',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPGU',name:'Augusto Vergara',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPBR',name:'Barú',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCA',name:'Caledonia',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCS',name:'Casaya',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMC',name:'Chame Mayor',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCO',name:'Coiba',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCJ',name:'Corazón de Jesús',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPRE',name:'El Real',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPFE',name:'Fernando Eleta',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPFC',name:'Finca 45',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPSS',name:'Finca 67',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPGA',name:'Garachiné',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPPN',name:'Guillermo Palm',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPIO',name:'Ingenio Ofelina',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPSR',name:'Ingenio Santa Rosa',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPSJ',name:'Isla San José',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPSE',name:'Islas Secas',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPJE',name:'Jaque',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPPD',name:'Cap. Justiniano Montenegro',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPCM',name:'Cap. Krish E. Persaud',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPES',name:'La Especial',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPLY',name:'Lago Bay',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPLA',name:'Las Lajas',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMA',name:'Mamitupo',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMN',name:'Mansucum',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMF',name:'Miraflores',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMB',name:'Missions Beyond Aviation',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMU',name:'Mulatupo',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPOG',name:'Ogobsucum',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPPI',name:'Piña',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPPX',name:'Pixvae',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPPH',name:'Playón Chico',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPOA',name:'Puerto Obaldía',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPPU',name:'Punta Cocos',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPRA',name:'Raúl Arias E. · Isla Contadora',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPRP',name:'Reserva Punta Patiño',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPRG',name:'Cap. Reynaldo Guiraud',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPRZ',name:'Río Azúcar',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPRS',name:'Río Sidra',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPSA',name:'Rubén Cantú',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPSB',name:'Sambú',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPMI',name:'San Miguel',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPTI',name:'Ticantikí',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPTU',name:'Tubualá',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPUP',name:'Ustupo',category:'Aeródromo nacional',system:'OACI'},
+  {code:'MPWN',name:'Wannukandí',category:'Aeródromo nacional',system:'OACI'},
+  {code:'BDT',name:'Bocas del Toro',category:'VOR/DME',system:'VOR'},
+  {code:'DAV',name:'David',category:'VOR/DME',system:'VOR'},
+  {code:'FNC',name:'France',category:'DVOR/DME',system:'VOR'},
+  {code:'PML',name:'La Palma',category:'VOR/DME',system:'VOR'},
+  {code:'RHT',name:'Río Hato',category:'DVOR/DME',system:'VOR'},
+  {code:'STG',name:'Santiago',category:'VOR/DME',system:'VOR'},
+  {code:'TBG',name:'Taboga',category:'DVOR/DME',system:'VOR'},
+  {code:'TUM',name:'Tocumen',category:'DVOR/DME',system:'VOR'},
+  {code:'MPHH',name:'Hospital Santo Tomás',category:'Helipuerto',system:'OACI'},
+  {code:'MPIR',name:'Importadora Ricamar',category:'Helipuerto',system:'OACI'},
+  {code:'MPHM',name:'Megapolis',category:'Helipuerto',system:'OACI'},
+  {code:'MPHU',name:'Punta Barco',category:'Helipuerto',system:'OACI'},
+  {code:'MPHT',name:'The Panamá Clinic',category:'Helipuerto',system:'OACI'},
+  {code:'MPOR',name:'Ocean Reef',category:'Helipuerto',system:'OACI'}
+ ];
+ function routeMarkup(value=''){
+  const parts=E.routeError(value)?[]:E.normalizeRoute(value).split(' - '),codes=Array.from({length:3},(_,i)=>parts[i]||'');
+  const options=panamaRouteCodes.map(row=>'<div class="hp-route-code-option" data-route-item data-search="'+esc((row.code+' '+row.name+' '+row.category+' '+row.system).toLocaleLowerCase('es'))+'"><button type="button" data-insert-route-code="'+esc(row.code)+'" aria-label="Usar '+esc(row.code)+' · '+esc(row.name)+'"><strong>'+esc(row.code)+'</strong><span>'+esc(row.system)+' · '+esc(row.category)+'</span></button><small>'+esc(row.name)+'</small></div>').join('');
+  return '<div class="hp-full hp-route-field" data-route-field><div class="hp-route-heading"><span>Ruta o destino</span><button type="button" data-route-toggle aria-expanded="false">Consultar códigos nacionales</button></div><div class="hp-route-inputs" aria-label="Tres códigos separados por guiones"><input name="routePart1" data-route-part="0" type="text" minlength="3" maxlength="4" pattern="[A-Za-z0-9]{3,4}" required autocapitalize="characters" autocomplete="off" spellcheck="false" value="'+esc(codes[0])+'" placeholder="MPMG" aria-label="Primer código de ruta"><span aria-hidden="true">-</span><input name="routePart2" data-route-part="1" type="text" minlength="3" maxlength="4" pattern="[A-Za-z0-9]{3,4}" required autocapitalize="characters" autocomplete="off" spellcheck="false" value="'+esc(codes[1])+'" placeholder="MPDA" aria-label="Segundo código de ruta"><span aria-hidden="true">-</span><input name="routePart3" data-route-part="2" type="text" minlength="3" maxlength="4" pattern="[A-Za-z0-9]{3,4}" required autocapitalize="characters" autocomplete="off" spellcheck="false" value="'+esc(codes[2])+'" placeholder="MPMG" aria-label="Tercer código de ruta"></div><input type="hidden" name="route" value="'+esc(codes.every(Boolean)?codes.join(' - '):'')+'"><div class="hp-route-catalog" data-route-catalog hidden><label>Buscar por código o lugar<input type="search" data-route-search placeholder="Ej.: Río Hato, RHT, MPMG"></label><div class="hp-route-code-list" data-route-list>'+options+'</div><p data-route-no-results hidden>No se encontraron códigos con esa búsqueda.</p></div><small>Escribe exactamente tres códigos OACI, IATA o VOR, separados por guiones. Se aceptan códigos de 3 o 4 caracteres.</small></div>';
+ }
+ function bindRouteFields(container){
+  container.querySelectorAll('[data-route-field]').forEach(section=>{
+   const fields=[...section.querySelectorAll('[data-route-part]')],hidden=section.querySelector('[name="route"]'),toggle=section.querySelector('[data-route-toggle]'),catalog=section.querySelector('[data-route-catalog]'),search=section.querySelector('[data-route-search]'),items=[...section.querySelectorAll('[data-route-item]')],empty=section.querySelector('[data-route-no-results]');
+   let active=0;
+   const update=()=>{for(const field of fields)field.value=field.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);const values=fields.map(field=>field.value),complete=values.every(Boolean);hidden.value=complete?values.join(' - '):'';const error=complete?E.routeError(hidden.value):'';for(const field of fields)field.setCustomValidity(error);};
+   fields.forEach((field,index)=>{field.addEventListener('focus',()=>active=index);field.addEventListener('input',update);field.addEventListener('change',update);});
+   toggle.addEventListener('click',()=>{catalog.hidden=!catalog.hidden;toggle.setAttribute('aria-expanded',String(!catalog.hidden));if(!catalog.hidden)search.focus();});
+   search.addEventListener('input',()=>{const query=search.value.trim().toLocaleLowerCase('es');let shown=0;for(const item of items){item.hidden=!!query&&!item.dataset.search.includes(query);if(!item.hidden)shown++;}empty.hidden=shown>0;});
+   section.querySelectorAll('[data-insert-route-code]').forEach(button=>button.addEventListener('click',()=>{let index=active;if(fields[index]?.value){const next=fields.findIndex(field=>!field.value);if(next>=0)index=next;}fields[index].value=button.dataset.insertRouteCode;fields[index].dispatchEvent(new Event('input',{bubbles:true}));const next=fields.findIndex((field,i)=>i>index&&!field.value),firstEmpty=fields.findIndex(field=>!field.value);active=next>=0?next:firstEmpty>=0?firstEmpty:index;fields[active].focus();}));
+   update();
+  });
+ }
+ function flightAircraftChoices(state,type,role){return state.aircraft.filter(a=>E.canSchedule(role,a)&&E.canChooseFlightType(state,type,role,a));}
+ function flightAircraftOptions(rows,selected){return rows.length?rows.map(a=>'<option value="'+esc(a.id)+'" '+(a.id===selected?'selected':'')+'>'+esc(a.id+' · '+a.model)+'</option>').join(''):'<option value="">No hay aeronaves habilitadas para este tipo.</option>';}
+ function refreshFlightAircraft(form){
+  const selector=form.elements.aircraft,type=form.elements.flightType.value,rows=flightAircraftChoices(model.state,type,model.rights.role),selected=rows.some(a=>a.id===selector.value)?selector.value:rows[0]?.id||'';
+  if(selector.dataset.flightAircraftType!==type||selector.value!==selected){selector.innerHTML=flightAircraftOptions(rows,selected);selector.dataset.flightAircraftType=type;selector.value=selected;}
+ }
+
  const acName=id=>model.state.aircraft.find(a=>a.id===id)?.id||id;
  const pilotName=id=>model.state.pilots.find(p=>p.id===id)?.name||(String(id).startsWith('legacy-name:')?String(id).slice(12):'Piloto');
  const personName=id=>model.state.students.find(p=>p.id===id)?.name||'';
@@ -29,7 +132,7 @@
  function modal(title,body,submit){
   dialog?.close();const d=document.createElement('dialog');dialog=d;d.className='hp-itinerary-dialog';d.dataset.itineraryControl='true';
   d.innerHTML='<h2>'+esc(title)+'</h2><form>'+body+'<p class="hp-error" role="alert"></p><div class="hp-actions"><button type="button" data-close>Cancelar</button>'+(submit?'<button type="submit" class="hp-primary">Guardar</button>':'')+'</div></form>';
-  document.body.appendChild(d);bindTimes(d);d.querySelector('[data-close]').onclick=()=>d.close();d.onclose=()=>{d.remove();if(dialog===d)dialog=null;};
+  document.body.appendChild(d);bindTimes(d);bindRouteFields(d);d.querySelector('[data-close]').onclick=()=>d.close();d.onclose=()=>{d.remove();if(dialog===d)dialog=null;};
   if(submit)d.querySelector('form').onsubmit=async e=>{e.preventDefault();const form=e.target;if(form.dataset.busy)return;form.dataset.busy='1';form.querySelector('[type=submit]').disabled=true;try{await submit(Object.fromEntries(new FormData(form)),form);d.close();}catch(error){form.querySelector('[role=alert]').textContent=timeText(error.message);}finally{delete form.dataset.busy;form.querySelector('[type=submit]').disabled=false;}};
   else d.querySelector('[data-close]').textContent='Cerrar';d.showModal();return d;
  }
@@ -132,31 +235,38 @@
  }
  function formFlight(q,request){
   const s=model.state,selectedAircraft=s.aircraft.find(a=>a.id===q.aircraft),pilot880=model.rights.role==='pilot'&&selectedAircraft?.id==='HP880BL';
-  const typeIds=pilot880?['multi','multiLey89','multiConversion','atp','charter','socio','examen']:Object.keys(E.flightTypes);
+  const typeIds=request&&pilot880?['multi','multiLey89','multiConversion','atp','charter','socio','examen']:Object.keys(E.flightTypes);
   if(q.flightType&&!typeIds.includes(q.flightType))typeIds.push(q.flightType);
-  const types=select('flightType','Tipo de vuelo',typeIds.filter(id=>id!=='charter'||model.rights.role==='director'||pilot880).map(id=>({id,name:E.flightTypeLabel(id,q.aircraft)})),q.flightType||'privado');
-  const identity=request?'<div class="hp-full hp-notice">'+esc(q.aircraft)+' · '+pretty(date)+' · '+esc(pilotName(model.rights.pilot))+'</div><div class="hp-full">'+types+'</div>':field('newDate','Fecha de vuelo',date,'date')+types+select('aircraft','Aeronave',s.aircraft.filter(a=>E.canSchedule(model.rights.role,a)).map(a=>({id:a.id,name:a.id+' · '+a.model})),q.aircraft)+select('pilot','Piloto / Instructor',s.pilots,q.pilot);
-  const showMonoWindow=request&&s.scheduleWindow&&selectedAircraft?.category==='Monomotor',dayWindow=request&&s.scheduleWindow?'<p class="hp-full hp-notice" data-day-window '+(showMonoWindow?'':'hidden')+'>'+(showMonoWindow?'Horario permitido para monomotores en '+pretty(date)+': '+esc(range(s.scheduleWindow)):'')+'</p>':'';
+  const visibleTypes=typeIds.filter(id=>id!=='charter'||model.rights.role==='director'||pilot880);
+  const typeValue=q.flightType||'privado',types=select('flightType','Tipo de vuelo',visibleTypes.map(id=>({id,name:E.flightTypeLabel(id,q.aircraft)})),typeValue);
+  const aircraftChoices=request?[]:flightAircraftChoices(s,typeValue,model.rights.role),aircraftValue=aircraftChoices.some(a=>a.id===q.aircraft)?q.aircraft:aircraftChoices[0]?.id||'';
+  const aircraftField=request?'': '<label>Aeronave<select name="aircraft" required data-flight-aircraft-type="'+esc(typeValue)+'">'+flightAircraftOptions(aircraftChoices,aircraftValue)+'</select></label>';
+  const delegation='<label class="hp-full" data-delegation '+(q.flightType==='examen'?'':'hidden')+'>Número de delegación<input name="delegationNumber" type="text" value="'+esc(q.delegationNumber||'')+'"></label>';
+  const identity=request?'<div class="hp-full hp-notice">'+esc(q.aircraft)+' · '+pretty(date)+' · '+esc(pilotName(model.rights.pilot))+'</div><div class="hp-full">'+types+'</div>'+delegation:field('newDate','Fecha de vuelo',date,'date')+select('pilot','Piloto',s.pilots,q.pilot)+types+delegation+aircraftField;
+  const chosenAircraft=s.aircraft.find(a=>a.id===(request?q.aircraft:aircraftValue)),showMonoWindow=request&&s.scheduleWindow&&chosenAircraft?.category==='Monomotor',dayWindow=request&&s.scheduleWindow?'<p class="hp-full hp-notice" data-day-window '+(showMonoWindow?'':'hidden')+'>'+(showMonoWindow?'Horario permitido para monomotores en '+pretty(date)+': '+esc(range(s.scheduleWindow)):'')+'</p>':'';
   return '<div class="hp-form-grid">'+identity+dayWindow+
    '<div class="hp-full hp-flight-times">'+field('start','Hora de inicio',q.start||'06:30','time')+field('end','Hora final',q.end||'09:30','time')+'</div>'+
-   '<label class="hp-full">Ruta o destino<input name="route" required maxlength="200" value="'+esc(q.route||'')+'" placeholder="Ej.: MPMG – Chitré – MPMG"><small>Referencia de lo previsto. El vuelo realizado se registra en la bitácora.</small></label>'+
+   routeMarkup(q.route)+
    personFieldsMarkup(q)+
-   '<label class="hp-full" data-delegation '+(q.flightType==='examen'?'':'hidden')+'>Número de delegación<input name="delegationNumber" type="text" value="'+esc(q.delegationNumber||'')+'"></label>'+
    '<label class="hp-full">Observaciones (opcional)<textarea name="note" maxlength="1000" placeholder="Detalles del vuelo (opcional)">'+esc(q.note||'')+'</textarea></label></div><p class="hp-notice">Indica obligatoriamente un estudiante o cliente. Si no existe expediente, completa nombre, cédula, correo y celular. Observaciones son opcionales.</p><p class="hp-notice" data-flight-warning></p>';
  }
  function watchFlight(d,q,request){
   const form=d.querySelector('form');
   form.elements.newPersonKind?.addEventListener('change',()=>form.dataset.personKindTouched='1');
   const update=()=>{
+   if(!request)refreshFlightAircraft(form);
    const aircraft=model.state.aircraft.find(a=>a.id===(request?q.aircraft:form.elements.aircraft.value));
-   for(const option of form.elements.flightType.options){option.disabled=!E.canChooseFlightType(model.state,option.value,model.rights.role,aircraft);option.hidden=option.disabled;option.textContent=E.flightTypeLabel(option.value,aircraft?.id);}
+   for(const option of form.elements.flightType.options){
+    const enabled=!request||E.canChooseFlightType(model.state,option.value,model.rights.role,aircraft);
+    option.disabled=!enabled;option.hidden=!enabled;option.textContent=E.flightTypeLabel(option.value,aircraft?.id);
+   }
    if(form.elements.flightType.selectedOptions[0]?.disabled)form.elements.flightType.value=[...form.elements.flightType.options].find(o=>!o.disabled)?.value||'';
    if(!form.dataset.personKindTouched)syncPersonFields(form,form.elements.flightType.value);
    const exam=form.elements.flightType.value==='examen';form.querySelector('[data-delegation]').hidden=!exam;form.elements.delegationNumber.required=exam;form.elements.delegationNumber.disabled=!exam;form.elements.delegationNumber.setCustomValidity(exam?E.delegationNumberError(form.elements.delegationNumber.value):'');
-   const f={...q,...Object.fromEntries(new FormData(form)),studentId:form.elements.studentId.value,pilot:request?model.rights.pilot:form.elements.pilot.value},target=E.normalizeRequest(model.state,f),competing=E.competingRequests(model.state,target),studentOverlap=E.studentConflicts(model.state,target).length,a=model.state.aircraft.find(row=>row.id===target.aircraft),windowError=request?E.scheduleWindowError(a,target):'',warning=form.querySelector('[data-flight-warning]'),windowNotice=form.querySelector('[data-day-window]');
+   const f={...q,...Object.fromEntries(new FormData(form)),studentId:form.elements.studentId.value,pilot:request?model.rights.pilot:form.elements.pilot.value},target=E.normalizeRequest(model.state,f),competing=E.competingRequests(model.state,target),studentOverlap=E.studentConflicts(model.state,target).length,a=model.state.aircraft.find(row=>row.id===target.aircraft),windowError=request?E.scheduleWindowError(a,target):'',routeIssue=E.routeError(form.elements.route.value),warning=form.querySelector('[data-flight-warning]'),windowNotice=form.querySelector('[data-day-window]');
    if(windowNotice){const constrained=a?.category==='Monomotor'&&model.state.scheduleWindow;windowNotice.hidden=!constrained;windowNotice.textContent=constrained?'Horario permitido para monomotores en '+pretty(date)+': '+range(model.state.scheduleWindow):'';}
-   warning.textContent=(windowError?timeText(windowError):'')+(a?.status!=='operativo'?'⚠ Estado actual: '+a?.status+'. ':'')+(competing.length?'Ya hay '+competing.length+' solicitud(es) en este horario. Puedes solicitarlo; el cierre decidirá la asignación. ':'')+(studentOverlap?'El estudiante ya tiene una solicitud o vuelo en ese horario; puedes guardar y Dirección ajustará el horario al publicar. ':'')+timeText(E.typeHint(model.state,f.flightType,target.aircraft));
-   warning.classList.toggle('hp-warning',!!windowError||!!competing.length||!!studentOverlap||a?.status!=='operativo');
+   warning.textContent=(windowError?timeText(windowError)+' ':'')+(routeIssue?routeIssue+' ':'')+(a?.status!=='operativo'?'⚠ Estado actual: '+a?.status+'. ':'')+(competing.length?'Ya hay '+competing.length+' solicitud(es) en este horario. Puedes solicitarlo; el cierre decidirá la asignación. ':'')+(studentOverlap?'El estudiante ya tiene una solicitud o vuelo en ese horario; puedes guardar y Dirección ajustará el horario al publicar. ':'')+timeText(E.typeHint(model.state,f.flightType,target.aircraft));
+   warning.classList.toggle('hp-warning',!!windowError||!!routeIssue||!!competing.length||!!studentOverlap||a?.status!=='operativo');
    const submit=form.querySelector('[type=submit]');if(request&&submit)submit.disabled=!!windowError;
   };
   form.addEventListener('input',()=>{syncPersonFields(form,form.elements.flightType.value);update();});form.addEventListener('change',()=>{syncPersonFields(form,form.elements.flightType.value);update();});syncPersonFields(form,form.elements.flightType.value);update();
@@ -166,7 +276,7 @@
   if(!slot)return;
   const s=model.state,aircraft=s.aircraft.find(a=>a.id===slot.aircraft),pilot880=aircraft?.id==='HP880BL',typeIds=pilot880?['multi','multiLey89','multiConversion','charter','socio','examen']:Object.keys(E.flightTypes);
   if(slot.flightType&&!typeIds.includes(slot.flightType))typeIds.push(slot.flightType);
-  const types=typeIds.filter(id=>E.canChooseFlightType(s,id,'pilot',aircraft)).map(id=>({id,name:E.flightTypeLabel(id,aircraft?.id)})),d=modal('Tomar espacio liberado · '+slot.aircraft,'<div class="hp-form-grid">'+select('flightType','Tipo de vuelo',types,slot.flightType||'privado')+'<label class="hp-full" data-delegation '+(slot.flightType==='examen'?'':'hidden')+'>Número de delegación<input name="delegationNumber" type="text"></label>'+personFieldsMarkup({flightType:slot.flightType||'privado'})+'<label class="hp-full">Ruta o destino<input name="route" required maxlength="200" placeholder="Ej.: MPMG – Chitré – MPMG"></label><label class="hp-full">Observaciones (opcional)<textarea name="note" maxlength="1000"></textarea></label></div><p class="hp-notice">Horario: '+esc(range(slot))+' · La aeronave y las horas están reservadas. Indica un estudiante o cliente; si no existe, completa sus datos para crear el expediente.</p>',f=>save('claim-open-slot',{id:slot.id,flight:{...f,aircraft:slot.aircraft,start:slot.start,end:slot.end}}));
+  const types=typeIds.filter(id=>E.canChooseFlightType(s,id,'pilot',aircraft)).map(id=>({id,name:E.flightTypeLabel(id,aircraft?.id)})),d=modal('Tomar espacio liberado · '+slot.aircraft,'<div class="hp-form-grid">'+select('flightType','Tipo de vuelo',types,slot.flightType||'privado')+'<label class="hp-full" data-delegation '+(slot.flightType==='examen'?'':'hidden')+'>Número de delegación<input name="delegationNumber" type="text"></label>'+personFieldsMarkup({flightType:slot.flightType||'privado'})+routeMarkup('')+'<label class="hp-full">Observaciones (opcional)<textarea name="note" maxlength="1000"></textarea></label></div><p class="hp-notice">Horario: '+esc(range(slot))+' · La aeronave y las horas están reservadas. Indica un estudiante o cliente; si no existe, completa sus datos para crear el expediente.</p>',f=>save('claim-open-slot',{id:slot.id,flight:{...f,aircraft:slot.aircraft,start:slot.start,end:slot.end}}));
   const form=d.querySelector('form'),update=()=>{
    const exam=form.elements.flightType.value==='examen';form.querySelector('[data-delegation]').hidden=!exam;form.elements.delegationNumber.required=exam;form.elements.delegationNumber.disabled=!exam;form.elements.delegationNumber.setCustomValidity(exam?E.delegationNumberError(form.elements.delegationNumber.value):'');
    syncPersonFields(form,form.elements.flightType.value);
