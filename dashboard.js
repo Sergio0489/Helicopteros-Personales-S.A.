@@ -434,7 +434,7 @@ function buildPanel(ac, data, idx) {
           <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
           <label class="field-label">TAC actual<input type="number" class="field-input" id="tac-actual-${idx}" aria-label="TAC actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
         </div>`}
-        <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">${isDualTAC(ac.reg)?'Hobbs actual y HV del día se calculan con la mayor diferencia entre los dos motores.':'Ingresa ambos TAC para calcular las horas.'}</div>
+        <div id="tac-msg-${idx}" aria-live="polite" style="font-size:11px;color:var(--muted);margin-bottom:10px">${isDualTAC(ac.reg)?'Hobbs actual = Hobbs anterior + mayor diferencia de motor. HV = Hobbs actual − Hobbs anterior. Ambos se pueden editar.':'Ingresa ambos TAC para calcular las horas.'}</div>
         <div class="inspection-controls"><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,50)">✓ Resuelto · 50 horas</button><button type="button" class="record-btn" onclick="openRecordEditor('inspection',${idx},-1,100)">✓ Resuelto · 100 horas</button></div>
         <div class="field-row" style="margin-bottom:4px">
           <span class="field-label">Horas del día</span>

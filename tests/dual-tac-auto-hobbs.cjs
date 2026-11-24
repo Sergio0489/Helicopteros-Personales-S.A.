@@ -62,6 +62,8 @@ test('HP880BL allows manual Hobbs or HV edits and keeps the two values linked',(
  vm.runInContext("updateTAC(0,'hobbs')",context);
  assert.equal(elements.get('horas_diarias-0').value,'2.75');
  assert.equal(elements.get('horas-venc-dia-0').value,'2.75');
+ assert.equal(elements.get('horas_diarias-0').readOnly,false);
+ assert.match(dashboard,/Hobbs actual = Hobbs anterior \+ mayor diferencia de motor/);
  elements.get('horas_diarias-0').value='3.25';
  vm.runInContext("updateTAC(0,'horas_diarias')",context);
  assert.equal(elements.get('tac-hobbs-actual-0').value,'1003.25');
