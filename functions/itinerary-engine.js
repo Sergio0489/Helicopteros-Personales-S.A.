@@ -236,6 +236,11 @@ function typeHint(state,type,aircraftId){
  const aircraft=String(typeof aircraftId==='object'?aircraftId?.id||'':aircraftId||'').replace(/[^a-z0-9]/gi,'').toUpperCase(),hp880Types=[...multiTypes,'ley89','conversion','charter','socio'].includes(type),allowed=aircraft==='HP880BL'&&hp880Types?['HP880BL']:allowedForType(state,type);
  return flightTypeLabel(type,aircraftId)+': '+(allowed.join(' → ')||'sin aeronaves asignadas')+(type==='examen'?' · prioridad máxima entre solicitudes pendientes; requiere número de delegación':type==='charter'?aircraft==='HP880BL'?' · disponible para pilotos en HP880BL · agenda fija':' · solo director · agenda fija':multiTypes.includes(type)?' · prioridad y aeronaves configurables por el director':' · prioridad por tipo; solo se redistribuyen monomotores');
 }
+function routeError(value){
+ const parts=String(value||'').normalize('NFKC').toUpperCase().trim().split(/\s*[-–—]\s*/);
+ return parts.length!==3||parts.some(code=>!/^[A-Z0-9]{3,4}$/.test(code))?'Ingresa exactamente 3 códigos OACI, IATA o VOR de 3 o 4 caracteres, separados por guiones.':'';
+}
+function normalizeRoute(value){return String(value||'').normalize('NFKC').toUpperCase().trim().split(/\s*[-–—]\s*/).map(code=>code.trim()).join(' - ');}
 function delegationNumberError(value){const number=String(value||'').trim();return !number||number.length>30||/[\x00-\x1F\x7F]/.test(number)?'Escribe un número de delegación válido (máximo 30 caracteres).':'';}
 function flightDataError(state,q){
  if(q.studentId&&!state.students?.some(x=>x.id===q.studentId))return 'Selecciona un estudiante de la lista o deja la casilla en blanco.';
@@ -478,7 +483,7 @@ function simulate(state){
  }
  return {assignments,results:results.sort((a,b)=>a.created-b.created)};
 }
-const api={slots,fleet,minutes,overlaps,active,validWindow,coversWindow,availabilityStart,bookable,bookingSlots,covers,scheduleWindowError,directorWindowAvailable,flightAvailable,isNightFlight,nightPublication,sourceSnapshot,timeError,validateSlots,requestError,reservationGate,panamaClock,operationalAlerts,competingRequests,studentConflicts,sameStudentConflict,prepareApproval,publishedChange,publicationNotice,canCancelRelocated,reallocatePublished,directorFlightError,pilotCanRequest,canSchedule,allowedForType,defaultTypeRules,normalizeRequest,typeHint,flightTypeLabel,typeConfigAircraft,canChooseFlightType,delegationNumberError,flightDataError,simulate,fitRequest,fitDeviation,MIN_ASSIGNMENT_MINUTES,flightTypes,typeOf,aircraftOrder,compatible};
+const api={slots,fleet,minutes,overlaps,active,validWindow,coversWindow,availabilityStart,bookable,bookingSlots,covers,scheduleWindowError,directorWindowAvailable,flightAvailable,isNightFlight,nightPublication,sourceSnapshot,timeError,validateSlots,requestError,reservationGate,panamaClock,operationalAlerts,competingRequests,studentConflicts,sameStudentConflict,prepareApproval,publishedChange,publicationNotice,canCancelRelocated,reallocatePublished,directorFlightError,pilotCanRequest,canSchedule,allowedForType,defaultTypeRules,normalizeRequest,typeHint,flightTypeLabel,typeConfigAircraft,canChooseFlightType,routeError,normalizeRoute,delegationNumberError,flightDataError,simulate,fitRequest,fitDeviation,MIN_ASSIGNMENT_MINUTES,flightTypes,typeOf,aircraftOrder,compatible};
 if(typeof module==='object'&&module.exports)module.exports=api;else root.HPItinerary=api;
 })(typeof globalThis==='object'?globalThis:this);
 
