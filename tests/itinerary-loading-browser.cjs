@@ -205,23 +205,28 @@ test('Pilot sees the daily range only when requesting a monomotor, not HP880BL',
  await page.locator('dialog [data-close]').click();
  await page.locator('[data-slot="HP880BL:b4"]').click();assert.doesNotMatch(await page.locator('dialog').textContent(),/Horario permitido para monomotores/);
 });
-test('Director config shows independent Multi aircraft lists and pilot can select each HP880BL type',async t=>{
+test('Director config shows independent Multi and ATP aircraft lists and pilot can select each HP880BL type',async t=>{
  const directorPage=await app(t),directorData=response();await directorPage.evaluate(result=>resolveRead(result),directorData);await directorPage.locator('[data-date]').waitFor();
  await directorPage.locator('[data-types]').click();
  const config=directorPage.locator('dialog'),configured=await config.locator('[data-type]').evaluateAll(rows=>rows.map(row=>({id:row.dataset.type,label:row.querySelector('summary')?.textContent.trim(),aircraft:[...row.querySelectorAll('[data-id]')].map(item=>({id:item.dataset.id,checked:item.querySelector('input')?.checked}))})));
- const expected=[['multi','Multi Estudiante'],['multiLey89','Multi Ley 89'],['multiConversion','Multi Conversión']];
+ const expected=[['multi','Multi Estudiante'],['multiLey89','Multi Ley 89'],['multiConversion','Multi Conversión'],['atp','ATP']];
  for(const [id,label] of expected){const row=configured.find(item=>item.id===id);assert.ok(row,'missing settings list '+id);assert.equal(row.label,label);assert.equal(row.aircraft.find(item=>item.id==='HP880BL')?.checked,true);assert.ok(row.aircraft.every(item=>directorData.state.aircraft.find(a=>a.id===item.id)?.category==='Multimotor'));}
  assert.ok(configured.some(item=>item.id==='ley89'&&item.label==='Ley 89'));assert.ok(configured.some(item=>item.id==='conversion'&&item.label==='Conversión'));
- await config.locator('[data-close]').click();
+ await config.locator('[data-type="privado"] input').first().uncheck();
+ await directorPage.evaluate(result=>{window.commandResult=result},directorData);
+ await config.locator('[type=submit]').click();
+ const savedRules=await directorPage.evaluate(()=>window.itineraryCommands.at(-1).typeRules);
+ assert.deepEqual(Object.keys(savedRules),['privado']);
  const pilotData=response();pilotData.rights={role:'pilot',request:true,pilot:'a',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};
  const pilotPage=await app(t);await pilotPage.evaluate(result=>resolveRead(result),pilotData);await pilotPage.locator('[data-date]').waitFor();await pilotPage.locator('[data-slot="HP880BL:b4"]').click();
  const form=pilotPage.locator('dialog form'),options=await form.locator('[name="flightType"] option').evaluateAll(nodes=>nodes.map(option=>({value:option.value,label:option.textContent,disabled:option.disabled,hidden:option.hidden})));
  for(const [id,label] of expected){const option=options.find(item=>item.value===id);assert.ok(option,'missing pilot option '+id);assert.equal(option.label,label);assert.equal(option.disabled,false);assert.equal(option.hidden,false);}
+ await form.locator('[name="flightType"]').selectOption('atp');assert.equal(await form.locator('[name="flightType"]').inputValue(),'atp');
  await form.locator('[name="flightType"]').selectOption('multiLey89');assert.equal(await form.locator('[name="flightType"]').inputValue(),'multiLey89');
  await form.locator('[data-close]').click();
  const monoData=response();monoData.rights={role:'pilot',request:true,pilot:'a',settings:false,create:false,boxes:{planner:true,flights:true,requests:true}};monoData.state.requests=[];monoData.state.confirmed=[];
  const monoPage=await app(t);await monoPage.evaluate(result=>resolveRead(result),monoData);await monoPage.locator('[data-date]').waitFor();await monoPage.locator('[data-slot="HP1907:b1"]').click();
- const monoForm=monoPage.locator('dialog form');await monoForm.locator('[name="flightType"]').selectOption('multiConversion');
+ const monoForm=monoPage.locator('dialog form');await monoForm.locator('[name="flightType"]').selectOption('atp');assert.equal(await monoForm.locator('[name="flightType"]').inputValue(),'atp');await monoForm.locator('[name="flightType"]').selectOption('multiConversion');
  assert.equal(await monoForm.locator('[name="flightType"]').inputValue(),'multiConversion');assert.equal(await monoForm.locator('[type=submit]').isEnabled(),true);
 });
 test('A Multi request started from a monomotor uses HP880BL hours outside the mono window',async t=>{
