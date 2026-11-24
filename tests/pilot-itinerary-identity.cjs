@@ -4,7 +4,7 @@ const M=require('../functions/itinerary-model');
 const date='2030-06-15',editDate='2030-06-16',now='2030-06-15T12:05:00-05:00';
 const pilotPolicy={itinerario:{actions:{view:true,edit:true},areas:{Calendario:true,'Programación de vuelos':true,'Solicitudes de vuelos':true},boxes:{planner:{view:true},flights:{view:true,edit:false},create:{view:true,edit:true},requests:{view:true,edit:true}}}};
 function fleet(){return Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo',serial:'FICTICIO'}]));}
-function flightRequest(id,pilot,aircraft,start,end,created){return {id,pilot,aircraft,start,end,slot:'b1',flightType:'privado',route:'MPMG - MPCL',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio',created,status:'pending'};}
+function flightRequest(id,pilot,aircraft,start,end,created){return {id,pilot,aircraft,start,end,slot:'b1',flightType:'privado',route:'MPMG - MPCE - MPMG',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio',created,status:'pending'};}
 function fixture(){
  const pilots=[
   {authUid:'pilot-ana',email:'ana@example.test',nombre:'Ana Ficticia',medico:'2035-12-31'},
@@ -84,7 +84,7 @@ test('director save migrates pending requests, published flights, priorities, no
  const actor={user:{uid:'pilot-beto',email:'beto@example.test',emailVerified:true},account:{role:'Piloto',assignedAt:'fixture'},director:false};
  assert.equal(M.scope(data,actor).pilot,beto.id);
  const editDay=data.itinerary.days[editDate];assert.equal(editDay.revision,4);
- const updated=M.apply(data,actor,{date:editDate,command:'request',actionId:'update-own-request-fictitious-01',id:'request-beto-edit',revision:editDay.revision,flight:{aircraft:'HP1907',pilot:'legacy-pilot-0',start:'12:30',end:'14:00',slot:'b3',flightType:'privado',route:'MPMG - MPCL',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio'}},now);
+ const updated=M.apply(data,actor,{date:editDate,command:'request',actionId:'update-own-request-fictitious-01',id:'request-beto-edit',revision:editDay.revision,flight:{aircraft:'HP1907',pilot:'legacy-pilot-0',start:'12:30',end:'14:00',slot:'b3',flightType:'privado',route:'MPMG - MPCE - MPMG',note:'',studentId:'student:identity-fixture',studentName:'Estudiante Ficticio'}},now);
  assert.equal(updated.duplicate,false);
  const own=data.itinerary.days[editDate].requests.find(q=>q.id==='request-beto-edit');
  assert.equal(own.pilot,beto.id);assert.equal(own.start,'12:30');

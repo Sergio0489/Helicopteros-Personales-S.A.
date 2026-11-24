@@ -7,7 +7,7 @@ const pilot=id=>({user:{uid:id,email:id+'@example.test',emailVerified:true},acco
 function fixture(){return {fleet:Object.fromEntries(M.E.fleet.map(([id])=>[id==='HP1186'?id:id.replace(/^HP/,'HP_'),{status:'operativo'}])),pilotos:[{id:'p1',nombre:'Piloto Uno',email:'p1@example.test',medico:'2027-12-31'},{id:'p2',nombre:'Piloto Dos',email:'p2@example.test',medico:'2027-12-31'}],itinerarios:[],school:{students:[{id:'fixture-student',name:'Estudiante Delegación'}],registry:{clients:[]},accessConfiguration:{roles:{Piloto:structuredClone(policy),Administrativo:structuredClone(policy)}}},itinerary:{version:1,config:{},days:{},notices:[]}};}
 let sequence=0;
 function apply(d,actor,command,fields={},at=now){return M.apply(d,actor,{date,command,actionId:'delegation-test-'+String(++sequence).padStart(4,'0'),revision:M.day(d,date).revision,configurationRevision:d.itinerary.config.revision||0,...fields},at);}
-const flight=(pilotId='p1',aircraft='HP1907',extra={})=>({pilot:pilotId,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG – Chitré',note:'',studentId:'student:fixture-student',studentName:'Estudiante Delegación',...extra});
+const flight=(pilotId='p1',aircraft='HP1907',extra={})=>({pilot:pilotId,aircraft,start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG - MPCE - MPMG',note:'',studentId:'student:fixture-student',studentName:'Estudiante Delegación',...extra});
 
 test('the shared server rule accepts letters, digits, signs and internal spaces up to 30 trimmed characters',()=>{
  const state=M.stateFor(fixture(),date,now);

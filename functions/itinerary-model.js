@@ -170,9 +170,10 @@ function cleanFlight(input,id,now){
   if(typeof input[field]!=='string'||!input[field].trim())error('Completa el campo '+label+'.');
   if(input[field].trim().length>max)error(label+': máximo '+max+' caracteres.');
  }
+ const routeProblem=E.routeError(input.route);if(routeProblem)error(routeProblem);
  if(input.note!=null&&(typeof input.note!=='string'||input.note.trim().length>1000))error('Observaciones: máximo 1000 caracteres.');
  if(!Object.hasOwn(E.flightTypes,input.flightType))error('Vuelo no válido.');
- const flight={id,aircraft:key(input.aircraft),pilot:String(input.pilot||''),studentId:String(input.studentId||''),start:String(input.start||''),end:String(input.end||''),slot:String(input.slot||'b1'),flightType:String(input.flightType||'privado'),socioName:String(input.socioName||'').trim().slice(0,120),route:input.route.trim(),note:String(input.note||'').trim().slice(0,1000),created:Date.parse(now)};
+ const flight={id,aircraft:key(input.aircraft),pilot:String(input.pilot||''),studentId:String(input.studentId||''),start:String(input.start||''),end:String(input.end||''),slot:String(input.slot||'b1'),flightType:String(input.flightType||'privado'),socioName:String(input.socioName||'').trim().slice(0,120),route:E.normalizeRoute(input.route),note:String(input.note||'').trim().slice(0,1000),created:Date.parse(now)};
  if(input.flightType==='examen')flight.delegationNumber=String(input.delegationNumber||'').trim();
  return flight;
 }

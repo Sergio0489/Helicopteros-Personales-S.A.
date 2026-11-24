@@ -119,11 +119,11 @@ test('Director sees detailed flights, requires a student or client, and allows b
  for(const value of ['Aeronave','Hora de inicio y fin','Ruta o destino','Cliente / Estudiante','Estudiante A','Chitré <referencia>'])assert.ok(details.includes(value),value);
  await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
  const form=page.locator('dialog form');
- assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name&&!el.disabled).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','route','studentName'].sort());
+ assert.deepEqual(await form.evaluate(f=>Array.from(f.elements).filter(el=>el.required&&el.name&&!el.disabled).map(el=>el.name).sort()),['aircraft','flightType','newDate','pilot','routePart1','routePart2','routePart3','studentName'].sort());
  assert.equal(await form.evaluate(f=>f.querySelectorAll('[data-time-field] [required]').length),6);
  assert.equal(await form.evaluate(f=>f.elements.studentName.required),true);
  assert.equal(await form.evaluate(f=>f.checkValidity()),false);
- await page.locator('[name=route]').fill('MPMG – Chitré');
+ await page.locator('[name=routePart1]').fill('MPMG');await page.locator('[name=routePart2]').fill('MPDA');await page.locator('[name=routePart3]').fill('MPMG');
  await page.locator('[name=studentName]').fill('Estudiante A');
  assert.equal(await form.evaluate(f=>f.checkValidity()),true);
  await page.locator('[name=flightType]').selectOption('socio');assert.equal(await form.evaluate(f=>f.elements.socioName.value),'Estudiante A');assert.equal(await form.evaluate(f=>f.checkValidity()),true);
@@ -136,11 +136,11 @@ test('Director sees detailed flights, requires a student or client, and allows b
  await page.evaluate(result=>{window.commandResult=result;},result);
  await page.getByRole('button',{name:'Guardar',exact:true}).click();
  await page.locator('dialog').waitFor({state:'detached'});
- const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG – Chitré');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'00:05');assert.equal(saved[0].flight.end,'12:45');
+ const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.equal(saved[0].date,'2026-10-30');assert.equal(saved[0].flight.route,'MPMG - MPDA - MPMG');assert.equal(saved[0].flight.studentId,'st1');assert.equal(saved[0].flight.studentName,'Estudiante A');assert.equal(saved[0].flight.start,'00:05');assert.equal(saved[0].flight.end,'12:45');
 });
 test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canonical times',async t=>{
  const page=await app(t,390),result=response();
- Object.assign(result.state.confirmed[0],{start:'00:00',end:'12:00',route:'MPMG',note:'Sin observaciones'});
+ Object.assign(result.state.confirmed[0],{start:'00:00',end:'12:00',route:'MPMG - MPDA - MPMG',note:'Sin observaciones'});
  Object.assign(result.state.confirmed[1],{start:'13:07',end:'23:59'});
  result.alerts=[{aircraft:'HP1907',date:'2026-10-30',start:'13:07',end:'23:59',status:'mantenimiento'}];
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
@@ -149,7 +149,7 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  assert.match(await page.locator('[data-board]').textContent(),/12:30 PM – 3:30 PM/);
  await page.locator('[data-edit-flight="fixed-2"]').click();
  const startBox=await page.locator('[data-time-field=start]').boundingBox(),endBox=await page.locator('[data-time-field=end]').boundingBox();
- assert.equal(startBox.y,endBox.y,'Start and end times stay on the same row on mobile');assert(endBox.x>startBox.x);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+ assert(endBox.y>startBox.y,'End time appears below start on mobile');assert.equal(startBox.x,endBox.x);assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
  assert.equal(await page.locator('[data-time-field=start] [data-hour]').inputValue(),'1');assert.equal(await page.locator('[data-time-field=start] [data-minute]').inputValue(),'07');assert.equal(await page.locator('[data-time-field=start] [data-period]').inputValue(),'PM');
  await page.locator('[data-time-field=start] [data-hour]').fill('0');assert.equal(await page.locator('dialog form').evaluate(f=>f.checkValidity()),false);
  await page.getByRole('button',{name:'Cancelar',exact:true}).click();
@@ -160,7 +160,7 @@ test('AM/PM appears in flights, blocks and alerts; mobile editors preserve canon
  const saved=await page.evaluate(()=>itineraryCommands);assert.equal(saved.length,1);assert.deepEqual(saved[0].slots,result.state.aircraft.find(a=>a.id==='HP1907').slots);assert.equal(saved[0].release.from,'06:30');
 });
 async function assertExamDelegationValidity(page){
- const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=route]').fill('MPMG – Chitré');await page.locator('[name=studentName]').fill('Estudiante A');
+ const form=page.locator('dialog form');await page.locator('[name=flightType]').selectOption('examen');await page.locator('[name=routePart1]').fill('MPMG');await page.locator('[name=routePart2]').fill('MPDA');await page.locator('[name=routePart3]').fill('MPMG');await page.locator('[name=studentName]').fill('Estudiante A');
  const field=page.locator('[name=delegationNumber]');assert.equal(await field.getAttribute('maxlength'),null,'custom validation matches the server after trimming');
  assert.equal(await form.evaluate(f=>f.elements.delegationNumber.required),true);assert.equal(await form.evaluate(f=>f.checkValidity()),false,'blank value is rejected');
  await field.fill('   ');assert.equal(await form.evaluate(f=>f.checkValidity()),false,'spaces-only value is rejected');

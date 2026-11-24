@@ -34,7 +34,7 @@ function memory(data=fixtureData(),accountPatch={}){
 }
 const callReport=(h,body=reportBody,accountPatch={},userPatch={})=>Reports.handle(h.db,{user:{...user,...userPatch},account:{...h.account(),...accountPatch},actor,body:structuredClone(body)});
 const context=(patch={},director=false)=>({user:structuredClone(user),account:{...structuredClone(account),...patch},director});
-const requestBody={date:fixedDate,command:'request',actionId:'identity-gate-request-001',flight:{aircraft:'HP1907',start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'Ruta ficticia',note:'Solicitud ficticia',studentId:'student:fixture-student',studentName:'Estudiante de prueba'}};
+const requestBody={date:fixedDate,command:'request',actionId:'identity-gate-request-001',flight:{aircraft:'HP1907',start:'06:30',end:'09:30',slot:'b1',flightType:'privado',route:'MPMG - MPDA - MPMG',note:'Solicitud ficticia',studentId:'student:fixture-student',studentName:'Estudiante de prueba'}};
 
 test('an explicitly pending pilot cannot create an aircraft report even while the stored link still says matched',async()=>{
  const h=memory(undefined,{identityReviewPending:true}),before=structuredClone(h.root);
