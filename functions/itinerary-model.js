@@ -357,9 +357,11 @@ function apply(data,actor,body,now){
   actionWarning=requestWarnings.join(' ');
   d.requests=d.requests.filter(x=>x.id!==q.id);d.requests.push(q);if(d.draftPlan&&!d.published)recalculateDraftPlan(data,d,dte,now);
  }else if(action==='cancel-request'){
-  const q=d.requests.find(q=>q.id===body.id);if(!q||q.status==='approved'||state.published)error('La solicitud ya fue aprobada o publicada.');
+  const q=d.requests.find(q=>q.id===body.id);if(!q||q.status==='approved'||q.status==='cancelled')error('La solicitud ya fue aprobada o retirada.');
+  if(state.confirmed.some(f=>f.sourceRequestId===q.id))error('La solicitud ya tiene un vuelo asignado y no puede retirarse.');
+  if(state.published&&!rights.settings)error('Solo Dirección puede retirar una solicitud pendiente después de publicar el horario.');
   if(!rights.settings&&(!rights.request||q.pilot!==rights.pilot))error('No puedes cancelar esta solicitud.');
-  d.cancelled.push(q.id);q.status='cancelled';if(d.draftPlan&&!d.published)recalculateDraftPlan(data,d,dte,now);
+  d.cancelled ||= [];if(!d.cancelled.includes(q.id))d.cancelled.push(q.id);q.status='cancelled';q.cancelledAt=now;if(d.draftPlan&&!d.published)recalculateDraftPlan(data,d,dte,now);
  }else if(action==='approve'){
    requireDirector();const editingDraft=!!(!state.published&&d.draftPlan);if(editingDraft)state.confirmed=copy(d.draftPlan.assignments);
    const prepared=E.prepareApproval(state,body.id);if(prepared.error)error(prepared.error);assertPilot(data,prepared.flight,dte,now);

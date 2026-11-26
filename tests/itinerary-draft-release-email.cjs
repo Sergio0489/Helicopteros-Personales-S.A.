@@ -183,7 +183,7 @@ test('published email recipients include every pilot and named mechanic, with a 
 test('ambiguous SMTP acceptance becomes a safe review receipt instead of silently appearing sent',async()=>{
  const records={},reported=[],publication={id:'publication-'+date,date,flights:[]};
  const db={ref(path){return {transaction:async update=>{
-  const key=path.slice('itineraryEmailDeliveries/'.length),old=records[key]??null,next=update(structuredClone(old));
+  const key=path.slice(path.lastIndexOf('/')+1),old=records[key]??null,next=update(structuredClone(old));
   if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(old)}};
   records[key]=next;return {committed:true,snapshot:{val:()=>structuredClone(next)}};
  }};}};
@@ -193,7 +193,12 @@ test('ambiguous SMTP acceptance becomes a safe review receipt instead of silentl
  assert.equal(receipt.status,'review');
  assert.equal(receipt.code,'smtp-unconfirmed');
  assert.deepEqual(reported[0],[ 'smtp-unconfirmed',publication.id,{acceptedCount:0,rejectedCount:0,rejectedErrorCount:0,responseCode:null,command:''} ]);
- assert.deepEqual(email.deliverySummary(publication.id,publication,['pilot@example.test'],records,'known-time'),{id:publication.id,date,kind:'publication',recipientCount:1,sentCount:0,reviewCount:1,failedCount:0,pendingCount:0,codeCounts:{'smtp-unconfirmed':1},updatedAt:'known-time'});
+ assert.deepEqual(email.deliverySummary(publication.id,publication,['pilot@example.test'],records,'known-time'),{id:publication.id,date,kind:'publication',recipientCount:1,sentCount:0,reviewCount:1,failedCount:0,pendingCount:0,unaccountedCount:0,codeCounts:{'smtp-unconfirmed':1},updatedAt:'known-time'});
+});
+
+test('delivery summaries count every recipient without a terminal or in-progress receipt as unaccounted',()=>{
+ const publication={id:'publication-'+date,date,flights:[]};
+ assert.deepEqual(email.deliverySummary(publication.id,publication,['pilot@example.test','mechanic@example.test'],{},'known-time'),{id:publication.id,date,kind:'publication',recipientCount:2,sentCount:0,reviewCount:0,failedCount:0,pendingCount:0,unaccountedCount:2,codeCounts:{'delivery-receipt-missing':2},updatedAt:'known-time'});
 });
 
 test('pilot and student/client choices are alphabetic and the itinerary exposes a visible selector',()=>{
@@ -242,6 +247,23 @@ test('pilots can edit and delete their own request after cutoff until publish; s
  apply(pendingData,director,'cancel-request',{id:pending.id},later);
  assert.ok(M.day(pendingData,date).cancelled.includes(pending.id));
  assert.equal(M.day(pendingData,date).requests[0].status,'cancelled');
+});
+
+test('only Director can retire an unassigned request after publication and confirmed flights remain intact',()=>{
+ const data=fixture();
+ apply(data,pilot('carlos'),'request',{flight:flight('carlos','HP880BL','15:30','17:30',{flightType:'multi'})});
+ const pending=M.day(data,date).requests[0];
+ apply(data,director,'flight',{flight:flight('sergio','HP880BL','15:30','17:30',{flightType:'multi'})});
+ M.day(data,date).published=true;
+ const confirmedBefore=structuredClone(data.itinerarios);
+ assert.throws(()=>apply(data,pilot('carlos'),'cancel-request',{id:pending.id}),/Solo Dirección puede retirar/);
+ apply(data,director,'cancel-request',{id:pending.id});
+ const updated=M.day(data,date),visible=M.view(data,director,date,now).state;
+ assert.equal(updated.requests.find(q=>q.id===pending.id).status,'cancelled');
+ assert.ok(updated.cancelled.includes(pending.id));
+ assert.equal(updated.requests.find(q=>q.id===pending.id).cancelledAt,now);
+ assert.deepEqual(data.itinerarios,confirmedBefore,'removing an unassigned request must not alter confirmed flights');
+ assert.equal(visible.requests.find(q=>q.id===pending.id).status,'cancelled');
 });
 
 test('Director draft warns about unresolved requests before publishing',()=>{
