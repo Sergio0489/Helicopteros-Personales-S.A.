@@ -18,16 +18,17 @@ async function app(t,width=1440){
  page.setDefaultTimeout(8000);
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',route=>route.fulfill({body:''}));
+ await page.clock.install({time:new Date('2026-11-20T17:00:00Z')});
  await page.setContent(fs.readFileSync(path.join(root,'index.html'),'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''));
  await page.evaluate(()=>{
   window.CLOUD_INITIAL={fleet:{},pilotos:[],itinerarios:[{id:'historic',fecha:'2026-10-30',horaInicio:'08:00',horaFin:'09:00',piloto:'Piloto histórico',aeronave:'HP-1784'}],school:{students:[],rates:{},intakes:[],registry:{clients:[],entries:[]}}};
   window.cloudWrite=()=>{throw Error('Unexpected write');};
   window.showCloudError=e=>{throw e;};
-  window.itineraryReads=[];window.itineraryCommands=[];
+  window.itineraryReads=[];window.itineraryCommands=[];window.calendarReads=[];
   window.readItinerary=(action,payload)=>{
    if(action==='itinerary-command'){window.itineraryCommands.push(payload);return Promise.resolve(window.commandResult);}
    if(action==='itinerary-notices')return Promise.resolve({notices:[],alerts:[]});
-   if(action==='itinerary-calendar')return Promise.resolve({version:1,year:payload.year,days:[{date:payload.year+'-02-28',count:3}]});
+   if(action==='itinerary-calendar'){window.calendarReads.push(payload.year);return Promise.resolve({version:1,year:payload.year,days:[{date:payload.year+'-02-28',count:3}]});}
    if(action!=='itinerary-read')throw Error('Unexpected mutation');
    window.itineraryReads.push(payload.date);
    return new Promise((resolve,reject)=>{window.resolveRead=resolve;window.rejectRead=reject;});
@@ -49,7 +50,7 @@ async function noOldScreen(page){
  for(const selector of ['#itinerary-legacy','#cal-cells','#flight-date','#planner-timeline'])assert.equal(await page.locator(selector).count(),0,'Previous screen is removed: '+selector);
  assert.equal(await page.evaluate(()=>JSON.stringify(flightsData)===originalFlights),true,'Historical flights survive screen replacement');
 }
-for(const width of [1440,390])test('Only the new itinerary appears during delayed loading and navigation ('+width+'px)',async t=>{
+for(const width of [1440,390])test('Calendar opens on the current month and supports month navigation ('+width+'px)',async t=>{
  const page=await app(t,width);
  await noOldScreen(page);
  assert.match(await page.locator('.hp-itinerary [role=status]').textContent(),/Cargando itinerario/);
@@ -58,17 +59,30 @@ for(const width of [1440,390])test('Only the new itinerary appears during delaye
  await page.locator('[data-date]').waitFor({state:'visible'});
  await noOldScreen(page);
  assert.equal(await page.locator('[data-year-calendar]').evaluate(el=>el===el.parentElement.lastElementChild),true);
- assert.equal(await page.locator('.hp-calendar-month').count(),12);
- assert.equal(await page.locator('[data-calendar-date]').count(),365);
- assert.equal(await page.locator('.hp-has-flights').count(),2);
+ assert.equal(await page.locator('.hp-calendar-controls strong').textContent(),'noviembre de 2026');
+ assert.equal(await page.locator('.hp-calendar-month').count(),1);
+ assert.equal(await page.locator('[data-calendar-date]').count(),30);
+ assert.equal(await page.locator('.hp-has-flights').count(),1);
+ assert.equal(await page.locator('[data-calendar-date="2026-11-20"][aria-current="date"]').count(),1);
+ await page.getByRole('button',{name:'Mes anterior',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.hp-calendar-controls strong').textContent==='octubre de 2026');
+ assert.equal(await page.locator('[data-calendar-date]').count(),31);
+ assert.equal(await page.locator('.hp-has-flights').count(),1);
  assert.match(await page.locator('[data-calendar-date="2026-10-30"]').getAttribute('aria-label'),/2 vuelos agendados/);
- assert.equal(await page.locator('[data-year-calendar]').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
- await page.getByRole('button',{name:'Año siguiente',exact:true}).click();
- await page.waitForFunction(()=>document.querySelector('.hp-calendar-heading strong').textContent==='2027'&&!document.querySelector('[data-year-calendar]').matches('[aria-busy=true]'));
+ await page.getByRole('button',{name:'Mes siguiente',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.hp-calendar-controls strong').textContent==='noviembre de 2026');
+ await page.getByRole('button',{name:'Mes siguiente',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.hp-calendar-controls strong').textContent==='diciembre de 2026');
+ assert.equal(await page.locator('[data-calendar-date]').count(),31);
+ await page.getByRole('button',{name:'Mes siguiente',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.hp-calendar-controls strong').textContent==='enero de 2027'&&!document.querySelector('[data-year-calendar]').getAttribute('aria-busy').includes('true'));
+ assert.deepEqual(await page.evaluate(()=>calendarReads),['2027']);
+ await page.getByRole('button',{name:'Mes siguiente',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.hp-calendar-controls strong').textContent==='febrero de 2027');
  assert.equal(await page.locator('[data-calendar-date="2027-02-28"].hp-has-flights').count(),1);
- await page.getByRole('button',{name:'Año siguiente',exact:true}).click();
- await page.locator('[data-calendar-date="2028-02-29"]').waitFor();
- assert.equal(await page.locator('[data-calendar-date]').count(),366);
+ for(let i=0;i<3;i++)await page.getByRole('button',{name:'Mes anterior',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.hp-calendar-controls strong').textContent==='noviembre de 2026');
+ assert.equal(await page.locator('[data-year-calendar]').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
  await page.evaluate(()=>{dailyScheduleTab.click();renderCalendar();renderDayFlights('2026-10-30');updatePilotDropdown();itinerariosTab.click();closeDrawer();});
  await page.waitForFunction(()=>itineraryReads.length===2);
  await noOldScreen(page);
@@ -111,6 +125,35 @@ test('Cancelling a schedule date change keeps the explicitly selected day',async
  assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-selected-date'),selected);
  await page.evaluate(()=>renderDailySchedule());
  assert.equal(await page.locator('#panel-horario-dia').getAttribute('data-schedule-date'),selected);
+});
+test('Student/client autocomplete filters prefixes alphabetically and supports creating a new dossier',async t=>{
+ const page=await app(t),result=response();
+ result.state.students=[
+  {id:'student:zoe',name:'Zoe Vela',kind:'student'},
+  {id:'client:ana-perez',name:'Ana Pérez',kind:'client'},
+  {id:'student:ana-fernandez',name:'Ana Fernández',kind:'student'}
+ ];
+ await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
+ const form=page.locator('dialog form'),input=form.locator('[name="studentName"]'),list=form.locator('[data-person-suggestions]');
+ await input.fill('a');await list.waitFor({state:'visible'});
+ assert.deepEqual(await list.locator('[data-person-suggestion] span').allTextContents(),['Ana Fernández','Ana Pérez']);
+ await list.locator('[data-person-suggestion="client:ana-perez"]').click();
+ assert.equal(await input.inputValue(),'Ana Pérez');assert.equal(await form.locator('[name="studentId"]').inputValue(),'client:ana-perez');
+ assert.equal(await form.locator('[data-person-new]').isVisible(),false);
+ await input.fill('María Valdez');await list.locator('[data-person-create]').waitFor({state:'visible'});await list.locator('[data-person-create]').click();
+ assert.equal(await form.locator('[data-person-new]').isVisible(),true);
+ for(const name of ['personIdentity','personEmail','personPhone'])assert.equal(await form.locator('[name="'+name+'"]').evaluate(el=>el.required),true);
+});
+test('Released-slot autocomplete keeps matching dossiers selectable after the name field loses focus',async t=>{
+ const result=response();result.rights={role:'pilot',request:true,pilot:'b',boxes:{planner:true,flights:true,requests:true}};result.state.published=true;
+ result.state.students=[{id:'client:ana-perez',name:'Ana Pérez',kind:'client'},{id:'student:ana-fernandez',name:'Ana Fernández',kind:'student'}];
+ result.state.openSlots=[{id:'open-autocomplete-test',aircraft:'HP1907',start:'06:30',end:'09:30',flightType:'privado'}];
+ const page=await app(t);await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ await page.locator('[data-claim-slot="open-autocomplete-test"]').click();
+ const form=page.locator('dialog form'),input=form.locator('[name="studentName"]'),list=form.locator('[data-person-suggestions]');
+ await input.fill('a');await list.waitFor({state:'visible'});await list.locator('[data-person-suggestion="client:ana-perez"]').click();
+ assert.equal(await input.inputValue(),'Ana Pérez');assert.equal(await form.locator('[name="studentId"]').inputValue(),'client:ana-perez');assert.equal(await form.locator('[data-person-new]').isVisible(),false);
 });
 test('Director sees detailed flights, requires a student or client, and allows blank observations',async t=>{
  const page=await app(t),result=response();Object.assign(result.state.confirmed[0],{route:'Chitré <referencia>',note:'Sin observaciones',studentId:'st1'});

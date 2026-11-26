@@ -430,7 +430,7 @@ function buildPanel(ac, data, idx) {
       <div class="card">
         <div class="card-title">✈ Inspección de 50 / 100 horas</div>
 
-        ${isDualTAC(ac.reg)?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px">${DUAL_TAC_METERS.map(m=>`<div><div class="field-label" style="margin-bottom:5px">${m.label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-${m.key}-anterior-${idx}" aria-label="${m.label} anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.previous]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx},'${m.key==='hobbs'?'hobbs-previous':'engine'}')"></label><label class="field-label">${m.key==='hobbs'?'TAC actual · automático · editable':'TAC actual'}<input type="number" class="field-input" id="tac-${m.key}-actual-${idx}" aria-label="${m.label} actual${m.key==='hobbs'?' calculado automáticamente y editable':''}" ${m.key==='hobbs'?'title="El Hobbs automático puede editarse manualmente."':''} min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.current]??''}" style="width:100%;margin-top:4px" oninput="updateTAC(${idx},'${m.key==='hobbs'?'hobbs':'engine'}')"></label></div></div>`).join('')}</div>`:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        ${isDualTAC(ac.reg)?`<div class="dual-tac-meter-grid">${DUAL_TAC_METERS.map(m=>`<div class="dual-tac-meter"><div class="field-label dual-tac-meter-title">${m.label}</div><div class="dual-tac-readings"><label class="field-label dual-tac-reading"><span>TAC anterior</span><input type="number" class="field-input" id="tac-${m.key}-anterior-${idx}" aria-label="${m.label} anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.previous]??''}" oninput="updateTAC(${idx},'${m.key==='hobbs'?'hobbs-previous':'engine'}')"></label><label class="field-label dual-tac-reading"><span>${m.key==='hobbs'?'TAC actual · automático · editable':'TAC actual'}</span><input type="number" class="field-input" id="tac-${m.key}-actual-${idx}" aria-label="${m.label} actual${m.key==='hobbs'?' calculado automáticamente y editable':''}" ${m.key==='hobbs'?'title="El Hobbs automático puede editarse manualmente."':''} min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data[m.current]??''}" oninput="updateTAC(${idx},'${m.key==='hobbs'?'hobbs':'engine'}')"></label></div></div>`).join('')}</div>`:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <label class="field-label">TAC anterior<input type="number" class="field-input" id="tac-anterior-${idx}" aria-label="TAC anterior" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" value="${data.tac_anterior||''}" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
           <label class="field-label">TAC actual<input type="number" class="field-input" id="tac-actual-${idx}" aria-label="TAC actual" min="0" max="99999.99" step="0.01" inputmode="decimal" placeholder="00000.00" style="width:100%;margin-top:6px" oninput="updateTAC(${idx})"></label>
         </div>`}
@@ -978,17 +978,49 @@ async function recibirPieza(idx, mi, pi) {
   renderBitacoraPedidos(idx);
 }
 
+function setLogbookViewport(container,entries=Array.from(container?.children||[]),leadingHeight=0) {
+  if(!container)return;
+  container.classList.add('logbook-scroll');
+  if(!container.getClientRects().length){container.style.maxHeight='';container.style.overflowY='';container.dataset.logbookPending='true';return;}
+  delete container.dataset.logbookPending;
+  if(entries.length<=4){container.style.maxHeight='';container.style.overflowY='';return;}
+  const heightOf=entry=>Array.isArray(entry)?entry.reduce((sum,row)=>sum+row.getBoundingClientRect().height,0):entry.getBoundingClientRect().height;
+  const height=leadingHeight+entries.slice(0,4).reduce((sum,entry)=>sum+heightOf(entry),0);
+  container.style.maxHeight=Math.ceil(height+4)+'px';container.style.overflowY='auto';
+}
+function setTableLogbookViewport(container) {
+  if(!container)return;const table=container.querySelector('.aircraft-log-table'),body=table?.tBodies?.[0];if(!table||!body){container.classList.add('logbook-scroll');container.style.maxHeight='';container.style.overflowY='';return;}
+  const rows=[...body.rows],entries=[];
+  for(let i=0;i<rows.length;i++){if(rows[i].classList.contains('log-audit-row'))continue;const group=[rows[i]];if(rows[i+1]?.classList.contains('log-audit-row'))group.push(rows[++i]);entries.push(group);}
+  setLogbookViewport(container,entries,table.tHead?.getBoundingClientRect().height||0);
+}
+function refreshAircraftLogbookViewports(idx) {
+  const panel=document.getElementById('panel-'+idx);if(!panel)return;
+  panel.querySelectorAll('.logbook-scroll').forEach(container=>{
+    if(container.classList.contains('venc-log-component')){const children=[...container.children];setLogbookViewport(container,children.slice(2),(children[0]?.getBoundingClientRect().height||0)+(children[1]?.getBoundingClientRect().height||0));}
+    else if(container.querySelector('.aircraft-log-table'))setTableLogbookViewport(container);
+    else if(!container.classList.contains('inspection-reset-entries')||container.closest('details')?.open)setLogbookViewport(container);
+  });
+  panel.querySelectorAll('.venc-log-component:not(.logbook-scroll)').forEach(container=>{const children=[...container.children];setLogbookViewport(container,children.slice(2),(children[0]?.getBoundingClientRect().height||0)+(children[1]?.getBoundingClientRect().height||0));});
+}
+function newestLogEntries(rows,dateKeys=['fecha']) {
+  return (rows||[]).map((r,index)=>({r,index})).sort((a,b)=>{
+    const dateOf=row=>dateKeys.map(key=>dayNumber(row[key])).find(Number.isFinite)??-Infinity;
+    return dateOf(b.r)-dateOf(a.r)||b.index-a.index;
+  });
+}
 function renderBitacoraPedidos(idx) {
   const container = document.getElementById('bitacora-pedidos-' + idx);
   if (!container) return;
   const items = state[idx].bitacora_pedidos || [];
   if (!items.length) {
     container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
+    setLogbookViewport(container);
     return;
   }
   const director = isDirectorView();
-  container.innerHTML = [...items].reverse().map((r, ri) => {
-    const origIdx = items.length - 1 - ri;
+  const ordered=newestLogEntries(items,['fecha_recibida','fecha_pedido']).map(({r,index:origIdx})=>({r,origIdx}));
+  container.innerHTML = ordered.map(({r,origIdx}) => {
     const isLast = origIdx === items.length - 1;
     return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 80px 80px 60px ${isLast?'30px':'30px'};gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;color:var(--text)">${r.pieza}</span>
@@ -1000,6 +1032,7 @@ function renderBitacoraPedidos(idx) {
       ${isLast ? `<button onclick="eliminarBitacoraPedido(${idx},${origIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0">✕</button>` : '<span></span>'}
     </div>`;
   }).join('');
+  setLogbookViewport(container);
 }
 
 function eliminarBitacoraPedido(idx, ri) {
@@ -1111,12 +1144,15 @@ function renderBitacora(idx, items) {
   const resueltos = (items || []).filter(m => m.resuelto && m.nombre);
   if (!resueltos.length) {
     container.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>`;
+    setLogbookViewport(container);
     return;
   }
   // Need original indices for delete
-  const allItems = items || [];
-  container.innerHTML = allItems.map((m, origIdx) => {
-    if (!m.resuelto || !m.nombre) return '';
+  const allItems = items || [],ordered=allItems.map((m,origIdx)=>({m,origIdx})).filter(({m})=>m.resuelto&&m.nombre).sort((a,b)=>{
+    const dateOf=m=>[m.fecha_resuelto,m.fecha].map(dayNumber).find(Number.isFinite)??-Infinity;
+    return dateOf(b.m)-dateOf(a.m)||b.origIdx-a.origIdx;
+  });
+  container.innerHTML = ordered.map(({m,origIdx}) => {
     const piezas = Array.isArray(m.piezas) ? m.piezas.filter(p => p.nombre) : [];
     const diasTotal = m.fecha && m.fecha_resuelto ? (() => {
       const n=diasEntreFechas(m.fecha,m.fecha_resuelto);
@@ -1147,6 +1183,7 @@ function renderBitacora(idx, items) {
     </div>`;
   }).join('');
   if (!container.innerHTML.trim()) container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
+  setLogbookViewport(container);
 }
 
 async function updateMaintenanceLogDate(idx, mi, key, value) {
@@ -1276,13 +1313,14 @@ function renderBitacoraHoras(idx, items) {
   if (!registros.length) {
     container.classList.remove('flight-log-list-dual');
     container.innerHTML = '<div style="font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--muted);text-align:center;padding:8px 0">Sin registros</div>';
+    setLogbookViewport(container);
     return;
   }
   if (isDualTAC(fleet[idx].reg)) {
     const meterValue=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';
     container.classList.add('flight-log-list-dual');
-    container.innerHTML=[...registros].reverse().map((r,ri)=>{
-      const origIdx=registros.length-1-ri,isLast=origIdx===registros.length-1;
+    container.innerHTML=newestLogEntries(registros).map(({r,index:origIdx})=>{
+      const isLast=origIdx===registros.length-1;
       const meters=hasDualTACLog(r)?DUAL_TAC_METERS.map(m=>{
         const stem=m.key==='left'?'tacLeft':m.key==='right'?'tacRight':'hobbs';
         if(m.key==='hobbs'){const measured=r.hobbsMeasuredHours100??r.hobbsHours100,accounted=r.hobbsMeasuredHours100!==undefined?r.hobbsHours100:Math.round(Number(r.hv||0)*100),source=r.hobbsAccountingSource==='left'?'motor izquierdo':r.hobbsAccountingSource==='right'?'motor derecho':Number(r.tacLeftHours100)>=Number(r.tacRightHours100)?'motor izquierdo':'motor derecho';return '<div class="flight-log-meter"><strong class="flight-log-meter-name">Hobbs</strong><div><small class="flight-log-reading-label">Anterior</small><b class="flight-log-reading-value">'+meterValue(r.hobbsPrevious100)+'</b></div><div><small class="flight-log-reading-label">Actual</small><b class="flight-log-reading-value">'+meterValue(r.hobbsCurrent100)+'</b></div><div><small class="flight-log-reading-label">Hobbs medido</small><b class="flight-log-reading-value">'+meterValue(measured)+' h</b></div><div><small class="flight-log-reading-label">Contable · TAC '+source+'</small><b class="flight-log-reading-value">'+meterValue(accounted)+' h</b></div></div>';}
@@ -1290,6 +1328,7 @@ function renderBitacoraHoras(idx, items) {
       }).join(''):'<div class="flight-log-legacy">Registro histórico con TAC único</div>';
       return '<article class="flight-log-entry-dual'+(isLast?' flight-log-entry-latest':'')+'"><div class="flight-log-summary">'+[['Fecha',r.fecha||'—'],['Hora',r.hora||'—'],['HV día',parseFloat(r.hv||0).toFixed(2)+' h'],['Acumulado',parseFloat(r.acum||0).toFixed(2)+' h']].map(([label,value])=>'<div><small class="flight-log-summary-label">'+label+'</small><b class="flight-log-summary-value">'+escapeRecord(value)+'</b></div>').join('')+'</div><div class="flight-log-meters">'+meters+'</div>'+(isLast?'<div class="flight-log-delete"><button type="button" onclick="eliminarHoraBitacora('+idx+','+origIdx+')" aria-label="Eliminar último registro del '+escapeRecord(r.fecha||'')+'" title="Eliminar último registro">Eliminar último registro</button></div>':'')+'</article>';
     }).join('');
+    setLogbookViewport(container);
     return;
   }
   container.classList.remove('flight-log-list-dual');
@@ -1301,8 +1340,7 @@ function renderBitacoraHoras(idx, items) {
     const p=r[stem+'Previous100'],c=r[stem+'Current100'],h=r[stem+'Hours100'];
     return '<span style="display:inline-block;margin-right:8px">'+m.label+': '+meterValue(p)+' → '+meterValue(c)+' ('+meterValue(h)+' h)</span>';
   }).join(''):'Registro histórico con TAC único':'—';
-  container.innerHTML = [...registros].reverse().map((r, ri) => {
-    const origIdx = registros.length - 1 - ri;
+  container.innerHTML = newestLogEntries(registros).map(({r,index:origIdx}) => {
     const isLast = origIdx === lastIdx;
     return `<div style="display:grid;grid-template-columns:1fr 1fr 65px 65px 1.6fr;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)${isLast?';background:rgba(0,102,204,0.04)':''}">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text)">${r.fecha||'—'}</span>
@@ -1312,6 +1350,7 @@ function renderBitacoraHoras(idx, items) {
       <span style="font-size:8px;line-height:1.6;color:var(--muted)">${meterDetails(r)}${isLast ? `<button onclick="eliminarHoraBitacora(${idx},${origIdx})" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0" title="Eliminar último registro">✕</button>` : ''}</span>
     </div>`;
   }).join('');
+  setLogbookViewport(container);
 }
 
 // Allow correcting the date of any bitacora_horas entry (e.g. when hours were
@@ -1579,7 +1618,8 @@ function inspectionTACRows(records){
 function renderInspectionResetHistory(idx){
  const el=document.getElementById('inspection-reset-log-'+idx);if(!el)return;
  const records=Array.isArray(state[idx].bitacora_reinicios_inspeccion)?state[idx].bitacora_reinicios_inspeccion:[];
- el.innerHTML=records.length?'<details><summary>Reinicios registrados ('+records.length+')</summary>'+records.slice().reverse().map(r=>'<div class="record-audit"><b>'+escapeRecord(r.fecha||fechaVista(r.createdAt))+' · '+escapeRecord(r.hora||'')+' · '+escapeRecord(r.limitHours)+' horas</b><div>'+escapeRecord(r.before)+' → '+escapeRecord(r.after)+' HV</div><div>Motivo: '+escapeRecord(r.reason)+'</div></div>').join('')+'</details>':'';
+ el.innerHTML=records.length?'<details><summary>Reinicios registrados ('+records.length+')</summary><div class="inspection-reset-entries">'+newestLogEntries(records,['fecha','createdAt']).map(({r})=>'<div class="record-audit"><b>'+escapeRecord(r.fecha||fechaVista(r.createdAt))+' · '+escapeRecord(r.hora||'')+' · '+escapeRecord(r.limitHours)+' horas</b><div>'+escapeRecord(r.before)+' → '+escapeRecord(r.after)+' HV</div><div>Motivo: '+escapeRecord(r.reason)+'</div></div>').join('')+'</div></details>':'';
+ const details=el.querySelector('details');if(details)details.ontoggle=()=>{if(details.open)setLogbookViewport(el.querySelector('.inspection-reset-entries'));};
 }
 function renderTACLogs(idx){
  const d=state[idx],tac=document.getElementById('tac-log-'+idx),insp=document.getElementById('inspection-log-'+idx);renderInspectionResetHistory(idx);
@@ -1590,13 +1630,14 @@ function renderTACLogs(idx){
  const dual=isDualTAC(fleet[idx].reg),audit=(r,span=4)=>(r.modificaciones||[]).length?'<tr class="log-audit-row"><td colspan="'+span+'">'+renderAudit(r.modificaciones)+'</td></tr>':'';
  const table=(headers,rows)=>'<table class="aircraft-log-table"><thead><tr>'+headers.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>';
  if(tac)tac.innerHTML=(d.bitacora_tac||[]).length?dual?table(['Fecha','TAC motor izquierdo · anterior → actual · horas','TAC motor derecho · anterior → actual · horas','Hobbs · lecturas · medido / contable'],
-   d.bitacora_tac.map((r,i)=>{const val=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';const meter=(stem)=>val(r[stem+'Previous100'])+' → '+val(r[stem+'Current100'])+' · '+val(r[stem+'Hours100'])+' h';const measured=r.hobbsMeasuredHours100??r.hobbsHours100,accounted=r.hobbsMeasuredHours100!==undefined?r.hobbsHours100:Number(r.hv||0)*100,source=r.hobbsAccountingSource==='left'?'motor izquierdo':r.hobbsAccountingSource==='right'?'motor derecho':Number(r.tacLeftHours100)>=Number(r.tacRightHours100)?'motor izquierdo':'motor derecho',hobbs=val(r.hobbsPrevious100)+' → '+val(r.hobbsCurrent100)+' · medido '+val(measured)+' h · contable '+val(accounted)+' h (TAC '+source+')';return '<tr>'+dateCell('tac',r,i)+(hasDualTACLog(r)?'<td>'+meter('tacLeft')+'</td><td>'+meter('tacRight')+'</td><td>'+hobbs+'</td>':'<td colspan="3">Registro histórico con TAC único: '+escapeRecord(number(r.anterior))+' → '+escapeRecord(number(r.actual))+' · '+escapeRecord(number(r.hv))+' h</td>')+'</tr>'+audit(r,4);}).reverse().join('')
+   newestLogEntries(d.bitacora_tac).map(({r,index:i})=>{const val=v=>v!==''&&v!=null&&Number.isFinite(Number(v))?(Number(v)/100).toFixed(2):'—';const meter=(stem)=>val(r[stem+'Previous100'])+' → '+val(r[stem+'Current100'])+' · '+val(r[stem+'Hours100'])+' h';const measured=r.hobbsMeasuredHours100??r.hobbsHours100,accounted=r.hobbsMeasuredHours100!==undefined?r.hobbsHours100:Number(r.hv||0)*100,source=r.hobbsAccountingSource==='left'?'motor izquierdo':r.hobbsAccountingSource==='right'?'motor derecho':Number(r.tacLeftHours100)>=Number(r.tacRightHours100)?'motor izquierdo':'motor derecho',hobbs=val(r.hobbsPrevious100)+' → '+val(r.hobbsCurrent100)+' · medido '+val(measured)+' h · contable '+val(accounted)+' h (TAC '+source+')';return '<tr class="log-record-row">'+dateCell('tac',r,i)+(hasDualTACLog(r)?'<td>'+meter('tacLeft')+'</td><td>'+meter('tacRight')+'</td><td>'+hobbs+'</td>':'<td colspan="3">Registro histórico con TAC único: '+escapeRecord(number(r.anterior))+' → '+escapeRecord(number(r.actual))+' · '+escapeRecord(number(r.hv))+' h</td>')+'</tr>'+audit(r,4);}).join('')
  ):table(['Fecha','TAC Anterior','TAC Actual','Horas'],
-   d.bitacora_tac.map((r,i)=>'<tr>'+dateCell('tac',r,i)+'<td>'+escapeRecord(number(r.anterior))+'</td><td>'+escapeRecord(number(r.actual))+'</td><td>'+escapeRecord(number(r.hv))+'</td></tr>'+audit(r)).reverse().join('')
+   newestLogEntries(d.bitacora_tac).map(({r,index:i})=>'<tr class="log-record-row">'+dateCell('tac',r,i)+'<td>'+escapeRecord(number(r.anterior))+'</td><td>'+escapeRecord(number(r.actual))+'</td><td>'+escapeRecord(number(r.hv))+'</td></tr>'+audit(r)).join('')
  ):'<div class="record-empty">Sin tacómetros registrados</div>';
  if(insp)insp.innerHTML=(d.bitacora_inspecciones||[]).length?table(['Fecha','TAC Insp. Anterior','TAC Actual','Horas'],
-   inspectionTACRows(d.bitacora_inspecciones).map(({r,index,previous,hours})=>'<tr>'+dateCell('inspection',r,index)+'<td title="'+(previous===null?'No hay un TAC de inspección anterior registrado':'TAC de la inspección anterior')+'">'+(previous===null?'Pendiente':escapeRecord(previous))+'</td><td>'+escapeRecord(number(r.tac))+'</td><td title="'+(hours!==null&&Number(hours)<0?'Revisar: el TAC actual es menor al anterior':'Diferencia entre los dos TAC')+'">'+(hours===null?'—':escapeRecord(hours))+'</td></tr>'+audit(r)).join('')
+   inspectionTACRows(d.bitacora_inspecciones).map(({r,index,previous,hours})=>'<tr class="log-record-row">'+dateCell('inspection',r,index)+'<td title="'+(previous===null?'No hay un TAC de inspección anterior registrado':'TAC de la inspección anterior')+'">'+(previous===null?'Pendiente':escapeRecord(previous))+'</td><td>'+escapeRecord(number(r.tac))+'</td><td title="'+(hours!==null&&Number(hours)<0?'Revisar: el TAC actual es menor al anterior':'Diferencia entre los dos TAC')+'">'+(hours===null?'—':escapeRecord(hours))+'</td></tr>'+audit(r)).join('')
  ):'<div class="record-empty">Sin inspecciones registradas</div>';
+ setTableLogbookViewport(tac);setTableLogbookViewport(insp);
 }
 async function openRecordEditor(kind,idx,ri=-1,tipo=50){
  if(kind==='tac'&&state[idx].bitacora_tac?.[ri]?.registryId){window.Registro.edit(state[idx].bitacora_tac[ri].registryId);return;}
@@ -1957,6 +1998,7 @@ fleet.forEach((ac, idx) => {
     document.querySelectorAll('.aircraft-panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + idx).classList.add('active');
+    refreshAircraftLogbookViewports(idx);
   });
   sidebarEl.appendChild(tab);
 
@@ -3438,12 +3480,13 @@ function renderVencimientoLog(idx) {
   const number=v=>v===null||v===undefined?'—':Number(v).toFixed(2);
   el.innerHTML='<div class="venc-log-groups">'+['Motor','Hélice'].map(group=>
     '<section class="venc-log-group">'+current.filter(c=>c.group===group).map(c=>{
-      const entries=[...records].reverse().map(r=>({r,c:(r.componentes||[]).find(x=>x.key===c.key)})).filter(x=>x.c);
+      const entries=newestLogEntries(records).map(({r})=>({r,c:(r.componentes||[]).find(x=>x.key===c.key)})).filter(x=>x.c);
       return '<div class="venc-log-component"><div class="venc-log-label">'+c.label+'</div>'+
         '<div class="venc-log-row venc-log-head"><span>FECHA</span><span>HORA</span><span>HORAS INGRESADAS</span><span>HORAS TOTALES</span><span>HORAS REMANENTES</span></div>'+
         (entries.length?entries.map(({r,c},i)=>'<div class="venc-log-row'+(i===0?' venc-log-latest':'')+'"><span>'+escapeRecord(fechaVista(r.fecha))+'</span><span class="venc-log-time">'+escapeRecord(r.hora||'—')+'</span><span class="venc-log-hours">'+number(c.ingresadas)+'</span><span>'+number(c.total)+'</span><span>'+number(c.remanentes)+'</span></div>').join(''):'<div class="venc-log-empty">Sin registros</div>')+'</div>';
     }).join('')+'</section>'
   ).join('')+'</div>';
+  el.querySelectorAll('.venc-log-component').forEach(component=>{const children=[...component.children],headerHeight=(children[0]?.getBoundingClientRect().height||0)+(children[1]?.getBoundingClientRect().height||0);setLogbookViewport(component,children.slice(2),headerHeight);});
 }
 
 function dailyScheduleDate(now=new Date()) {

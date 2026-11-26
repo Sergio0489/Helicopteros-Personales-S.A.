@@ -450,12 +450,34 @@ function reallocatePublished(state,aircraftId,previousStatus,now){
 function restorePublished(state,aircraftId,previousStatus,now){
  const flights=structuredClone(state.confirmed),changes=[],a=state.aircraft.find(a=>a.id===aircraftId),clock=panamaClock(now);
  if(!state.published||!['mantenimiento','grounded'].includes(previousStatus)||a?.status!=='operativo'||state.date<clock.date)return {flights,changes};
- const affected=flights.filter(q=>{const origin=q.relocationOrigin?.aircraft||q.relocation?.from,moved=origin===aircraftId&&q.aircraft!==aircraftId&&(!q.relocation?.to||q.relocation.to===q.aircraft);return (moved||q.aircraft===aircraftId&&q.relocationPending)&&(state.date>clock.date||minutes(q.end)>minutes(clock.time));}).sort((x,y)=>minutes(x.start)-minutes(y.start)||x.id.localeCompare(y.id));
+ const affected=flights.filter(q=>{
+  const origin=q.relocationOrigin?.aircraft||q.relocation?.from;
+  const movedFromThisAircraft=origin===aircraftId&&q.aircraft!==aircraftId&&(!q.relocation?.to||q.relocation.to===q.aircraft);
+  return (movedFromThisAircraft||q.aircraft===aircraftId&&q.relocationPending)&&(state.date>clock.date||minutes(q.end)>minutes(clock.time));
+ }).sort((x,y)=>minutes(x.start)-minutes(y.start)||x.id.localeCompare(y.id));
  for(const q of affected){
-  if(q.aircraft===aircraftId){const before=structuredClone(q),conflict=flights.some(x=>x.id!==q.id&&(x.aircraft===a.id||x.pilot===q.pilot||sameStudent(x,q))&&overlaps(x,q))||pendingConflict(state,q,a.id),allowed=allowedForType(state,typeOf(q)).includes(a.id),available=allowed&&compatible(state,q,a)&&flightAvailable(a,q,state.date)&&covers(a,q,state.date)&&!scheduleWindowError(a,q)&&!operatingHoursError(q)&&!conflict;if(available){q.conditional=false;delete q.relocationPending;delete q.operationalHold;delete q.validationHold;delete q.publicationStatus;q.reason='Horario conservado en '+a.id+' al restablecerse sus operaciones.';changes.push({kind:'restored',before,after:structuredClone(q),reason:q.reason});}else{q.conditional=true;q.relocationPending=true;q.reason='La aeronave está operativa, pero la asignación requiere revisión del Director por disponibilidad o conflicto.';changes.push({kind:'review',before,after:structuredClone(q),reason:q.reason});}continue;}
-  const before=structuredClone(q),origin=q.relocationOrigin||{},candidate={...q,aircraft:a.id,slot:origin.slot||q.slot,coveredSlots:origin.coveredSlots||q.coveredSlots},inProgress=state.date===clock.date&&minutes(q.start)<=minutes(clock.time),conflict=flights.some(x=>x.id!==q.id&&(x.aircraft===a.id||x.pilot===q.pilot||sameStudent(x,q))&&overlaps(x,candidate))||pendingConflict(state,q,a.id),allowed=allowedForType(state,typeOf(q)).includes(a.id);
-  if(!inProgress&&a.category==='Monomotor'&&allowed&&compatible(state,q,a)&&flightAvailable(a,candidate,state.date)&&covers(a,candidate,state.date)&&!scheduleWindowError(a,candidate)&&!operatingHoursError(candidate)&&!conflict){q.aircraft=a.id;q.slot=candidate.slot;q.coveredSlots=candidate.coveredSlots;q.conditional=false;q.relocationHistory=[...(q.relocationHistory||[]),{from:before.aircraft,to:a.id,at:now,reason:'Horario restaurado al volver a estar operativa',restored:true}];delete q.relocation;delete q.relocationOrigin;delete q.relocationPending;q.reason='Horario restaurado en '+a.id+' al volver a estar operativa.';changes.push({kind:'restored',before,after:structuredClone(q),reason:q.reason});}
-  else{q.conditional=true;q.relocationPending=true;q.reason=inProgress?'El vuelo ya había comenzado; requiere revisión del Director.':'No hay un espacio libre compatible en '+a.id+' para restaurar el horario anterior; requiere revisión del Director.';changes.push({kind:'review',before,after:structuredClone(q),reason:q.reason});}
+  if(q.aircraft===aircraftId){
+   const before=structuredClone(q),conflict=flights.some(x=>x.id!==q.id&&(x.aircraft===a.id||x.pilot===q.pilot||sameStudent(x,q))&&overlaps(x,q))||pendingConflict(state,q,a.id),allowed=allowedForType(state,typeOf(q)).includes(a.id),available=allowed&&compatible(state,q,a)&&flightAvailable(a,q,state.date)&&covers(a,q,state.date)&&!scheduleWindowError(a,q)&&!operatingHoursError(q)&&!conflict;
+   if(available){q.conditional=false;delete q.relocationPending;delete q.operationalHold;delete q.validationHold;delete q.publicationStatus;q.reason='Horario conservado en '+a.id+' al restablecerse sus operaciones.';changes.push({kind:'restored',before,after:structuredClone(q),reason:q.reason});}
+   else{q.conditional=true;q.relocationPending=true;q.reason='La aeronave está operativa, pero la asignación requiere revisión del Director por disponibilidad o conflicto.';changes.push({kind:'review',before,after:structuredClone(q),reason:q.reason});}
+   continue;
+  }
+  const before=structuredClone(q),origin=q.relocationOrigin||{},start=q.start,end=q.end;
+  const candidate={...q,aircraft:a.id,start,end,slot:origin.slot||q.slot,coveredSlots:origin.coveredSlots||q.coveredSlots};
+  const inProgress=state.date===clock.date&&minutes(q.start)<=minutes(clock.time);
+  const conflict=flights.some(x=>x.id!==q.id&&(x.aircraft===a.id||x.pilot===q.pilot||sameStudent(x,q))&&overlaps(x,candidate))||pendingConflict(state,q,a.id);
+  const allowed=allowedForType(state,typeOf(q)).includes(a.id);
+  if(!inProgress&&a.category==='Monomotor'&&allowed&&compatible(state,q,a)&&flightAvailable(a,candidate,state.date)&&covers(a,candidate,state.date)&&!scheduleWindowError(a,candidate)&&!operatingHoursError(candidate)&&!conflict){
+   q.aircraft=a.id;q.start=start;q.end=end;q.slot=candidate.slot;q.coveredSlots=candidate.coveredSlots;q.conditional=false;
+   q.relocationHistory=[...(q.relocationHistory||[]),{from:before.aircraft,to:a.id,at:now,reason:'Horario restaurado al volver a estar operativa',restored:true}];
+   delete q.relocation;delete q.relocationOrigin;delete q.relocationPending;
+   q.reason='Horario restaurado en '+a.id+' al volver a estar operativa.';
+   changes.push({kind:'restored',before,after:structuredClone(q),reason:q.reason});
+  }else{
+   q.conditional=true;q.relocationPending=true;
+   const reason=inProgress?'El vuelo ya había comenzado; requiere revisión del Director.':'No hay un espacio libre compatible en '+a.id+' para restaurar el horario anterior; requiere revisión del Director.';
+   q.reason=reason;changes.push({kind:'review',before,after:structuredClone(q),reason});
+  }
  }
  return {flights,changes};
 }
