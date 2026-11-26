@@ -25,7 +25,7 @@ function fixture(){
     flightRequest('request-deleted-cami','legacy-pilot-2','HP1907','15:00','16:30',3)
    ],held:[{id:'held-cami',pilot:'legacy-pilot-2',aircraft:'HP1907',start:'16:30',end:'18:00',flightType:'privado',fixed:true}],cancelled:[],cancelledFlights:[{id:'cancel-ana',pilot:'legacy-pilot-0'}],openSlots:[],results:[{id:'request-beto',pilot:'legacy-pilot-1',status:'waiting'}]},
    [editDate]:{revision:3,nightEnabled:false,published:false,requests:[flightRequest('request-beto-edit','legacy-pilot-1','HP1907','12:30','14:00',4)],held:[],cancelled:[],cancelledFlights:[],openSlots:[],results:[]}
-  },notices:[{id:'notice-ana',recipients:[{kind:'pilot',id:'legacy-pilot-0'}],before:{pilot:'legacy-pilot-0'},after:{pilot:'legacy-pilot-1'}}]}
+  },notices:[{id:'notice-ana',createdAt:new Date().toISOString(),recipients:[{kind:'pilot',id:'legacy-pilot-0'}],before:{pilot:'legacy-pilot-0'},after:{pilot:'legacy-pilot-1'}}]}
  };
 }
 function endpointHarness(data){

@@ -167,7 +167,8 @@ function storeFlights(data,state){
  data.itinerarios=[...old.filter(f=>iso(f.fecha)!==state.date),...state.confirmed.filter(q=>!held.has(q.id)).map(q=>{const original=old.find(f=>legacyId(f)===q.id);return q.legacy&&original&&eq(fromFlight(original,state.pilots),q)?original:toFlight(q,state,original);})];
  return night;
 }
-function notice(data,event,now,id){if(!event)return;const s=setup(data);s.notices ||= [];if(s.notices.some(n=>n.id===id))return;s.notices.push({...copy(event),id,createdAt:now});s.notices=s.notices.slice(-500);}
+function pruneNotices(data,now){const notices=data.itinerary?.notices,nowMs=Date.parse(now);if(!Array.isArray(notices)||!Number.isFinite(nowMs))return false;const cutoff=nowMs-2*DAY_MS,kept=notices.filter(n=>{const created=Date.parse(n?.createdAt);return Number.isFinite(created)&&created>cutoff&&created<=nowMs;});if(kept.length===notices.length)return false;data.itinerary.notices=kept;return true;}
+function notice(data,event,now,id){if(!event)return;const s=setup(data);s.notices ||= [];pruneNotices(data,now);if(s.notices.some(n=>n.id===id))return;s.notices.push({...copy(event),id,createdAt:now});s.notices=s.notices.slice(-500);}
 function changeNotice(data,before,after,published,now,id,all=false){const n=E.publishedChange(before,after,published);if(n){if(all)n.recipients=[{kind:'group',id:'all'}];notice(data,n,now,id);}}
 function cleanFlight(input,id,now){
  if(!input||typeof input!=='object'||Array.isArray(input))error('Vuelo no válido.');
@@ -468,7 +469,7 @@ function protect(before,after,migration={}){
  }else{delete after.itinerary;after.itinerarios=remapFlights(after.itinerarios,migration).flights;}
 }
 function reconcile(before,data,now,emailEvents=[]){
- let changed=false;const today=E.panamaClock(now).date;data.operationalNotices ||= [];
+ let changed=pruneNotices(data,now);const today=E.panamaClock(now).date;data.operationalNotices ||= [];
  for(const [registration,aircraft]of Object.entries(data.fleet||{})){
   const previous=before.fleet?.[registration]?.status||'',previousStatus=previous==='aog'?'grounded':previous,status=aircraft?.status==='aog'?'grounded':aircraft?.status;
   if(previousStatus===status)continue;
@@ -514,7 +515,8 @@ function reconcile(before,data,now,emailEvents=[]){
 function operational(data,now){const clock=E.panamaClock(now);return E.operationalAlerts([stateFor(data,clock.date,now),stateFor(data,clock.tomorrow,now)],now);}
 function visibleNotices(data,actor,now){
  const rights=scope(data,actor),record=actor.account?.syncStatus==='matched'?actor.account.recordKind+':'+actor.account.recordId:null;
- return arr(data.itinerary?.notices).filter(n=>actor.director||n.recipients.some(r=>r.kind==='group'&&(r.id==='all'||r.id==='mechanics'&&actor.account?.role==='Mecánico')||r.kind==='pilot'&&r.id===rights.pilot||r.kind==='student'&&r.id===record)).slice(-100).reverse().map(n=>({id:n.id,kind:n.kind,action:n.action,date:n.date||n.after?.date||n.before?.date,createdAt:n.createdAt,flightCount:n.flightCount,...(actor.director||rights.view&&actor.account?.role!=='Estudiante'||n.recipients.some(r=>r.kind==='pilot'&&r.id===rights.pilot||r.kind==='student'&&r.id===record)||actor.account?.role==='Mecánico'?{before:n.before,after:n.after,reason:n.reason}:{})}));
+ const nowMs=Date.parse(now),cutoff=nowMs-2*DAY_MS;
+ return arr(data.itinerary?.notices).filter(n=>{const created=Date.parse(n?.createdAt);return Number.isFinite(nowMs)&&Number.isFinite(created)&&created>cutoff&&created<=nowMs&&(actor.director||n.recipients.some(r=>r.kind==='group'&&(r.id==='all'||r.id==='mechanics'&&actor.account?.role==='Mecánico')||r.kind==='pilot'&&r.id===rights.pilot||r.kind==='student'&&r.id===record));}).slice(-100).reverse().map(n=>({id:n.id,kind:n.kind,action:n.action,date:n.date||n.after?.date||n.before?.date,createdAt:n.createdAt,flightCount:n.flightCount,...(actor.director||rights.view&&actor.account?.role!=='Estudiante'||n.recipients.some(r=>r.kind==='pilot'&&r.id===rights.pilot||r.kind==='student'&&r.id===record)||actor.account?.role==='Mecánico'?{before:n.before,after:n.after,reason:n.reason}:{})}));
 }
 function view(data,actor,d,now){
  const rights=scope(data,actor);if(!rights.view)error('No tienes permiso para consultar el itinerario.');const state=stateFor(data,d,now);

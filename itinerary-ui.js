@@ -8,7 +8,7 @@
  const range=q=>clock(q.start)+' – '+clock(q.end);
  const timeText=value=>String(value??'').replace(/\b([ap])\.\s*m\./gi,(_,p)=>p.toUpperCase()+'M').replace(/\b(\d{1,2}):([0-5]\d)(?:\s*(AM|PM)\b)?/gi,(all,h,m,p)=>p?Number(h)+':'+m+' '+p.toUpperCase():Number(h)<24?clock(h+':'+m):all);
  let api,onChange,root,model,date=E.panamaClock(new Date()).tomorrow,category='Todas',busy=false,loaded=false,noticeData={notices:[],alerts:[]},bell,lastRead=0,dialog,attempt=null,pendingFlightFocus=null,practiceMode=false,noticeSequence=0;
- let calendarYear=date.slice(0,4),calendarData=null,calendarBusy=false,calendarError='',calendarSequence=0,queuedDate=null;
+ let calendarMonth=E.panamaClock(new Date()).date.slice(0,7),calendarYear=calendarMonth.slice(0,4),calendarData=null,calendarBusy=false,calendarError='',calendarSequence=0,queuedDate=null;
  const field=(name,label,value,type='text')=>type==='time'?timeField(name,label,value):'<label>'+esc(label)+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(name==='newDate'?'required':'')+'></label>';
  function timeField(name,label,value){
   const valid=/^([01]\d|2[0-3]):[0-5]\d$/.test(value||''),h=valid?Number(value.slice(0,2)):null,minute=valid?value.slice(3):'';
@@ -154,7 +154,7 @@
   if(attempt?.signature!==signature)attempt={signature,id:commandId()};
   const result=await api(practiceMode?'itinerary-practice-command':'itinerary-command',{...body,actionId:attempt.id});attempt=null;model=result;date=result.state.date;noticeSequence++;noticeData=result;acceptCalendar(result);render();message(result.actionWarning||'✓ Guardado en Firebase');await onChange?.(result);return result;
  }
- function acceptCalendar(result){calendarSequence++;calendarYear=date.slice(0,4);calendarData=result.calendar||null;calendarBusy=false;calendarError=calendarData?'':'No se pudo cargar el calendario. Reintenta.';}
+ function acceptCalendar(result){calendarSequence++;calendarYear=calendarMonth.slice(0,4);calendarData=result.calendar?.year===calendarYear?result.calendar:null;calendarBusy=false;calendarError='';if(model?.rights.role==='director'&&!calendarData)loadCalendar(calendarYear);}
  async function loadCalendar(year){
   if(model?.rights.role!=='director')return;
   if(!/^[1-9]\d{3}$/.test(year))return;
@@ -163,15 +163,13 @@
   catch(e){if(sequence===calendarSequence)calendarError=e.message;}
   finally{if(sequence===calendarSequence){calendarBusy=false;renderCalendarView();}}
  }
+ function moveCalendarMonth(delta){const [year,month]=calendarMonth.split('-').map(Number),next=new Date(Date.UTC(year,month-1+delta,1)),newYear=String(next.getUTCFullYear());calendarMonth=newYear+'-'+String(next.getUTCMonth()+1).padStart(2,'0');if(newYear!==calendarYear||calendarData?.year!==newYear)loadCalendar(newYear);else renderCalendarView();}
  function renderCalendarView(){
   const el=root?.querySelector('[data-year-calendar]');if(!el)return;
-  const counts=new Map((calendarData?.year===calendarYear?calendarData.days:[]).map(d=>[d.date,d.count])),today=E.panamaClock(new Date()).date,year=Number(calendarYear);
+  const counts=new Map((calendarData?.year===calendarYear?calendarData.days:[]).map(d=>[d.date,d.count])),today=E.panamaClock(new Date()).date,[year,monthNumber]=calendarMonth.split('-').map(Number),month=String(monthNumber).padStart(2,'0'),first=new Date(calendarMonth+'-01T12:00:00Z'),length=new Date(Date.UTC(year,monthNumber,0)).getUTCDate(),title=new Intl.DateTimeFormat('es-PA',{month:'long',year:'numeric',timeZone:'UTC'}).format(first);
   el.setAttribute('aria-busy',String(calendarBusy));
-  el.innerHTML='<div class="hp-calendar-heading"><h3>Calendario anual</h3><div class="hp-buttons"><button type="button" data-year="'+(year-1)+'" aria-label="Año anterior" '+(year<=1000?'disabled':'')+'>‹</button><strong>'+calendarYear+'</strong><button type="button" data-year="'+(year+1)+'" aria-label="Año siguiente" '+(year>=9999?'disabled':'')+'>›</button></div></div><p class="hp-calendar-legend"><span aria-hidden="true"></span>Verde: días con vuelos agendados. Toca una fecha para ver su programación.</p><p role="status" aria-live="polite">'+esc(calendarBusy?'Cargando vuelos del año…':calendarError)+'</p>'+(calendarError?'<button type="button" data-calendar-retry>Reintentar calendario</button>':'')+'<div class="hp-calendar-months">'+Array.from({length:12},(_,m)=>{
-   const month=String(m+1).padStart(2,'0'),first=new Date(calendarYear+'-'+month+'-01T12:00:00Z'),length=new Date(Date.UTC(year,m+1,0)).getUTCDate(),title=new Intl.DateTimeFormat('es-PA',{month:'long',timeZone:'UTC'}).format(first);
-   return '<section class="hp-calendar-month" aria-label="'+title+' '+calendarYear+'"><h4>'+title+'</h4><div class="hp-calendar-week" aria-hidden="true">'+['D','L','M','M','J','V','S'].map(d=>'<span>'+d+'</span>').join('')+'</div><div class="hp-calendar-days">'+'<span aria-hidden="true"></span>'.repeat(first.getUTCDay())+Array.from({length},(_,i)=>{const d=calendarYear+'-'+month+'-'+String(i+1).padStart(2,'0'),count=counts.get(d)||0;return '<button type="button" data-calendar-date="'+d+'" class="'+(count?'hp-has-flights ':'')+(d===date?'hp-selected-date':'')+'" aria-label="'+pretty(d)+(count?' · '+count+' vuelo'+(count===1?' agendado':'s agendados'):'')+'" aria-pressed="'+(d===date)+'"'+(d===today?' aria-current="date"':'')+'><span>'+(i+1)+'</span>'+(count?'<small>'+count+'</small>':'')+'</button>';}).join('')+'</div></section>';
-  }).join('')+'</div>';
-  el.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>loadCalendar(b.dataset.year));
+  el.innerHTML='<div class="hp-calendar-heading"><h3>Calendario de vuelos</h3><div class="hp-calendar-controls"><button type="button" data-calendar-month="-1" aria-label="Mes anterior">‹</button><strong>'+esc(title)+'</strong><button type="button" data-calendar-month="1" aria-label="Mes siguiente">›</button></div></div><p class="hp-calendar-legend"><span aria-hidden="true"></span>Verde: días con vuelos agendados. Toca una fecha para ver su programación.</p><p role="status" aria-live="polite">'+esc(calendarBusy?'Cargando vuelos del año…':calendarError)+'</p>'+(calendarError?'<button type="button" data-calendar-retry>Reintentar calendario</button>':'')+'<div class="hp-calendar-months"><section class="hp-calendar-month" aria-label="'+esc(title)+'"><div class="hp-calendar-week" aria-hidden="true">'+['D','L','M','M','J','V','S'].map(d=>'<span>'+d+'</span>').join('')+'</div><div class="hp-calendar-days">'+'<span aria-hidden="true"></span>'.repeat(first.getUTCDay())+Array.from({length},(_,i)=>{const d=calendarYear+'-'+month+'-'+String(i+1).padStart(2,'0'),count=counts.get(d)||0;return '<button type="button" data-calendar-date="'+d+'" class="'+(count?'hp-has-flights ':'')+(d===date?'hp-selected-date':'')+'" aria-label="'+pretty(d)+(count?' · '+count+' vuelo'+(count===1?' agendado':'s agendados'):'')+'" aria-pressed="'+(d===date)+'"'+(d===today?' aria-current="date"':'')+'><span>'+(i+1)+'</span>'+(count?'<small>'+count+'</small>':'')+'</button>';}).join('')+'</div></section></div>';
+  el.querySelectorAll('[data-calendar-month]').forEach(b=>b.onclick=()=>moveCalendarMonth(Number(b.dataset.calendarMonth)));
   el.querySelectorAll('[data-calendar-date]').forEach(b=>b.onclick=()=>load(b.dataset.calendarDate));
   el.querySelector('[data-calendar-retry]')?.addEventListener('click',()=>loadCalendar(calendarYear));
  }
@@ -186,7 +184,7 @@
     root.insertAdjacentHTML('beforeend','<section class="hp-section" data-practice-clock><span class="hp-label">Control de práctica</span><h3>Reloj simulado de Panamá</h3><p>Las solicitudes de los pilotos abren a las 12:01 p. m. y cierran a las 8:00 p. m. para el día siguiente. El reloj simulado solo afecta este itinerario.</p><label>Hora de práctica (24 h)<input type="text" inputmode="numeric" maxlength="5" placeholder="12:01" autocomplete="off" data-practice-clock-time value="'+esc(s.simulatedTime||'')+'"></label><div class="hp-buttons"><button data-practice-clock-apply>Aplicar hora</button><button data-practice-clock-real>Usar hora real</button></div><p>'+esc(s.simulatedTime?'Hora simulada':'Hora real')+': '+esc(clock(panama.time))+'. '+esc(gate?timeText(gate):'Solicitudes abiertas para mañana.')+'</p><hr><h3>Aeronaves operativas para la simulación</h3><p>Este ajuste solo afecta el itinerario temporal.</p>'+s.aircraft.map(a=>'<label class="hp-row">'+esc(a.id)+' · '+esc(a.model)+'<select data-practice-status="'+esc(a.id)+'"><option value="operativo" '+(a.status==='operativo'?'selected':'')+'>Operativa</option><option value="mantenimiento" '+(a.status==='mantenimiento'?'selected':'')+'>Mantenimiento</option><option value="grounded" '+(a.status==='grounded'?'selected':'')+'>Grounded</option></select></label>').join('')+'</section>');
    }
   }
-  if(r.role==='director'&&!practiceMode)root.insertAdjacentHTML('beforeend','<section class="hp-year-calendar" data-year-calendar aria-label="Calendario anual de vuelos"></section>');
+  if(r.role==='director'&&!practiceMode)root.insertAdjacentHTML('beforeend','<section class="hp-year-calendar" data-year-calendar aria-label="Calendario de vuelos"></section>');
   if(r.boxes){root.querySelector('[data-board-section]').hidden=!r.boxes.planner;root.querySelector('[data-flights]').hidden=!r.boxes.flights&&!r.boxes.planner;root.querySelector('[data-itinerary-requests]').hidden=!r.boxes.requests;}
   root.querySelector('[data-board]').innerHTML=s.aircraft.filter(a=>visibleAircraft(a)&&(category==='Todas'||category===a.category)).sort((a,b)=>a.rank-b.rank).map(a=>{const maintenance=a.status==='mantenimiento',grounded=a.status==='grounded',canRequest=r.request&&E.requestSelectable(a);return '<article class="hp-aircraft '+(maintenance||grounded?'hp-maintenance':'')+'" aria-label="'+a.id+(maintenance?' · MANTENIMIENTO':grounded?' · GROUNDED':'')+'"><div class="hp-aircraft-head" style="border-top-color:'+(maintenance||grounded?'#b4232d':a.color.startsWith('#')?a.color:'#315b9a')+'"><div class="hp-tail">'+a.id+'</div><small>'+esc(a.model)+' · '+a.category+'</small><p><span class="hp-status '+(a.status==='operativo'?'hp-green':'hp-red')+'">● '+esc(maintenance?'MANTENIMIENTO':grounded?'GROUNDED':a.status==='operativo'?'Operativa':a.status)+'</span></p>'+(a.release?.enabled?'<p><small>Disponibilidad prevista '+clock(a.release.from)+' – '+clock(a.release.until||a.slots.at(-1)?.end||'18:30')+'</small></p>':'')+(r.settings?'<div class="hp-buttons"><button data-config="'+a.id+'">Bloques y disponibilidad</button><button data-priority="'+a.id+'">Pilotos prioritarios</button></div>':'')+'</div><div class="hp-blocks">'+(canRequest?E.requestSlots(a,date):a.slots.filter(b=>b.id!=='b5'||a.night)).filter(b=>E.minutes(b.end)-E.minutes(b.start)>=E.MIN_ASSIGNMENT_MINUTES).map(b=>{const flightCount=s.confirmed.filter(f=>f.aircraft===a.id&&E.overlaps(b,f)).length,count=pending.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)).length;const disabled=grounded||r.request&&!canRequest;return '<div class="hp-slot"><div><strong>'+range(b)+'</strong><small>'+flightCount+' confirmados · '+count+' solicitudes</small></div><button '+(disabled?'disabled':'')+' data-slot="'+a.id+':'+b.id+'">'+(grounded?'GROUNDED':maintenance&&r.request?'Solicitar · alerta':r.request?(practiceMode&&!requestOpen?'Solicitudes cerradas':'Solicitar'):'Ver bloques')+'</button></div>';}).join('')+'</div></article>';}).join('')||'<p>No hay aeronaves disponibles para esta categoría y fecha.</p>';
   root.querySelector('[data-flight-list]').innerHTML=s.confirmed.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(q=>flightRow(q,heldIds.has(q.id)||q.publicationStatus==='held')).join('')||'<p>No hay vuelos confirmados en esta fecha.</p>';
@@ -223,31 +221,71 @@
  }
  function detailsDialog(a,b){const s=model.state;modal(a.id+' · '+range(b),'<div class="hp-notice">'+esc(a.status)+(a.release?.enabled?' · Disponible '+clock(a.release.from)+' – '+clock(a.release.until||a.slots.at(-1)?.end||'18:30'):'')+'</div>'+s.confirmed.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)).map(q=>'<p><b>'+range(q)+'</b> · '+esc(pilotName(q.pilot))+'</p>').join('')+'<p>'+s.requests.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)&&!s.cancelled.includes(q.id)).length+' solicitudes en este bloque.</p>');}
  function personKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');}
- function validPersonPhone(value){const raw=String(value||'').trim();return /^[+0-9().\s-]+$/.test(raw)&&/^\+?\d{7,15}$/.test(raw.replace(/[().\s-]/g,''));}
+ function personRows(){return model.state.students.slice().sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'})||a.id.localeCompare(b.id,'es'));}
  function personFieldsMarkup(q={}){
-  const s=model.state,person=s.students.find(p=>p.id===q.studentId),initialName=person?.name||q.studentName||(q.flightType==='socio'?q.socioName:'')||'',kindDefault=['charter','socio'].includes(q.flightType)?'client':'student';
-  const people=s.students.slice().sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'})||a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
-  const existingOptions=people.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===q.studentId?'selected':'')+'>'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
-  const matchOptions=people.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
-  return '<div class="hp-full hp-person-fields" data-person-fields><label class="hp-full">Elegir expediente existente<select name="existingStudentId"><option value="">Selecciona un estudiante o cliente existente</option>'+existingOptions+'</select><small>La lista incluye estudiantes y clientes en orden alfabético. También puedes escribir un nombre nuevo abajo.</small></label><label class="hp-full">Estudiante o cliente<input name="studentName" required maxlength="120" autocomplete="off" value="'+esc(initialName)+'" placeholder="Escribe el nombre completo"><small>Si el expediente existe, selecciónalo arriba o escribe su nombre exacto.</small></label><input type="hidden" name="studentId" value="'+esc(q.studentId||'')+'"><label class="hp-full" data-person-match hidden>Hay varios expedientes con este nombre<select name="personMatchId"><option value="">Selecciona el expediente</option>'+matchOptions+'</select></label><p class="hp-full hp-notice" data-person-status></p><div class="hp-full" data-person-new hidden><label>Tipo de expediente<select name="newPersonKind"><option value="student" '+(kindDefault==='student'?'selected':'')+'>Estudiante</option><option value="client" '+(kindDefault==='client'?'selected':'')+'>Cliente</option></select></label><label>Cédula<input name="personIdentity" type="text" maxlength="40" autocomplete="off"></label><label>Correo<input name="personEmail" type="email" maxlength="200" autocomplete="off"></label><label>Celular<input name="personPhone" type="tel" maxlength="30" autocomplete="tel" inputmode="tel" placeholder="Ej. número nacional o internacional"><small>Acepta números de Panamá o del extranjero, con 7 a 15 dígitos.</small></label></div><input type="hidden" name="socioName" value="'+esc(q.socioName||'')+'"></div>';
+  const s=model.state,rows=personRows(),person=s.students.find(p=>p.id===q.studentId),initialName=person?.name||q.studentName||(q.flightType==='socio'?q.socioName:'')||'',kindDefault=['charter','socio'].includes(q.flightType)?'client':'student';
+  const existingOptions=rows.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===q.studentId?'selected':'')+'>'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
+  const matchOptions=rows.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
+  return '<div class="hp-full hp-person-fields" data-person-fields><label class="hp-full">Elegir expediente existente<select name="existingStudentId"><option value="">Selecciona un estudiante o cliente existente</option>'+existingOptions+'</select><small>La lista incluye estudiantes y clientes en orden alfabético.</small></label><div class="hp-full hp-person-lookup"><label>Estudiante o cliente<input name="studentName" required maxlength="120" autocomplete="off" aria-autocomplete="list" aria-controls="hp-person-suggestions" aria-expanded="false" value="'+esc(initialName)+'" placeholder="Escribe para buscar"><small>Escribe las primeras letras para ver coincidencias.</small></label><div class="hp-person-suggestions" id="hp-person-suggestions" role="listbox" aria-label="Estudiantes y clientes coincidentes" data-person-suggestions hidden></div></div><input type="hidden" name="studentId" value="'+esc(q.studentId||'')+'"><label class="hp-full" data-person-match hidden>Hay varios expedientes con este nombre<select name="personMatchId"><option value="">Selecciona el expediente</option>'+matchOptions+'</select></label><p class="hp-full hp-notice" data-person-status></p><div class="hp-full" data-person-new hidden><label>Tipo de expediente<select name="newPersonKind"><option value="student" '+(kindDefault==='student'?'selected':'')+'>Estudiante</option><option value="client" '+(kindDefault==='client'?'selected':'')+'>Cliente</option></select></label><label>Cédula<input name="personIdentity" type="text" maxlength="40" autocomplete="off"></label><label>Correo<input name="personEmail" type="email" maxlength="200" autocomplete="off"></label><label>Celular<input name="personPhone" type="tel" maxlength="30" autocomplete="tel" inputmode="tel" placeholder="Ej. número nacional o internacional"><small>Acepta números de Panamá o del extranjero, con 7 a 15 dígitos.</small></label></div><input type="hidden" name="socioName" value="'+esc(q.socioName||'')+'"></div>';
+ }
+ function choosePersonSuggestion(form,button){
+  const input=form.elements.studentName,refresh=form.__personRefresh||(()=>{});
+  if(button.hasAttribute('data-person-create')){
+   delete input.dataset.personSelectedKey;form.elements.existingStudentId.value='';form.elements.studentId.value='';form.dataset.personCreateNewKey=personKey(input.value);syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();return;
+  }
+  const person=personRows().find(p=>p.id===button.dataset.personSuggestion);if(!person)return;
+  delete form.dataset.personCreateNewKey;input.value=person.name;input.dataset.personSelectedKey=personKey(person.name);form.elements.studentId.value=person.id;syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();
+ }
+ function renderPersonSuggestions(form){
+  const input=form.elements.studentName,list=form.querySelector('[data-person-suggestions]');if(!input||!list)return;
+  const query=personKey(input.value),rows=personRows(),selected=rows.find(p=>p.id===form.elements.studentId.value),exact=rows.some(p=>personKey(p.name)===query);
+  if(!query||input.dataset.personSelectedKey===query&&selected&&personKey(selected.name)===query||form.dataset.personCreateNewKey===query){list.hidden=true;list.innerHTML='';input.setAttribute('aria-expanded','false');return;}
+  const matches=rows.filter(p=>personKey(p.name).startsWith(query));
+  list.innerHTML=matches.map(p=>'<button type="button" role="option" aria-selected="false" data-person-suggestion="'+esc(p.id)+'"><span>'+esc(p.name)+'</span><small>'+(p.kind==='client'?'Cliente':'Estudiante')+'</small></button>').join('')+(!exact?'<button type="button" role="option" aria-selected="false" data-person-create><span>Crear expediente nuevo</span><small>'+esc(input.value.trim())+'</small></button>':'');
+  list.hidden=!matches.length&&exact;input.setAttribute('aria-expanded',String(!list.hidden));
+  list.querySelectorAll('[data-person-suggestion],[data-person-create]').forEach(button=>button.addEventListener('click',()=>choosePersonSuggestion(form,button)));
+ }
+ function bindPersonSuggestions(form,refresh){
+  const input=form.elements.studentName,list=form.querySelector('[data-person-suggestions]');if(!input||!list)return;
+  form.__personRefresh=refresh;
+  input.addEventListener('input',()=>{delete form.dataset.personCreateNewKey;delete input.dataset.personSelectedKey;renderPersonSuggestions(form);});
+  input.addEventListener('keydown',event=>{if(event.key==='ArrowDown'&&!list.hidden){event.preventDefault();list.querySelector('button')?.focus();}});
+  list.addEventListener('keydown',event=>{
+   if(event.key==='Escape'){event.preventDefault();list.hidden=true;input.setAttribute('aria-expanded','false');input.focus();return;}
+   if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();const buttons=[...list.querySelectorAll('button')],index=buttons.indexOf(event.target),next=index+(event.key==='ArrowDown'?1:-1);if(next>=0&&next<buttons.length)buttons[next].focus();else if(event.key==='ArrowUp')input.focus();}
+  });
  }
  function syncPersonFields(form,flightType){
   const nameField=form.elements.studentName;if(!nameField)return;
   const existingSelect=form.elements.existingStudentId,idField=form.elements.studentId,matchWrap=form.querySelector('[data-person-match]'),matchSelect=form.elements.personMatchId,newFields=form.querySelector('[data-person-new]'),status=form.querySelector('[data-person-status]');
   let normalized=personKey(nameField.value),selected=existingSelect?.value?model.state.students.find(p=>p.id===existingSelect.value):null;
   if(selected&&normalized&&personKey(selected.name)!==normalized){existingSelect.value='';selected=null;}
-  if(selected){nameField.value=selected.name;normalized=personKey(selected.name);idField.value=selected.id;matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='Expediente seleccionado: '+selected.name+'.';}
-  else{
+  if(selected){
+   nameField.value=selected.name;normalized=personKey(selected.name);nameField.dataset.personSelectedKey=normalized;idField.value=selected.id;
+   matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='Expediente seleccionado: '+selected.name+'.';
+  }else{
+   delete nameField.dataset.personSelectedKey;
    const matches=normalized?model.state.students.filter(p=>personKey(p.name)===normalized):[];
-   if(matches.length===1){idField.value=matches[0].id;if(existingSelect)existingSelect.value=matches[0].id;matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='Expediente encontrado: '+matches[0].name+'.';}
-   else if(matches.length>1){if(existingSelect)existingSelect.value='';const previous=matchSelect.value||idField.value;matchWrap.hidden=false;matchSelect.disabled=false;matchSelect.innerHTML='<option value="">Selecciona el expediente</option>'+matches.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');const selectedId=matches.some(p=>p.id===previous)?previous:'';matchSelect.value=selectedId;idField.value=selectedId;matchSelect.required=true;newFields.hidden=true;status.textContent='Elige el expediente correcto para evitar duplicados.';}
-   else if(normalized){if(existingSelect)existingSelect.value='';idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=false;status.textContent='No hay coincidencia. Completa estos datos para crear el expediente.';}
-   else{if(existingSelect)existingSelect.value='';idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='';}
+   if(matches.length===1){
+    idField.value=matches[0].id;if(existingSelect)existingSelect.value=matches[0].id;nameField.dataset.personSelectedKey=normalized;
+    matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='Expediente encontrado: '+matches[0].name+'.';
+   }else if(matches.length>1){
+    if(existingSelect)existingSelect.value='';const previous=matchSelect.value||idField.value;matchWrap.hidden=false;matchSelect.disabled=false;
+    matchSelect.innerHTML='<option value="">Selecciona el expediente</option>'+matches.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
+    const selectedId=matches.some(p=>p.id===previous)?previous:'';matchSelect.value=selectedId;idField.value=selectedId;matchSelect.required=true;newFields.hidden=true;status.textContent='Elige el expediente correcto para evitar duplicados.';
+   }else if(normalized){
+    if(existingSelect)existingSelect.value='';idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;
+    const hasPrefixMatch=personRows().some(p=>personKey(p.name).startsWith(normalized)),createConfirmed=form.dataset.personCreateNewKey===normalized;
+    newFields.hidden=hasPrefixMatch&&!createConfirmed;status.textContent=hasPrefixMatch&&!createConfirmed?'Selecciona una coincidencia o elige crear un expediente nuevo.':'No hay coincidencia. Completa estos datos para crear el expediente.';
+   }else{
+    if(existingSelect)existingSelect.value='';idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='';
+   }
   }
-  const matchesName=normalized&&model.state.students.some(p=>personKey(p.name)===normalized),isNew=!!normalized&&!matchesName;
+  const exactMatch=normalized&&model.state.students.some(p=>personKey(p.name)===normalized),hasPrefixMatch=normalized&&personRows().some(p=>personKey(p.name).startsWith(normalized)),isNew=!!normalized&&!exactMatch&&(!hasPrefixMatch||form.dataset.personCreateNewKey===normalized);
   for(const name of ['newPersonKind','personIdentity','personEmail','personPhone']){const field=form.elements[name];if(field){field.disabled=!isNew;field.required=isNew;if(name==='personPhone')field.setCustomValidity(isNew&&field.value&&!validPersonPhone(field.value)?'Escribe un número de 7 a 15 dígitos; se aceptan números de Panamá o del extranjero.':'');}}
   if(isNew&&!form.dataset.personKindTouched)form.elements.newPersonKind.value=['charter','socio'].includes(flightType)?'client':'student';
   form.elements.socioName.value=flightType==='socio'?nameField.value.trim():'';
+  renderPersonSuggestions(form);
  }
  function formFlight(q,request){
   const s=model.state,selectedAircraft=s.aircraft.find(a=>a.id===q.aircraft),pilot880=model.rights.role==='pilot'&&selectedAircraft?.id==='HP880BL';
@@ -288,7 +326,8 @@
    warning.classList.toggle('hp-warning',!!windowError||!!hoursWarning||!!hoursError||!!nightError||!!routeIssue||!!aircraftAlert||!!competing.length||!!studentOverlap);
    const submit=form.querySelector('[type=submit]');if(submit)submit.disabled=!!windowError||!!hoursError||!!nightError;
   };
-  form.addEventListener('input',()=>{syncPersonFields(form,form.elements.flightType.value);update();});form.addEventListener('change',()=>{syncPersonFields(form,form.elements.flightType.value);update();});syncPersonFields(form,form.elements.flightType.value);update();
+  bindPersonSuggestions(form,update);
+  form.addEventListener('input',()=>{syncPersonFields(form,form.elements.flightType.value);update();});form.addEventListener('change',event=>{if(event.target===form.elements.studentName)return;syncPersonFields(form,form.elements.flightType.value);update();});syncPersonFields(form,form.elements.flightType.value);update();
  }
  function requestDialog(q){const gate=q.id&& !model.state.published?'':E.reservationGate(model.state);if(gate){modal('Reservas cerradas','<p>'+esc(timeText(gate))+'</p>');return;}const d=modal(q.id?'Modificar solicitud':'Solicitar vuelo',formFlight(q,true),async f=>save('request',{...(q.id?{id:q.id}:{}),flight:{...q,...f}}));watchFlight(d,q,true);}
  function claimSlotDialog(slot){
@@ -300,9 +339,10 @@
    const exam=form.elements.flightType.value==='examen';form.querySelector('[data-delegation]').hidden=!exam;form.elements.delegationNumber.required=exam;form.elements.delegationNumber.disabled=!exam;form.elements.delegationNumber.setCustomValidity(exam?E.delegationNumberError(form.elements.delegationNumber.value):'');
    syncPersonFields(form,form.elements.flightType.value);
   };
+  bindPersonSuggestions(form,update);
   form.elements.newPersonKind?.addEventListener('change',()=>form.dataset.personKindTouched='1');
   form.elements.existingStudentId?.addEventListener('change',()=>{const person=model.state.students.find(p=>p.id===form.elements.existingStudentId.value);if(person)form.elements.studentName.value=person.name;update();});
-  form.addEventListener('input',update);form.addEventListener('change',update);update();
+  form.addEventListener('input',update);form.addEventListener('change',event=>{if(event.target===form.elements.studentName)return;update();});update();
  }
  function flightDialog(q={}){const s=model.state,r=model.rights,pilots=sortedPilots(r.role==='pilot'?s.pilots.filter(p=>p.id===r.pilot):s.pilots),pilot=pilots.some(p=>p.id===r.pilot)?r.pilot:pilots[0]?.id,initial={aircraft:s.aircraft.find(a=>E.canSchedule(r.role,a))?.id,pilot,...q};const d=modal(q.id?'Modificar vuelo':'Agendar vuelo',formFlight(initial,false),async (f,form)=>{f.newDate=form.elements.newDate.value;const a=s.aircraft.find(a=>a.id===f.aircraft);if(a.status!=='operativo'&&!confirm('La aeronave '+a.id+' está '+a.status+'. ¿Confirmas agendar? Esto no cambia su estado.'))throw Error('Guardado cancelado.');const oldDate=date;let target=model;if(f.newDate&&f.newDate!==date)target=await api('itinerary-read',{date:f.newDate});await save('flight',{...(q.id?{id:q.id,originalDate:oldDate,originalRevision:s.revision}:{}),date:f.newDate||date,revision:target.state.revision,flight:f,acknowledge:true});});watchFlight(d,initial,false);}
  function orderHTML(ids,rows,all=true){const ordered=[...ids,...rows.map(r=>r.id).filter(id=>!ids.includes(id))];return '<div data-order>'+ordered.map(id=>'<div class="hp-order-row" data-id="'+esc(id)+'"><label>'+(all?'<input type="checkbox" '+(ids.includes(id)?'checked':'')+'>':'')+esc(rows.find(r=>r.id===id)?.name||id)+'</label><div><button type="button" data-up aria-label="Subir '+esc(id)+'">↑</button><button type="button" data-down aria-label="Bajar '+esc(id)+'">↓</button></div></div>').join('')+'</div>';}
