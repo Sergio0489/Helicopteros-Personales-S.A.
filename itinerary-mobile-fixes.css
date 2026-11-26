@@ -1,0 +1,64 @@
+/* Keep route codes on equal mobile columns, with separators centered in the gaps. */
+.hp-itinerary-dialog .hp-route-inputs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: center;
+}
+
+.hp-itinerary-dialog .hp-route-entry {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.hp-itinerary-dialog .hp-route-entry::after {
+  content: "–";
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  width: 16px;
+  transform: translateY(-50%);
+  text-align: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.hp-itinerary-dialog .hp-route-entry:last-child::after {
+  content: none;
+}
+
+.hp-itinerary-dialog .hp-route-entry input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  text-align: center;
+}
+
+.hp-itinerary-dialog .hp-person-lookup {
+  position: relative;
+  z-index: 4;
+}
+
+.hp-itinerary-dialog .hp-person-lookup input[name="studentName"] {
+  position: relative;
+  z-index: 1;
+  cursor: text;
+  touch-action: manipulation;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@media (max-width: 420px) {
+  .hp-itinerary-dialog .hp-route-inputs {
+    gap: 12px;
+  }
+
+  .hp-itinerary-dialog .hp-route-entry::after {
+    right: -12px;
+    width: 12px;
+  }
+}
