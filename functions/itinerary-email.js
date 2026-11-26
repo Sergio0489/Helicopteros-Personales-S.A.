@@ -57,7 +57,7 @@ function deliverySummary(id,publication,recipients,receipts,updatedAt=new Date()
 async function deliver({db,event,from,recipients:targets,send,report=()=>{},now=()=>Date.now()}){
  const publication=event.data?.val(),id=event.params?.publicationId;
  const validId=/^(publication-\d{4}-\d{2}-\d{2}|modified-\d{4}-\d{2}-\d{2}-[a-zA-Z0-9-]{12,100}|practice-\d{4}-\d{2}-\d{2}-[a-zA-Z0-9-]{12,100}|draft-\d{4}-\d{2}-\d{2}|aircraft-status-\d{4}-\d{2}-\d{2}-[a-zA-Z0-9-]{12,100})$/.test(id),isDraftId=String(id||'').startsWith('draft-'),isStatusId=String(id||'').startsWith('aircraft-status-');
- if(!publication||publication.id!==id||!validId||!/\d{4}-\d{2}-\d{2}$/.test(publication.date)||!Array.isArray(publication.flights)||publication.practice===true&&!id.startsWith('practice-')||publication.draft===true&&!isDraftId||isDraftId&&publication.draft!==true||publication.notificationType==='aircraft-status'&&!isStatusId||isStatusId&&publication.notificationType!=='aircraft-status')throw Error('Evento de publicación del horario no válido.');
+ if(!publication||publication.id!==id||!validId||!/\d{4}-\d{2}-\d{2}$/.test(publication.date)||!Array.isArray(publication.flights)&&!isStatusId||publication.practice===true&&!id.startsWith('practice-')||publication.draft===true&&!isDraftId||isDraftId&&publication.draft!==true||publication.notificationType==='aircraft-status'&&!isStatusId||isStatusId&&publication.notificationType!=='aircraft-status')throw Error('Evento de publicación del horario no válido.');
  const unique=[...new Set((targets||[]).map(address).filter(Boolean))],deliveryRoot='itineraryEmailDeliveries/'+id;
  if(!unique.length){report('recipients-empty',id);return;}
  let retry=false;
