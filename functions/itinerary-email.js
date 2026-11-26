@@ -48,9 +48,11 @@ function message(publication,from,to){
  return {from:{name:'Helicópteros Personales'+(publication.practice?' · SIMULACIÓN':''),address:from},to,subject:title,messageId:'<hp-itinerary-'+deliveryKey+'@'+domain+'>',text:intro,html,disableFileAccess:true,disableUrlAccess:true};
 }
 function deliverySummary(id,publication,recipients,receipts,updatedAt=new Date().toISOString()){
- const rows=Object.values(receipts||{}),count=status=>rows.filter(row=>row?.status===status).length,codeCounts={};
- for(const row of rows)if(typeof row?.code==='string')codeCounts[row.code]=(codeCounts[row.code]||0)+1;
- return {id,date:publication?.date||'',kind:publication?.draft===true?'draft':'publication',recipientCount:Array.isArray(recipients)?recipients.length:0,sentCount:count('sent'),reviewCount:count('review'),failedCount:count('failed'),pendingCount:count('sending')+count('retry'),codeCounts,updatedAt};
+ const targets=[...new Set((Array.isArray(recipients)?recipients:[]).map(address).filter(Boolean))],byRecipient=targets.map(to=>receipts?.[hash(to)]||null),count=status=>byRecipient.filter(row=>row?.status===status).length,codeCounts={};
+ const unaccountedCount=byRecipient.filter(row=>!['sent','review','failed','sending','retry'].includes(row?.status)).length;
+ for(const row of byRecipient)if(typeof row?.code==='string')codeCounts[row.code]=(codeCounts[row.code]||0)+1;
+ if(unaccountedCount)codeCounts['delivery-receipt-missing']=unaccountedCount;
+ return {id,date:publication?.date||'',kind:publication?.draft===true?'draft':'publication',recipientCount:targets.length,sentCount:count('sent'),reviewCount:count('review'),failedCount:count('failed'),pendingCount:count('sending')+count('retry'),unaccountedCount,codeCounts,updatedAt};
 }
 async function deliver({db,event,from,recipients:targets,send,report=()=>{},now=()=>Date.now()}){
  const publication=event.data?.val(),id=event.params?.publicationId;

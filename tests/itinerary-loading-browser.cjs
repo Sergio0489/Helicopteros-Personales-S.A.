@@ -112,6 +112,31 @@ test('Initial errors can be retried without returning to the old calendar',async
  await page.locator('[data-date]').waitFor({state:'visible'});
  await noOldScreen(page);
 });
+test('Director email warning counts missing receipts without concatenating the counts',async t=>{
+ const page=await app(t),result=response();
+ result.emailStatus=[{date:'2026-10-30',kind:'publication',recipientCount:21,sentCount:0,reviewCount:0,failedCount:0,pendingCount:0,codeCounts:{}}];
+ await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();
+ const status=await page.locator('[data-director-alerts]').textContent();
+ assert.match(status,/0 de 21 destinatarios aceptados por el servidor/);
+ assert.match(status,/21 requieren revisión \(21 sin comprobante\)/);
+ assert.doesNotMatch(status,/000 requieren revisión/);
+});
+test('Director can see a safe removal action for a stranded published request; pilots cannot',async t=>{
+ const directorPage=await app(t),directorResult=response();
+ directorResult.state.published=true;directorResult.state.cancelled=[];directorResult.state.confirmed=[];
+ directorResult.state.pilots=[{id:'pilot-carlos',name:'Carlos Diaz'}];
+ directorResult.state.requests=[{id:'stranded-request',aircraft:'HP880BL',pilot:'pilot-carlos',start:'15:30',end:'17:30',flightType:'multi',status:'pending'}];
+ directorResult.state.lastResults=[{id:'stranded-request',reason:'No se encontró un espacio compatible.'}];
+ await directorPage.evaluate(result=>resolveRead(result),directorResult);await directorPage.locator('[data-requests]').waitFor();
+ const directorActions=directorPage.locator('[data-requests] [data-request-cancel="stranded-request"]');
+ assert.equal(await directorActions.count(),1);
+ assert.equal(await directorActions.textContent(),'Retirar solicitud pendiente');
+ assert.equal(await directorPage.locator('[data-requests] [data-approve="stranded-request"]').count(),0,'published requests cannot be approved a second time');
+
+ const pilotPage=await app(t),pilotResult={...directorResult,rights:{role:'pilot',request:true,pilot:'pilot-carlos',settings:false}};
+ await pilotPage.evaluate(result=>resolveRead(result),pilotResult);await pilotPage.locator('[data-requests]').waitFor();
+ assert.equal(await pilotPage.locator('[data-requests] [data-request-cancel="stranded-request"]').count(),0,'pilots cannot remove pending requests after publication');
+});
 test('Annual calendar is absent for pilots, administrators and readers',async t=>{
  for(const role of ['pilot','admin','reader']){
   const page=await app(t),result=response();result.rights={role,create:role==='admin',boxes:{planner:true,flights:true,requests:true}};delete result.calendar;
