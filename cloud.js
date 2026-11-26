@@ -153,7 +153,7 @@ async function openDashboard(data){
  window.DASHBOARD_READY=false;
  const historyScript=document.createElement('script');historyScript.src='functions/inspection-history.js?v=20261121-inspection-reset-1';
  await new Promise((resolve,reject)=>{historyScript.onload=()=>window.HPInspectionHistory?resolve():reject(Error('No se pudo preparar el historial de inspecciones. Recarga la página.'));historyScript.onerror=()=>reject(Error('No se pudo cargar el historial de inspecciones. Recarga la página.'));document.body.appendChild(historyScript);});
- const script=document.createElement('script');script.src='dashboard.js?v=20261123-flight-route-codes-2';
+ const script=document.createElement('script');script.src='dashboard.js?v=20261125-mobile-route-picker-1';
  await new Promise((resolve,reject)=>{script.onload=()=>window.DASHBOARD_READY?resolve():reject(Error('El panel no terminó de cargar. Recarga la página; los datos guardados se conservan.'));script.onerror=()=>reject(Error('No se pudo cargar el panel. Recarga la página.'));document.body.appendChild(script);});
  window.STUDENTS_READY=false;
  const schoolScript=document.createElement('script');schoolScript.src='students.js?v=20261118-honorarios-scheduling-1';

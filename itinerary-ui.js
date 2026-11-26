@@ -101,7 +101,7 @@
   {code:'MPHT',name:'The Panamá Clinic',category:'Helipuerto',system:'OACI'},
   {code:'MPOR',name:'Ocean Reef',category:'Helipuerto',system:'OACI'}
  ];
- function routeEntryMarkup(code,index){return '<label class="hp-route-entry">'+(index?'<span aria-hidden="true">-</span>':'')+'<input name="routePart'+(index+1)+'" data-route-part="'+index+'" type="text" minlength="3" maxlength="4" pattern="[A-Za-z0-9]{3,4}" required autocapitalize="characters" autocomplete="off" spellcheck="false" value="'+esc(code)+'" placeholder="MPMG" aria-label="Código '+(index+1)+' de la ruta"></label>';}
+ function routeEntryMarkup(code,index){return '<label class="hp-route-entry"><input name="routePart'+(index+1)+'" data-route-part="'+index+'" type="text" minlength="3" maxlength="4" pattern="[A-Za-z0-9]{3,4}" required autocapitalize="characters" autocomplete="off" spellcheck="false" value="'+esc(code)+'" placeholder="MPMG" aria-label="Código '+(index+1)+' de la ruta"></label>';}
  function routeMarkup(value=''){
   const normalized=E.normalizeRoute(value),parts=E.routeError(normalized)?[]:normalized.split(' - '),codes=parts.length>=3?parts:['','',''];
   const options=panamaRouteCodes.slice().sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'})||a.code.localeCompare(b.code,'es')).map(row=>'<div class="hp-route-code-option" data-route-item data-search="'+esc((row.code+' '+row.name+' '+row.category+' '+row.system).toLocaleLowerCase('es'))+'"><button type="button" data-insert-route-code="'+esc(row.code)+'" aria-label="Agregar '+esc(row.name)+' - '+esc(row.code)+'">'+esc(row.name)+' - '+esc(row.code)+'</button></div>').join('');
@@ -224,14 +224,13 @@
  function personRows(){return model.state.students.slice().sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'})||a.id.localeCompare(b.id,'es'));}
  function personFieldsMarkup(q={}){
   const s=model.state,rows=personRows(),person=s.students.find(p=>p.id===q.studentId),initialName=person?.name||q.studentName||(q.flightType==='socio'?q.socioName:'')||'',kindDefault=['charter','socio'].includes(q.flightType)?'client':'student';
-  const existingOptions=rows.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===q.studentId?'selected':'')+'>'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
   const matchOptions=rows.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
-  return '<div class="hp-full hp-person-fields" data-person-fields><label class="hp-full">Elegir expediente existente<select name="existingStudentId"><option value="">Selecciona un estudiante o cliente existente</option>'+existingOptions+'</select><small>La lista incluye estudiantes y clientes en orden alfabético.</small></label><div class="hp-full hp-person-lookup"><label>Estudiante o cliente<input name="studentName" required maxlength="120" autocomplete="off" aria-autocomplete="list" aria-controls="hp-person-suggestions" aria-expanded="false" value="'+esc(initialName)+'" placeholder="Escribe para buscar"><small>Escribe las primeras letras para ver coincidencias.</small></label><div class="hp-person-suggestions" id="hp-person-suggestions" role="listbox" aria-label="Estudiantes y clientes coincidentes" data-person-suggestions hidden></div></div><input type="hidden" name="studentId" value="'+esc(q.studentId||'')+'"><label class="hp-full" data-person-match hidden>Hay varios expedientes con este nombre<select name="personMatchId"><option value="">Selecciona el expediente</option>'+matchOptions+'</select></label><p class="hp-full hp-notice" data-person-status></p><div class="hp-full" data-person-new hidden><label>Tipo de expediente<select name="newPersonKind"><option value="student" '+(kindDefault==='student'?'selected':'')+'>Estudiante</option><option value="client" '+(kindDefault==='client'?'selected':'')+'>Cliente</option></select></label><label>Cédula<input name="personIdentity" type="text" maxlength="40" autocomplete="off"></label><label>Correo<input name="personEmail" type="email" maxlength="200" autocomplete="off"></label><label>Celular<input name="personPhone" type="tel" maxlength="30" autocomplete="tel" inputmode="tel" placeholder="Ej. número nacional o internacional"><small>Acepta números de Panamá o del extranjero, con 7 a 15 dígitos.</small></label></div><input type="hidden" name="socioName" value="'+esc(q.socioName||'')+'"></div>';
+  return '<div class="hp-full hp-person-fields" data-person-fields><div class="hp-full hp-person-lookup"><label>Estudiante o cliente<input name="studentName" type="text" inputmode="text" enterkeyhint="search" autocapitalize="words" required maxlength="120" autocomplete="off" aria-autocomplete="list" aria-controls="hp-person-suggestions" aria-expanded="false" value="'+esc(initialName)+'" placeholder="Escribe el nombre para filtrar"><small>Escribe aquí para filtrar y seleccionar una coincidencia.</small></label><div class="hp-person-suggestions" id="hp-person-suggestions" role="listbox" aria-label="Estudiantes y clientes coincidentes" data-person-suggestions hidden></div></div><input type="hidden" name="studentId" value="'+esc(q.studentId||'')+'"><label class="hp-full" data-person-match hidden>Hay varios expedientes con este nombre<select name="personMatchId"><option value="">Selecciona el expediente</option>'+matchOptions+'</select></label><p class="hp-full hp-notice" data-person-status></p><div class="hp-full" data-person-new hidden><label>Tipo de expediente<select name="newPersonKind"><option value="student" '+(kindDefault==='student'?'selected':'')+'>Estudiante</option><option value="client" '+(kindDefault==='client'?'selected':'')+'>Cliente</option></select></label><label>Cédula<input name="personIdentity" type="text" maxlength="40" autocomplete="off"></label><label>Correo<input name="personEmail" type="email" maxlength="200" autocomplete="off"></label><label>Celular<input name="personPhone" type="tel" maxlength="30" autocomplete="tel" inputmode="tel" placeholder="Ej. número nacional o internacional"><small>Acepta números de Panamá o del extranjero, con 7 a 15 dígitos.</small></label></div><input type="hidden" name="socioName" value="'+esc(q.socioName||'')+'"></div>';
  }
  function choosePersonSuggestion(form,button){
   const input=form.elements.studentName,refresh=form.__personRefresh||(()=>{});
   if(button.hasAttribute('data-person-create')){
-   delete input.dataset.personSelectedKey;form.elements.existingStudentId.value='';form.elements.studentId.value='';form.dataset.personCreateNewKey=personKey(input.value);syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();return;
+   delete input.dataset.personSelectedKey;form.elements.studentId.value='';form.dataset.personCreateNewKey=personKey(input.value);syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();return;
   }
   const person=personRows().find(p=>p.id===button.dataset.personSuggestion);if(!person)return;
   delete form.dataset.personCreateNewKey;input.value=person.name;input.dataset.personSelectedKey=personKey(person.name);form.elements.studentId.value=person.id;syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();
@@ -257,9 +256,9 @@
  }
  function syncPersonFields(form,flightType){
   const nameField=form.elements.studentName;if(!nameField)return;
-  const existingSelect=form.elements.existingStudentId,idField=form.elements.studentId,matchWrap=form.querySelector('[data-person-match]'),matchSelect=form.elements.personMatchId,newFields=form.querySelector('[data-person-new]'),status=form.querySelector('[data-person-status]');
-  let normalized=personKey(nameField.value),selected=existingSelect?.value?model.state.students.find(p=>p.id===existingSelect.value):null;
-  if(selected&&normalized&&personKey(selected.name)!==normalized){existingSelect.value='';selected=null;}
+  const idField=form.elements.studentId,matchWrap=form.querySelector('[data-person-match]'),matchSelect=form.elements.personMatchId,newFields=form.querySelector('[data-person-new]'),status=form.querySelector('[data-person-status]');
+  let normalized=personKey(nameField.value),selected=idField.value?model.state.students.find(p=>p.id===idField.value):null;
+  if(selected&&personKey(selected.name)!==normalized){idField.value='';selected=null;}
   if(selected){
    nameField.value=selected.name;normalized=personKey(selected.name);nameField.dataset.personSelectedKey=normalized;idField.value=selected.id;
    matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='Expediente seleccionado: '+selected.name+'.';
@@ -267,18 +266,18 @@
    delete nameField.dataset.personSelectedKey;
    const matches=normalized?model.state.students.filter(p=>personKey(p.name)===normalized):[];
    if(matches.length===1){
-    idField.value=matches[0].id;if(existingSelect)existingSelect.value=matches[0].id;nameField.dataset.personSelectedKey=normalized;
+    idField.value=matches[0].id;nameField.dataset.personSelectedKey=normalized;
     matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='Expediente encontrado: '+matches[0].name+'.';
    }else if(matches.length>1){
-    if(existingSelect)existingSelect.value='';const previous=matchSelect.value||idField.value;matchWrap.hidden=false;matchSelect.disabled=false;
+    const previous=matchSelect.value||idField.value;matchWrap.hidden=false;matchSelect.disabled=false;
     matchSelect.innerHTML='<option value="">Selecciona el expediente</option>'+matches.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+(p.kind==='client'?'Cliente':'Estudiante')+'</option>').join('');
     const selectedId=matches.some(p=>p.id===previous)?previous:'';matchSelect.value=selectedId;idField.value=selectedId;matchSelect.required=true;newFields.hidden=true;status.textContent='Elige el expediente correcto para evitar duplicados.';
    }else if(normalized){
-    if(existingSelect)existingSelect.value='';idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;
+    idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;
     const hasPrefixMatch=personRows().some(p=>personKey(p.name).startsWith(normalized)),createConfirmed=form.dataset.personCreateNewKey===normalized;
     newFields.hidden=hasPrefixMatch&&!createConfirmed;status.textContent=hasPrefixMatch&&!createConfirmed?'Selecciona una coincidencia o elige crear un expediente nuevo.':'No hay coincidencia. Completa estos datos para crear el expediente.';
    }else{
-    if(existingSelect)existingSelect.value='';idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='';
+    idField.value='';matchWrap.hidden=true;matchSelect.required=false;matchSelect.disabled=true;newFields.hidden=true;status.textContent='';
    }
   }
   const exactMatch=normalized&&model.state.students.some(p=>personKey(p.name)===normalized),hasPrefixMatch=normalized&&personRows().some(p=>personKey(p.name).startsWith(normalized)),isNew=!!normalized&&!exactMatch&&(!hasPrefixMatch||form.dataset.personCreateNewKey===normalized);
@@ -308,7 +307,6 @@
  function watchFlight(d,q,request){
   const form=d.querySelector('form');
   form.elements.newPersonKind?.addEventListener('change',()=>form.dataset.personKindTouched='1');
-  form.elements.existingStudentId?.addEventListener('change',()=>{const person=model.state.students.find(p=>p.id===form.elements.existingStudentId.value);if(person)form.elements.studentName.value=person.name;syncPersonFields(form,form.elements.flightType.value);update();});
   const update=()=>{
    if(!request)refreshFlightAircraft(form);
    const aircraft=model.state.aircraft.find(a=>a.id===(request?q.aircraft:form.elements.aircraft.value));
@@ -341,7 +339,6 @@
   };
   bindPersonSuggestions(form,update);
   form.elements.newPersonKind?.addEventListener('change',()=>form.dataset.personKindTouched='1');
-  form.elements.existingStudentId?.addEventListener('change',()=>{const person=model.state.students.find(p=>p.id===form.elements.existingStudentId.value);if(person)form.elements.studentName.value=person.name;update();});
   form.addEventListener('input',update);form.addEventListener('change',event=>{if(event.target===form.elements.studentName)return;update();});update();
  }
  function flightDialog(q={}){const s=model.state,r=model.rights,pilots=sortedPilots(r.role==='pilot'?s.pilots.filter(p=>p.id===r.pilot):s.pilots),pilot=pilots.some(p=>p.id===r.pilot)?r.pilot:pilots[0]?.id,initial={aircraft:s.aircraft.find(a=>E.canSchedule(r.role,a))?.id,pilot,...q};const d=modal(q.id?'Modificar vuelo':'Agendar vuelo',formFlight(initial,false),async (f,form)=>{f.newDate=form.elements.newDate.value;const a=s.aircraft.find(a=>a.id===f.aircraft);if(a.status!=='operativo'&&!confirm('La aeronave '+a.id+' está '+a.status+'. ¿Confirmas agendar? Esto no cambia su estado.'))throw Error('Guardado cancelado.');const oldDate=date;let target=model;if(f.newDate&&f.newDate!==date)target=await api('itinerary-read',{date:f.newDate});await save('flight',{...(q.id?{id:q.id,originalDate:oldDate,originalRevision:s.revision}:{}),date:f.newDate||date,revision:target.state.revision,flight:f,acknowledge:true});});watchFlight(d,initial,false);}

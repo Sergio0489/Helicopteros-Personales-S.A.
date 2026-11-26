@@ -201,14 +201,15 @@ test('delivery summaries count every recipient without a terminal or in-progress
  assert.deepEqual(email.deliverySummary(publication.id,publication,['pilot@example.test','mechanic@example.test'],{},'known-time'),{id:publication.id,date,kind:'publication',recipientCount:2,sentCount:0,reviewCount:0,failedCount:0,pendingCount:0,unaccountedCount:2,codeCounts:{'delivery-receipt-missing':2},updatedAt:'known-time'});
 });
 
-test('pilot and student/client choices are alphabetic and the itinerary exposes a visible selector',()=>{
+test('pilot and student/client choices are alphabetic and the itinerary exposes a searchable picker',()=>{
  const data=fixture();data.pilotos=[data.pilotos[1],{id:'ana',nombre:'Ángel Reyes',medico:'2027-12-31'},data.pilotos[0]];data.school.students=[{id:'z',name:'Zoe'},{id:'a',name:'Álvaro'},{id:'b',name:'Ana'}];data.school.registry.clients=[{id:'client-z',name:'Cliente Uno'},{id:'client-a',name:'Ángela'}];
  const state=M.stateFor(data,date,now),compare=(a,b)=>a.localeCompare(b,'es',{sensitivity:'base'})||a.localeCompare(b,'es');
  assert.deepEqual(state.pilots.map(p=>p.name),state.pilots.map(p=>p.name).slice().sort(compare));
  assert.deepEqual(state.students.map(p=>p.name),state.students.map(p=>p.name).slice().sort(compare));
  const ui=fs.readFileSync(require.resolve('../itinerary-ui.js'),'utf8');
- assert.match(ui,/name=\"existingStudentId\"/);
- assert.match(ui,/Elegir expediente existente/);
+ assert.match(ui,/studentName.*type.*text.*inputmode.*text/);
+ assert.match(ui,/data-person-suggestions/);
+ assert.doesNotMatch(ui,/existingStudentId/);
  assert.match(ui,/panamaRouteCodes\.slice\(\)\.sort\(\(a,b\)=>a\.name\.localeCompare\(b\.name,'es',\{sensitivity:'base'\}\)/);
 });
 

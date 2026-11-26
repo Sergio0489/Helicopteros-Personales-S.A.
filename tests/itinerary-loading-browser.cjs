@@ -36,6 +36,7 @@ async function app(t,width=1440){
  });
  for(const file of ['dashboard.js','functions/itinerary-engine.js','itinerary-ui.js'])await page.addScriptTag({path:path.join(root,file)});
  await page.addStyleTag({path:path.join(root,'itinerary.css')});
+ await page.addStyleTag({path:path.join(root,'itinerary-mobile-fixes.css')});
  await page.evaluate(()=>{
   window.originalFlights=JSON.stringify(flightsData);
   document.getElementById('access-screen').hidden=true;
@@ -169,6 +170,14 @@ test('Student/client autocomplete filters prefixes alphabetically and supports c
  await input.fill('María Valdez');await list.locator('[data-person-create]').waitFor({state:'visible'});await list.locator('[data-person-create]').click();
  assert.equal(await form.locator('[data-person-new]').isVisible(),true);
  for(const name of ['personIdentity','personEmail','personPhone'])assert.equal(await form.locator('[name="'+name+'"]').evaluate(el=>el.required),true);
+});
+test('Mobile route stops align and the student/client search accepts text',async t=>{
+ const page=await app(t,390),result=response();result.state.students=[{id:'client:ana',name:'Ana Pérez',kind:'client'},{id:'student:zoe',name:'Zoe Vela',kind:'student'}];
+ await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
+ const form=page.locator('dialog form'),boxes=await form.locator('[data-route-part]').evaluateAll(fields=>fields.map(field=>{const r=field.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
+ assert.equal(boxes.length,3);assert.ok(Math.max(...boxes.map(box=>box.width))-Math.min(...boxes.map(box=>box.width))<1,JSON.stringify(boxes));assert.ok(Math.max(...boxes.map(box=>box.y))-Math.min(...boxes.map(box=>box.y))<1,JSON.stringify(boxes));
+ const separators=await form.locator('[data-route-part]').evaluateAll(fields=>fields.map(field=>getComputedStyle(field.parentElement,'::after').content));assert.notEqual(separators[0],'none');assert.notEqual(separators[1],'none');assert.equal(separators[2],'none');
+ const input=form.locator('[name="studentName"]'),list=form.locator('[data-person-suggestions]');assert.equal(await input.getAttribute('type'),'text');assert.equal(await input.getAttribute('inputmode'),'text');assert.equal(await input.isEnabled(),true);assert.equal(await input.getAttribute('readonly'),null);assert.equal(await form.locator('[name="existingStudentId"]').count(),0);await input.fill('a');await list.waitFor({state:'visible'});assert.deepEqual(await list.locator('[data-person-suggestion] span').allTextContents(),['Ana Pérez']);
 });
 test('Released-slot autocomplete keeps matching dossiers selectable after the name field loses focus',async t=>{
  const result=response();result.rights={role:'pilot',request:true,pilot:'b',boxes:{planner:true,flights:true,requests:true}};result.state.published=true;
