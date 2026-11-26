@@ -50,3 +50,9 @@ test('status mail reaches pilots, mechanics and director, while student accounts
  const updated=mail.message({...publication,id:'modified-2026-11-24-123456789012',notificationType:undefined,action:'updated',flights:[{aircraft:'HP-1784',aircraftStatus:'operativo',relocationFrom:'HP-1815',model:'Piper Warrior',pilot:'Piloto Uno',start:'06:30',end:'09:30',type:'Privado'}]},'sender@example.test','pilot@example.test');
  assert.match(updated.html,/REUBICADO POR MANTENIMIENTO/);assert.match(updated.html,/MANTENIMIENTO/);
 });
+test('status mail accepts Firebase records with an empty flights array omitted',async()=>{
+ const publication={id:'aircraft-status-2026-11-24-test-event123456',date:'2026-11-24',notificationType:'aircraft-status',notificationRoles:['Director','Piloto','Mecánico'],aircraftStatus:{aircraft:'HP-1815',status:'mantenimiento',previous:'operativo'}};
+ const receipts={},db={ref(path){return {transaction:async update=>{const key=path.slice(path.lastIndexOf('/')+1),old=receipts[key]??null,next=update(structuredClone(old));if(next===undefined)return {committed:false,snapshot:{val:()=>structuredClone(old)}};receipts[key]=next;return {committed:true,snapshot:{val:()=>structuredClone(next)}};}};}};
+ await mail.deliver({db,event:{params:{publicationId:publication.id},data:{val:()=>publication}},from:'sender@example.test',recipients:['director@example.test'],send:async message=>({accepted:[message.to]}),now:()=>1000});
+ const [receipt]=Object.values(receipts);assert.equal(receipt.status,'sent');assert.equal(receipt.code,'smtp-accepted');
+});
