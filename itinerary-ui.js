@@ -221,6 +221,7 @@
  }
  function detailsDialog(a,b){const s=model.state;modal(a.id+' · '+range(b),'<div class="hp-notice">'+esc(a.status)+(a.release?.enabled?' · Disponible '+clock(a.release.from)+' – '+clock(a.release.until||a.slots.at(-1)?.end||'18:30'):'')+'</div>'+s.confirmed.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)).map(q=>'<p><b>'+range(q)+'</b> · '+esc(pilotName(q.pilot))+'</p>').join('')+'<p>'+s.requests.filter(q=>q.aircraft===a.id&&E.overlaps(q,b)&&!s.cancelled.includes(q.id)).length+' solicitudes en este bloque.</p>');}
  function personKey(value){return String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');}
+ function validPersonPhone(value){const raw=String(value||'').trim();return /^[+0-9().\s-]+$/.test(raw)&&/^\+?\d{7,15}$/.test(raw.replace(/[().\s-]/g,''));}
  function personRows(){return model.state.students.slice().sort((a,b)=>a.name.localeCompare(b.name,'es',{sensitivity:'base'})||a.id.localeCompare(b.id,'es'));}
  function personFieldsMarkup(q={}){
   const s=model.state,rows=personRows(),person=s.students.find(p=>p.id===q.studentId),initialName=person?.name||q.studentName||(q.flightType==='socio'?q.socioName:'')||'',kindDefault=['charter','socio'].includes(q.flightType)?'client':'student';
@@ -230,10 +231,10 @@
  function choosePersonSuggestion(form,button){
   const input=form.elements.studentName,refresh=form.__personRefresh||(()=>{});
   if(button.hasAttribute('data-person-create')){
-   delete input.dataset.personSelectedKey;form.elements.studentId.value='';form.dataset.personCreateNewKey=personKey(input.value);syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();return;
+   delete input.dataset.personSelectedKey;form.elements.personMatchId.value='';form.elements.studentId.value='';form.dataset.personCreateNewKey=personKey(input.value);syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();return;
   }
   const person=personRows().find(p=>p.id===button.dataset.personSuggestion);if(!person)return;
-  delete form.dataset.personCreateNewKey;input.value=person.name;input.dataset.personSelectedKey=personKey(person.name);form.elements.studentId.value=person.id;syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();
+  delete form.dataset.personCreateNewKey;input.value=person.name;input.dataset.personSelectedKey=personKey(person.name);form.elements.personMatchId.value=person.id;form.elements.studentId.value=person.id;syncPersonFields(form,form.elements.flightType.value);refresh();input.focus();
  }
  function renderPersonSuggestions(form){
   const input=form.elements.studentName,list=form.querySelector('[data-person-suggestions]');if(!input||!list)return;
@@ -247,7 +248,7 @@
  function bindPersonSuggestions(form,refresh){
   const input=form.elements.studentName,list=form.querySelector('[data-person-suggestions]');if(!input||!list)return;
   form.__personRefresh=refresh;
-  input.addEventListener('input',()=>{delete form.dataset.personCreateNewKey;delete input.dataset.personSelectedKey;renderPersonSuggestions(form);});
+  input.addEventListener('input',()=>{delete form.dataset.personCreateNewKey;delete input.dataset.personSelectedKey;form.elements.personMatchId.value='';form.elements.studentId.value='';renderPersonSuggestions(form);});
   input.addEventListener('keydown',event=>{if(event.key==='ArrowDown'&&!list.hidden){event.preventDefault();list.querySelector('button')?.focus();}});
   list.addEventListener('keydown',event=>{
    if(event.key==='Escape'){event.preventDefault();list.hidden=true;input.setAttribute('aria-expanded','false');input.focus();return;}

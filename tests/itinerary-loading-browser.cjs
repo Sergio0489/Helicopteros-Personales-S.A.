@@ -171,6 +171,40 @@ test('Student/client autocomplete filters prefixes alphabetically and supports c
  assert.equal(await form.locator('[data-person-new]').isVisible(),true);
  for(const name of ['personIdentity','personEmail','personPhone'])assert.equal(await form.locator('[name="'+name+'"]').evaluate(el=>el.required),true);
 });
+test('A new dossier validates and submits a nonempty international phone',async t=>{
+ const page=await app(t),result=response();
+ await page.evaluate(result=>{window.commandResult=result;resolveRead(result);},result);
+ await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
+ const form=page.locator('dialog form'),phone=form.locator('[name="personPhone"]');
+ await form.locator('[name="studentName"]').fill('Persona Ficticia Prueba');
+ await form.locator('[name="personIdentity"]').fill('TEST-123');
+ await form.locator('[name="personEmail"]').fill('dossier@example.test');
+ for(const [i,code] of ['MPMG','MPDA','MPMG'].entries())await form.locator('[name="routePart'+(i+1)+'"]').fill(code);
+ await phone.fill('123');assert.equal(await phone.evaluate(el=>el.validity.customError),true);
+ await phone.fill('+1 (202) 555-0142');assert.equal(await phone.evaluate(el=>el.checkValidity()),true);
+ await page.getByRole('button',{name:'Guardar',exact:true}).click();
+ await page.locator('dialog').waitFor({state:'detached'});
+ const saved=await page.evaluate(()=>itineraryCommands);
+ assert.equal(saved.length,1);assert.equal(saved[0].flight.personPhone,'+1 (202) 555-0142');
+});
+test('Changing a same-name autocomplete choice submits the newly selected dossier ID',async t=>{
+ const page=await app(t),result=response();
+ result.state.students=[{id:'client:sample-1',name:'Ana Pérez',kind:'client'},{id:'student:sample-2',name:'Ana Pérez',kind:'student'}];
+ await page.evaluate(result=>{window.commandResult=result;resolveRead(result);},result);
+ await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
+ const form=page.locator('dialog form'),input=form.locator('[name="studentName"]'),id=form.locator('[name="studentId"]');
+ await input.fill('Ana');await form.locator('[data-person-suggestion="client:sample-1"]').click();
+ assert.equal(await id.inputValue(),'client:sample-1');
+ await input.fill('Ana Perez');
+ assert.equal(await id.inputValue(),'','Editing a homonym must invalidate any stale selection');
+ await form.locator('[data-person-suggestion="student:sample-2"]').click();
+ assert.equal(await id.inputValue(),'student:sample-2');
+ for(const [i,code] of ['MPMG','MPDA','MPMG'].entries())await form.locator('[name="routePart'+(i+1)+'"]').fill(code);
+ await page.getByRole('button',{name:'Guardar',exact:true}).click();
+ await page.locator('dialog').waitFor({state:'detached'});
+ const saved=await page.evaluate(()=>itineraryCommands);
+ assert.equal(saved.length,1);assert.equal(saved[0].flight.studentId,'student:sample-2');
+});
 test('Mobile route stops align and the student/client search accepts text',async t=>{
  const page=await app(t,390),result=response();result.state.students=[{id:'client:ana',name:'Ana Pérez',kind:'client'},{id:'student:zoe',name:'Zoe Vela',kind:'student'}];
  await page.evaluate(result=>resolveRead(result),result);await page.locator('[data-date]').waitFor();await page.getByRole('button',{name:'Agendar vuelo',exact:true}).click();
